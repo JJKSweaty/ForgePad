@@ -27,6 +27,7 @@ from .schema import (
     authoring_errors,
     authoring_schema,
     practice_question,
+    schema_errors,
     validate_files,
 )
 from .storage import StorageConflict, Store, now
@@ -113,6 +114,15 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             from .supabase_store import SupabaseStore
             app.state.store = SupabaseStore()
         else:
+            import fcntl
+            lock_path = Path(data_path).resolve().parent / "service.lock"
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            app.state.workspace_lock = lock_path.open("a+")
+            try:
+                fcntl.flock(app.state.workspace_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                app.state.workspace_lock.close()
+                raise RuntimeError("This workspace is already owned by ForgePad. Close the other service first.") from None
             app.state.store = Store(data_path)
         app.state.store.seed(seed_path)
         if not runner and os.getenv("FORGEPAD_RUNNER_URL"):
@@ -130,6 +140,8 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             app.state.queue = RunQueue(app.state.store, app.state.runner)
         yield
         app.state.queue.shutdown()
+        if hasattr(app.state, "workspace_lock"):
+            app.state.workspace_lock.close()
 
     app = FastAPI(title="ForgePad", version="0.1.0", lifespan=lifespan)
 
@@ -327,6 +339,9 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                 "errors": ["Question ID exists. Publish a strictly higher version, or choose a new ID."],
             }
         errors = authoring_errors(question)
+        if errors:
+            return {"valid": False, "errors": errors}
+        errors = schema_errors(request.question)
         if errors:
             return {"valid": False, "errors": errors}
         validation = None

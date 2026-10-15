@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0",
+  "id": "align-up",
+  "version": 1,
+  "title": "Checked alignment for DMA buffers",
+  "description": "Round a 32-bit address upward to a power-of-two alignment.",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "DMA",
+    "integer arithmetic",
+    "alignment"
+  ],
+  "duration_minutes": 30,
+  "language": "c",
+  "prompt": "Round a 32-bit address upward to a power-of-two alignment.\nImplement bool align_up(uint32_t value, uint32_t alignment, uint32_t *out). Return true and store the smallest aligned uint32_t value >= value. If alignment is zero, is not a power of two, or the rounded result exceeds UINT32_MAX, return false without changing *out.",
+  "constraints": [
+    "out is a valid non-null writable pointer.",
+    "No allocation or hardware access. Single-threaded calls.",
+    "All uint32_t values are in the input domain. Alignment is expressed in bytes."
+  ],
+  "starter_files": {
+    "exercise.h": "#include <stdint.h>\n#include <stdbool.h>\nbool align_up(uint32_t value,uint32_t alignment,uint32_t *out);\n",
+    "exercise.c": "#include \"exercise.h\"\n/* Implement the declared function. */\n"
+  },
+  "reference_solution": {
+    "exercise.h": "#include <stdint.h>\n#include <stdbool.h>\nbool align_up(uint32_t value,uint32_t alignment,uint32_t *out);\n",
+    "exercise.c": "#include \"exercise.h\"\nbool align_up(uint32_t value,uint32_t alignment,uint32_t *out) {\n if(!alignment || (alignment & (alignment-1u))) return false;\n uint32_t mask=alignment-1u;\n if(value>UINT32_MAX-mask) return false;\n *out=(value+mask)&~mask; return true;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "clang",
+    "sanitizers": true,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "case-1",
+        "name": "already aligned",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "1 16\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(16),UINT32_C(8),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      },
+      {
+        "id": "case-2",
+        "name": "round upward",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "1 24\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(17),UINT32_C(8),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      },
+      {
+        "id": "case-3",
+        "name": "zero",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1 0\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(0),UINT32_C(8),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      },
+      {
+        "id": "case-4",
+        "name": "unit alignment",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1 4294967295\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(4294967295),UINT32_C(1),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      },
+      {
+        "id": "case-5",
+        "name": "overflow",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0 123\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(4294967295),UINT32_C(8),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      },
+      {
+        "id": "case-6",
+        "name": "zero alignment",
+        "visibility": "hidden",
+        "category": "negative",
+        "stdin": "",
+        "expected_stdout": "0 123\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(9),UINT32_C(0),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      },
+      {
+        "id": "case-7",
+        "name": "non power of two",
+        "visibility": "hidden",
+        "category": "negative",
+        "stdin": "",
+        "expected_stdout": "0 123\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(9),UINT32_C(3),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      },
+      {
+        "id": "case-8",
+        "name": "largest alignment",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1 2147483648\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nuint32_t out=123; bool ok=align_up(UINT32_C(1),UINT32_C(2147483648),&out); printf(\"%u %u\\n\",(unsigned)ok,(unsigned)out);\n}\n"
+      }
+    ]
+  },
+  "rubric": [
+    "40: Implement all stated behavior correctly.",
+    "25: Explain boundaries and safety.",
+    "20: Justify a targeted test strategy.",
+    "15: Explain firmware trade-offs and resource use."
+  ],
+  "follow_ups": [
+    "Which hardware or concurrency assumptions must be stated before deploying this code?",
+    "How would you choose additional independently justified boundary tests?",
+    "How would a constrained target change your implementation or verification strategy?"
+  ],
+  "hints": [
+    "Write down the state invariants and boundary behavior before implementing."
+  ],
+  "source": {
+    "name": "ForgePad original",
+    "url": "",
+    "license": "MIT"
+  },
+  "solution_notes": "A power-of-two alignment has a mask of alignment-1. Check the addition bound first, then clear low bits. Expected values follow the smallest multiple definition; rejected calls preserve the sentinel.",
+  "time_complexity": "O(1)",
+  "space_complexity": "O(1)"
+}

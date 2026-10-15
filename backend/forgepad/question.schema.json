@@ -1,0 +1,464 @@
+{
+  "$defs": {
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Url",
+          "type": "string"
+        },
+        "license": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "license"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "TestCase": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,80}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "hidden"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "stdin": {
+          "default": "",
+          "maxLength": 65536,
+          "title": "Stdin",
+          "type": "string"
+        },
+        "expected_stdout": {
+          "maxLength": 65536,
+          "title": "Expected Stdout",
+          "type": "string"
+        },
+        "fixture": {
+          "anyOf": [
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixture"
+        },
+        "category": {
+          "enum": [
+            "normal",
+            "boundary",
+            "negative"
+          ],
+          "title": "Category",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "visibility",
+        "expected_stdout",
+        "category"
+      ],
+      "title": "TestCase",
+      "type": "object"
+    },
+    "TestConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "stdio",
+            "fixture"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "compiler": {
+          "default": "gcc",
+          "enum": [
+            "gcc",
+            "clang"
+          ],
+          "title": "Compiler",
+          "type": "string"
+        },
+        "sanitizers": {
+          "default": false,
+          "title": "Sanitizers",
+          "type": "boolean"
+        },
+        "timeout_seconds": {
+          "default": 2,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "tests": {
+          "items": {
+            "$ref": "#/$defs/TestCase"
+          },
+          "maxItems": 30,
+          "minItems": 8,
+          "title": "Tests",
+          "type": "array",
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "visibility": {
+                    "const": "public"
+                  }
+                },
+                "required": [
+                  "visibility"
+                ]
+              },
+              "minContains": 3
+            },
+            {
+              "contains": {
+                "properties": {
+                  "visibility": {
+                    "const": "hidden"
+                  }
+                },
+                "required": [
+                  "visibility"
+                ]
+              },
+              "minContains": 5
+            }
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "tests"
+      ],
+      "title": "TestConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,79}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "coding",
+        "theory",
+        "debugging",
+        "design",
+        "code_review"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "difficulty": {
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced",
+        "expert"
+      ],
+      "title": "Difficulty",
+      "type": "string"
+    },
+    "topics": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Topics",
+      "type": "array"
+    },
+    "duration_minutes": {
+      "maximum": 240,
+      "minimum": 1,
+      "title": "Duration Minutes",
+      "type": "integer"
+    },
+    "language": {
+      "enum": [
+        "c",
+        "cpp",
+        "independent"
+      ],
+      "title": "Language",
+      "type": "string"
+    },
+    "prompt": {
+      "maxLength": 30000,
+      "minLength": 1,
+      "title": "Prompt",
+      "type": "string"
+    },
+    "constraints": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Constraints",
+      "type": "array"
+    },
+    "starter_files": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Starter Files",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\\.(c|cpp|cc|h|hpp)$",
+        "not": {
+          "pattern": "\\.\\."
+        }
+      },
+      "maxProperties": 20
+    },
+    "test_config": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TestConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "reference_solution": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Reference Solution",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\\.(c|cpp|cc|h|hpp)$",
+        "not": {
+          "pattern": "\\.\\."
+        }
+      },
+      "maxProperties": 20
+    },
+    "rubric": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Rubric",
+      "type": "array"
+    },
+    "follow_ups": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 3,
+      "title": "Follow Ups",
+      "type": "array",
+      "minItems": 3
+    },
+    "hints": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Hints",
+      "type": "array",
+      "minItems": 1
+    },
+    "source": {
+      "$ref": "#/$defs/Source"
+    },
+    "solution_notes": {
+      "default": "",
+      "maxLength": 15000,
+      "title": "Solution Notes",
+      "type": "string"
+    },
+    "time_complexity": {
+      "default": "",
+      "maxLength": 1000,
+      "title": "Time Complexity",
+      "type": "string"
+    },
+    "space_complexity": {
+      "default": "",
+      "maxLength": 1000,
+      "title": "Space Complexity",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "version",
+    "title",
+    "description",
+    "type",
+    "difficulty",
+    "topics",
+    "duration_minutes",
+    "language",
+    "prompt",
+    "rubric",
+    "source",
+    "hints",
+    "follow_ups"
+  ],
+  "title": "Question",
+  "type": "object",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "test_config": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "test_config"
+        ]
+      },
+      "then": {
+        "required": [
+          "solution_notes",
+          "time_complexity",
+          "space_complexity"
+        ],
+        "properties": {
+          "solution_notes": {
+            "minLength": 1
+          },
+          "time_complexity": {
+            "minLength": 1
+          },
+          "space_complexity": {
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "coding"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "required": [
+          "test_config",
+          "starter_files",
+          "reference_solution"
+        ],
+        "properties": {
+          "test_config": {
+            "type": "object"
+          },
+          "starter_files": {
+            "minProperties": 1
+          },
+          "reference_solution": {
+            "minProperties": 1
+          },
+          "language": {
+            "enum": [
+              "c",
+              "cpp"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "theory",
+              "design"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "test_config": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forgepad.local/schema/question-1.0.json"
+}

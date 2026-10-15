@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0",
+  "id": "debounce-state",
+  "version": 1,
+  "title": "Debounce a sampled digital input",
+  "description": "Implement a deterministic sampled-input debouncer.",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "timers",
+    "state machines",
+    "wraparound"
+  ],
+  "duration_minutes": 30,
+  "language": "c",
+  "prompt": "Implement a deterministic sampled-input debouncer.\nImplement bool debounce_update(Debouncer *state, bool raw, uint32_t now, uint32_t delay). On a change from state->candidate, set candidate=raw and since=now. On every call, if (uint32_t)(now-since) >= delay, set stable=candidate. Return stable. A zero delay applies a new candidate immediately.",
+  "constraints": [
+    "state is a non-null writable pointer initialized with stable==candidate and since equal to its initial sampling time.",
+    "Time is a modular uint32_t tick count. Calls occur in forward chronological order; elapsed time since the current candidate began is less than 2^31 ticks.",
+    "delay < 2^31. Values outside these bounds are excluded, rather than assigned invented behavior.",
+    "Single-threaded calls with no allocation. This sampled contract does not prove behavior between samples."
+  ],
+  "starter_files": {
+    "exercise.h": "#include <stdint.h>\n#include <stdbool.h>\ntypedef struct { bool stable; bool candidate; uint32_t since; } Debouncer;\nbool debounce_update(Debouncer *state,bool raw,uint32_t now,uint32_t delay);\n",
+    "exercise.c": "#include \"exercise.h\"\n/* Implement the declared function. */\n"
+  },
+  "reference_solution": {
+    "exercise.h": "#include <stdint.h>\n#include <stdbool.h>\ntypedef struct { bool stable; bool candidate; uint32_t since; } Debouncer;\nbool debounce_update(Debouncer *state,bool raw,uint32_t now,uint32_t delay);\n",
+    "exercise.c": "#include \"exercise.h\"\nbool debounce_update(Debouncer *s,bool raw,uint32_t now,uint32_t delay) {\n if(raw!=s->candidate){s->candidate=raw;s->since=now;}\n if((uint32_t)(now-s->since)>=delay) s->stable=s->candidate;\n return s->stable;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "clang",
+    "sanitizers": true,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "case-1",
+        "name": "rising edge",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={false,false,0}; debounce_update(&s,true,10,5); printf(\"%u\\n\",(unsigned)debounce_update(&s,true,15,5));\n}\n"
+      },
+      {
+        "id": "case-2",
+        "name": "falling edge",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={true,true,0}; debounce_update(&s,false,10,5); printf(\"%u\\n\",(unsigned)debounce_update(&s,false,15,5));\n}\n"
+      },
+      {
+        "id": "case-3",
+        "name": "not too early",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={false,false,0}; debounce_update(&s,true,10,5); printf(\"%u\\n\",(unsigned)debounce_update(&s,true,14,5));\n}\n"
+      },
+      {
+        "id": "case-4",
+        "name": "zero delay",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={false,false,0}; printf(\"%u\\n\",(unsigned)debounce_update(&s,true,10,0));\n}\n"
+      },
+      {
+        "id": "case-5",
+        "name": "bounce resets window",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={false,false,0}; debounce_update(&s,true,10,5); debounce_update(&s,false,12,5); debounce_update(&s,true,13,5); printf(\"%u\\n\",(unsigned)debounce_update(&s,true,17,5));\n}\n"
+      },
+      {
+        "id": "case-6",
+        "name": "rollover",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={false,false,0}; debounce_update(&s,true,UINT32_C(4294967293),5); printf(\"%u\\n\",(unsigned)debounce_update(&s,true,2,5));\n}\n"
+      },
+      {
+        "id": "case-7",
+        "name": "repeated timestamp",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={false,false,0}; debounce_update(&s,true,10,5); printf(\"%u\\n\",(unsigned)debounce_update(&s,true,10,5));\n}\n"
+      },
+      {
+        "id": "case-8",
+        "name": "stable unchanged",
+        "visibility": "hidden",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nDebouncer s={true,true,10}; printf(\"%u\\n\",(unsigned)debounce_update(&s,true,11,5));\n}\n"
+      }
+    ]
+  },
+  "rubric": [
+    "40: Implement all stated behavior correctly.",
+    "25: Explain boundaries and safety.",
+    "20: Justify a targeted test strategy.",
+    "15: Explain firmware trade-offs and resource use."
+  ],
+  "follow_ups": [
+    "Which hardware or concurrency assumptions must be stated before deploying this code?",
+    "How would you choose additional independently justified boundary tests?",
+    "How would a constrained target change your implementation or verification strategy?"
+  ],
+  "hints": [
+    "Write down the state invariants and boundary behavior before implementing."
+  ],
+  "source": {
+    "name": "ForgePad original",
+    "url": "",
+    "license": "MIT"
+  },
+  "solution_notes": "Track the last candidate transition and only accept it after the configured modular elapsed duration. Tests directly simulate the specified transition rules, including a five-tick interval across UINT32_MAX.",
+  "time_complexity": "O(1)",
+  "space_complexity": "O(1)"
+}

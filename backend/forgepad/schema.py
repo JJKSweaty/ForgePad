@@ -145,17 +145,13 @@ def authoring_errors(question: dict) -> list[str]:
 
 
 def authoring_schema() -> dict:
-    schema = Question.model_json_schema()
-    schema["required"] += ["hints", "follow_ups"]
-    schema["properties"]["hints"]["minItems"] = 1
-    schema["properties"]["follow_ups"].update(minItems=3, maxItems=3)
-    tests = schema["$defs"]["TestConfig"]["properties"]["tests"]
-    tests["minItems"] = 8
-    tests["allOf"] = [{"contains": {"properties": {"visibility": {"const": visibility}},
-                                    "required": ["visibility"]}, "minContains": count}
-                       for visibility, count in (("public", 3), ("hidden", 5))]
-    schema["allOf"] = [{"if": {"properties": {"test_config": {"type": "object"}}, "required": ["test_config"]},
-                        "then": {"required": ["solution_notes", "time_complexity", "space_complexity"],
-                                 "properties": {key: {"minLength": 1} for key in (
-                                     "solution_notes", "time_complexity", "space_complexity")}}}]
-    return schema
+    """The same authoritative schema is embedded by the native Rust validator."""
+    import json
+    from importlib.resources import files
+    return json.loads(files("forgepad").joinpath("question.schema.json").read_text())
+
+
+def schema_errors(package: dict) -> list[str]:
+    from jsonschema import Draft202012Validator
+    return [f"{'.'.join(map(str, error.absolute_path))}: {error.message}"
+            for error in Draft202012Validator(authoring_schema()).iter_errors(package)][:50]

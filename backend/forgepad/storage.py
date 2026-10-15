@@ -29,7 +29,7 @@ class Store:
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 2:
+            if version > 4:
                 raise RuntimeError("Database was created by a newer ForgePad version")
             if version < 1:
                 db.executescript("""
@@ -73,6 +73,14 @@ class Store:
                     db.execute("UPDATE questions SET package=? WHERE id=? AND version=?",
                                (encode(package), row["id"], row["version"]))
                 db.execute("PRAGMA user_version=2")
+            if version < 4:
+                db.executescript("""
+                CREATE TABLE IF NOT EXISTS draft_versions(question_id TEXT NOT NULL, version INTEGER NOT NULL,
+                    files TEXT NOT NULL, answer TEXT NOT NULL, updated_at TEXT NOT NULL,
+                    PRIMARY KEY(question_id,version), FOREIGN KEY(question_id,version) REFERENCES questions(id,version));
+                INSERT OR IGNORE INTO draft_versions SELECT * FROM drafts;
+                PRAGMA user_version=4;
+                """)
             integrity = db.execute("PRAGMA quick_check").fetchone()[0]
             if integrity != "ok":
                 raise RuntimeError(f"SQLite integrity check failed: {integrity}")
@@ -183,12 +191,14 @@ class Store:
 
     def draft(self, question_id):
         with self.connect() as db:
-            row = db.execute("SELECT * FROM drafts WHERE question_id=?", (question_id,)).fetchone()
+            row = db.execute("SELECT * FROM draft_versions WHERE question_id=? ORDER BY version DESC LIMIT 1", (question_id,)).fetchone()
         return {**dict(row), "files": json.loads(row["files"])} if row else None
 
     def save_draft(self, question, files, answer):
         record = {"files": files, "answer": answer, "updated_at": now(), "question_version": question["version"]}
         with self.connect() as db:
+            db.execute("INSERT INTO draft_versions VALUES(?,?,?,?,?) ON CONFLICT(question_id,version) DO UPDATE SET files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",
+                       (question["id"], question["version"], encode(files), answer, record["updated_at"]))
             db.execute("INSERT INTO drafts VALUES (?,?,?,?,?) ON CONFLICT(question_id) DO UPDATE SET version=excluded.version,files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",
                        (question["id"], question["version"], encode(files), answer, record["updated_at"]))
         return record
@@ -260,7 +270,7 @@ class Store:
 
     def reset_user_data(self):
         with self.connect() as db:
-            for table in ("replay", "attempts", "runs", "interviews", "goals", "drafts", "question_flags", "imports"):
+            for table in ("replay", "attempts", "runs", "interviews", "goals", "drafts", "draft_versions", "question_flags", "imports"):
                 db.execute(f"DELETE FROM {table}")
 
     def backup(self, destination: Path):

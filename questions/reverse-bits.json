@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0",
+  "id": "reverse-bits",
+  "version": 1,
+  "title": "Reverse a 32-bit peripheral bit sequence",
+  "description": "Reverse exactly 32 bits of an unsigned value.",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "bit operations",
+    "registers",
+    "embedded C"
+  ],
+  "duration_minutes": 30,
+  "language": "c",
+  "prompt": "Reverse exactly 32 bits of an unsigned value.\nImplement uint32_t reverse_bits(uint32_t value). Bit i of the input becomes bit 31-i of the result.",
+  "constraints": [
+    "Every uint32_t value is valid.",
+    "No target-specific instructions or compiler intrinsics.",
+    "Single-threaded, no hardware access or allocation. Byte order in memory does not change the numeric contract."
+  ],
+  "starter_files": {
+    "exercise.h": "#include <stdint.h>\nuint32_t reverse_bits(uint32_t value);\n",
+    "exercise.c": "#include \"exercise.h\"\n/* Implement the declared function. */\n"
+  },
+  "reference_solution": {
+    "exercise.h": "#include <stdint.h>\nuint32_t reverse_bits(uint32_t value);\n",
+    "exercise.c": "#include \"exercise.h\"\nuint32_t reverse_bits(uint32_t value) {\n uint32_t result=0;\n for(unsigned i=0;i<32;i++) {result=(result<<1)|(value&1u);value>>=1;}\n return result;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "clang",
+    "sanitizers": true,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "case-1",
+        "name": "low bit",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "2147483648\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(1)));\n}\n"
+      },
+      {
+        "id": "case-2",
+        "name": "two bits",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "3221225472\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(3)));\n}\n"
+      },
+      {
+        "id": "case-3",
+        "name": "pattern",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "510274632\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(305419896)));\n}\n"
+      },
+      {
+        "id": "case-4",
+        "name": "zero",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(0)));\n}\n"
+      },
+      {
+        "id": "case-5",
+        "name": "all bits",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "4294967295\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(4294967295)));\n}\n"
+      },
+      {
+        "id": "case-6",
+        "name": "top bit",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(2147483648)));\n}\n"
+      },
+      {
+        "id": "case-7",
+        "name": "alternating",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1431655765\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(2863311530)));\n}\n"
+      },
+      {
+        "id": "case-8",
+        "name": "middle boundary",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "32768\n",
+        "fixture": "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include \"exercise.h\"\nint main(void) {\nprintf(\"%u\\n\",(unsigned)reverse_bits(UINT32_C(65536)));\n}\n"
+      }
+    ]
+  },
+  "rubric": [
+    "40: Implement all stated behavior correctly.",
+    "25: Explain boundaries and safety.",
+    "20: Justify a targeted test strategy.",
+    "15: Explain firmware trade-offs and resource use."
+  ],
+  "follow_ups": [
+    "Which hardware or concurrency assumptions must be stated before deploying this code?",
+    "How would you choose additional independently justified boundary tests?",
+    "How would a constrained target change your implementation or verification strategy?"
+  ],
+  "hints": [
+    "Write down the state invariants and boundary behavior before implementing."
+  ],
+  "source": {
+    "name": "ForgePad original",
+    "url": "",
+    "license": "MIT"
+  },
+  "solution_notes": "Shift an unsigned accumulator exactly 32 times, appending the least-significant input bit. Expected outputs are independently obtained by reversing the fixed-width 32-character binary representation.",
+  "time_complexity": "O(1)",
+  "space_complexity": "O(1)"
+}

@@ -14,6 +14,8 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+from .compiler_cache import CompilerCache, cache_key
+
 OUTPUT_LIMIT = 64 * 1024
 SOURCE_LIMIT = 256 * 1024
 SAFE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(?:c|cc|cpp|h|hpp)\Z")
@@ -285,6 +287,11 @@ class DockerRunner:
         flags = ["-std=c++17" if cpp else "-std=c11", "-Wall", "-Wextra", "-O1", "-g"]
         if config.get("sanitizers"):
             flags += ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
+        cache = CompilerCache(
+            os.getenv("FORGEPAD_COMPILE_CACHE"),
+            cache_key(question, files, image, compiler, flags, include_hidden=include_hidden),
+        )
+        artifacts = {}
         scratch = Path(
             os.getenv("FORGEPAD_RUNNER_TMPDIR", str(Path(__file__).resolve().parents[2] / "data" / "runner"))
         )
@@ -355,9 +362,11 @@ class DockerRunner:
                 test_build = root / f"build_{index}"
                 test_build.mkdir(mode=0o777)
                 test_build.chmod(0o777)
+                binary = test_build / "submission"
+                cached = cache.restore(index, binary)
                 link_inputs = list(object_names)
                 compiled = ProcessResult(0)
-                if config["mode"] == "fixture":
+                if config["mode"] == "fixture" and not cached:
                     test_fixture = fixture / str(index)
                     test_fixture.mkdir(mode=0o755)
                     fixture_file = test_fixture / ("fixture.cpp" if cpp else "fixture.c")
@@ -374,13 +383,19 @@ class DockerRunner:
                             "-o",
                             "/build/fixture.o",
                         ],
-                        [(test_fixture, "/fixture", True), (src, "/src", True), (test_build, "/build", False)],
+                        [
+                            (test_fixture, "/fixture", True),
+                            (src, "/src", True),
+                            (test_build, "/build", False),
+                        ],
                         25,
                         cancel,
                         compile_job=True,
                     )
                     link_inputs.append("/build/fixture.o")
-                if not (compiled.returncode or compiled.timeout or compiled.overflow or compiled.cancelled):
+                if not cached and not (
+                    compiled.returncode or compiled.timeout or compiled.overflow or compiled.cancelled
+                ):
                     compiled = self._container(
                         image,
                         [compiler, *flags, *link_inputs, "-o", "/build/submission"],
@@ -410,6 +425,7 @@ class DockerRunner:
                         return finish(
                             "compilation_error", "Compiler did not produce a valid bounded executable."
                         )
+                    artifacts[index] = binary
                     test_program = program / str(index)
                     test_program.mkdir(mode=0o755)
                     destination = test_program / "submission"
@@ -453,5 +469,6 @@ class DockerRunner:
                 item["elapsed_ms"] = round((time.monotonic() - test_start) * 1000)
                 result["tests"].append(item)
                 result["passed"] += item["status"] == "passed"
+            cache.publish(artifacts)
         failed = next((test["status"] for test in result["tests"] if test["status"] != "passed"), None)
         return finish(failed or "passed")
