@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def sign(bundle):
+def sign(bundle, identity="-"):
     bundle = Path(bundle).resolve(strict=True)
     worker = bundle / "Contents/MacOS/forgepad-worker"
     if not worker.is_file() or not (bundle / "Contents/Info.plist").is_file():
@@ -28,10 +28,25 @@ def sign(bundle):
                 "--options",
                 "runtime",
                 "--sign",
-                "-",
+                identity,
+                *(["--timestamp"] if identity != "-" else []),
                 "--entitlements",
                 str(entitlements),
                 str(worker),
+            ],
+            check=True,
+        )
+    for name in ("forgepad-mcp", "forgepad-speech"):
+        subprocess.run(
+            [
+                "codesign",
+                "--force",
+                "--options",
+                "runtime",
+                "--sign",
+                identity,
+                *(["--timestamp"] if identity != "-" else []),
+                str(bundle / "Contents/MacOS" / name),
             ],
             check=True,
         )
@@ -43,7 +58,8 @@ def sign(bundle):
             "--options",
             "runtime",
             "--sign",
-            "-",
+            identity,
+            *(["--timestamp"] if identity != "-" else []),
             "--entitlements",
             str(ROOT / "src-tauri/Entitlements.plist"),
             str(bundle),
@@ -51,7 +67,7 @@ def sign(bundle):
         check=True,
     )
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
-    print(f"Local ad-hoc bundle verified: {bundle.name}")
+    print(f"Mac bundle signatures verified: {bundle.name}")
 
 
 if __name__ == "__main__":

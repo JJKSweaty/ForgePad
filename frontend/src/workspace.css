@@ -456,6 +456,7 @@ textarea:focus-visible {
   color: var(--muted);
 }
 .run-toolbar {
+  justify-content: flex-end;
   padding: 14px 18px;
 }
 .run-toolbar > .muted-text,

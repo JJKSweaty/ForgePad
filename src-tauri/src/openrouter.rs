@@ -8,15 +8,26 @@ use tokio_util::sync::CancellationToken;
 const ENDPOINT: &str = "https://openrouter.ai/api/v1";
 impl Service {
     fn openrouter_entry(&self) -> Result<keyring::Entry> {
-        let hash = format!("{:x}", Sha256::digest(self.store.directory.to_string_lossy().as_bytes()));
-        Ok(keyring::Entry::new("dev.forgepad.desktop", &format!("openrouter-{}", &hash[..16]))?)
+        let hash = format!(
+            "{:x}",
+            Sha256::digest(self.store.directory.to_string_lossy().as_bytes())
+        );
+        Ok(keyring::Entry::new(
+            "dev.forgepad.desktop",
+            &format!("openrouter-{}", &hash[..16]),
+        )?)
     }
     pub fn openrouter_settings(&self) -> Value {
-        let config = self.store.get("settings", "openrouter").unwrap_or(json!({"id":"openrouter","enabled":false,"model":""}));
+        let config = self
+            .store
+            .get("settings", "openrouter")
+            .unwrap_or(json!({"id":"openrouter","enabled":false,"model":""}));
         json!({"enabled":config["enabled"]==true,"model":config["model"],"connected":self.openrouter_entry().and_then(|e|Ok(e.get_password()?)).is_ok()})
     }
     pub fn openrouter_enabled(&self) -> bool {
-        self.store.get("settings", "openrouter").is_ok_and(|v|v["enabled"]==true)
+        self.store
+            .get("settings", "openrouter")
+            .is_ok_and(|v| v["enabled"] == true)
     }
     pub fn configure_openrouter(&self, body: &Value) -> Result<Value> {
         let model = body["model"].as_str().unwrap_or("").trim();
@@ -31,26 +42,46 @@ impl Service {
             entry.set_password(key)?;
         }
         if body["enabled"] == true {
-            entry.get_password().context("Add your OpenRouter API key first")?;
+            entry
+                .get_password()
+                .context("Add your OpenRouter API key first")?;
         }
-        self.store.save("settings", &json!({"id":"openrouter","enabled":body["enabled"]==true,"model":model}))?;
+        self.store.save(
+            "settings",
+            &json!({"id":"openrouter","enabled":body["enabled"]==true,"model":model}),
+        )?;
         Ok(self.openrouter_settings())
     }
     pub fn disconnect_openrouter(&self) -> Result<Value> {
         match self.openrouter_entry()?.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => {},
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
             Err(e) => return Err(e.into()),
         }
-        self.store.save("settings", &json!({"id":"openrouter","enabled":false,"model":""}))?;
+        self.store.save(
+            "settings",
+            &json!({"id":"openrouter","enabled":false,"model":""}),
+        )?;
         Ok(self.openrouter_settings())
     }
-    pub async fn openrouter_reply(&self, system: &str, context: Value, cancel: CancellationToken) -> Result<String> {
+    pub async fn openrouter_reply(
+        &self,
+        system: &str,
+        context: Value,
+        cancel: CancellationToken,
+    ) -> Result<String> {
         let config = self.store.get("settings", "openrouter")?;
-        if config["enabled"] != true { bail!("OpenRouter is disabled"); }
-        let key = self.openrouter_entry()?.get_password().context("Reconnect OpenRouter in Settings")?;
-        let client = reqwest::Client::builder().no_proxy()
+        if config["enabled"] != true {
+            bail!("OpenRouter is disabled");
+        }
+        let key = self
+            .openrouter_entry()?
+            .get_password()
+            .context("Reconnect OpenRouter in Settings")?;
+        let client = reqwest::Client::builder()
+            .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(std::time::Duration::from_secs(60)).build()?;
+            .timeout(std::time::Duration::from_secs(60))
+            .build()?;
         let request = client.post(format!("{ENDPOINT}/chat/completions"))
             .bearer_auth(key).header("X-Title", "ForgePad")
             .json(&json!({"model":config["model"],"messages":[{"role":"system","content":system},{"role":"user","content":context.to_string()}],"max_tokens":600,"temperature":0.3}));
@@ -66,8 +97,10 @@ impl Service {
             r=response.json()=>r?,
             _=cancel.cancelled()=>bail!("Interview reply cancelled")
         };
-        let text = body["choices"][0]["message"]["content"].as_str()
-            .filter(|s|!s.trim().is_empty()).context("OpenRouter returned no reply")?;
+        let text = body["choices"][0]["message"]["content"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .context("OpenRouter returned no reply")?;
         Ok(text.chars().take(8000).collect())
     }
 }

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "forgepad"
-version = "0.1.0"
+version = "0.3.0"
 description = "Local embedded engineering practice and interview workspace"
 requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.32,<1", "pydantic>=2.10,<3", "httpx>=0.28,<1", "python-multipart>=0.0.20,<1", "jsonschema>=4.26,<5"]

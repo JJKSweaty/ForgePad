@@ -801,11 +801,6 @@ export default function Practice({
             </div>
           )}
           <div className="run-toolbar">
-            <span className="muted-text">
-              {coding
-                ? "Run checks public tests. Submit includes hidden tests."
-                : "Written responses are recorded for self-review."}
-            </span>
             <div className="button-row">
               {running && run ? (
                 <button
@@ -824,6 +819,7 @@ export default function Practice({
                 <>
                   <button
                     disabled={running || !Object.keys(files).length}
+                    title="Run public tests (Ctrl/Cmd+Enter)"
                     onClick={() => void execute("run")}
                   >
                     <Play size={14} />
@@ -832,6 +828,7 @@ export default function Practice({
                   <button
                     className="primary"
                     disabled={running || !Object.keys(files).length}
+                    title="Submit all tests (Shift+Ctrl/Cmd+Enter)"
                     onClick={() => void execute("submit")}
                   >
                     {running ? "Running…" : "Submit"}

@@ -17,7 +17,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 
 
-async def verify(binaries=None):
+async def verify(binaries=None, output=None):
     binaries = Path(binaries) if binaries else ROOT / "src-tauri/target/debug"
     with tempfile.TemporaryDirectory(prefix="forgepad-dashboard-test-", dir="/tmp") as directory:
         socket = Path(directory) / "service.sock"
@@ -111,11 +111,15 @@ async def verify(binaries=None):
         finally:
             process.send_signal(signal.SIGTERM)
             await asyncio.wait_for(process.wait(), timeout=15)
-        (ROOT / "docs/dashboard-verification.json").write_text(json.dumps(report, indent=2) + "\n")
+        (Path(output) if output else ROOT / "docs/dashboard-verification.json").write_text(
+            json.dumps(report, indent=2) + "\n"
+        )
         print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--binaries", help="Directory containing packaged service and worker")
-    asyncio.run(verify(parser.parse_args().binaries))
+    parser.add_argument("--output")
+    args = parser.parse_args()
+    asyncio.run(verify(args.binaries, args.output))
