@@ -204,7 +204,7 @@ impl Store {
             let credit=if was_focused&&(0..=30).contains(&elapsed){(at.min(input+Duration::seconds(30))-seen).num_seconds().max(0)}else{0};
             let input_at=if interacted&&focused{at.to_rfc3339()}else{last_input};
             db.execute("UPDATE practice_visits SET last_seen=?,last_input=?,focused=?,status=?,active_seconds=? WHERE id=?",params![at.to_rfc3339(),input_at,focused&&!close,if close{"closed"}else{"active"},total+credit,id])?;
-            if credit>0{insert(db,&crate::id(),"active_time",Some(&q),Some(version),session.as_deref(),&at.to_rfc3339(),credit,json!({"visit_id":id,"meaningful":false}))?;}
+            if credit>0{insert(db,&crate::id(),"active_time",Some(&q),Some(version),session.as_deref(),&at.min(input+Duration::seconds(30)).to_rfc3339(),credit,json!({"visit_id":id,"meaningful":false}))?;}
             Ok(json!({"id":id,"active_seconds":total+credit,"credited_seconds":credit,"status":if close{"closed"}else{"active"}}))
         })
     }
@@ -234,7 +234,7 @@ impl Store {
     }
     pub fn unfinished_draft(&self) -> Result<Option<Value>> {
         let drafts=self.with_db(|db|{
-            let mut st=db.prepare("SELECT d.question_id,d.version,d.files,d.answer,d.updated_at FROM draft_versions d LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC LIMIT 30")?;
+            let mut st=db.prepare("SELECT d.question_id,d.version,d.files,d.answer,d.updated_at FROM draft_versions d LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC")?;
             let rows=st.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?)))?.collect::<std::result::Result<Vec<_>,_>>()?;Ok(rows)
         })?;
         for (id, version, files, answer, updated) in drafts {

@@ -16,6 +16,11 @@ pub fn data_dir() -> std::path::PathBuf {
     if let Some(path) = std::env::var_os("FORGEPAD_DATA_DIR") {
         return path.into();
     }
+    // Separate debug previews can be compiled against a disposable workspace.
+    #[cfg(debug_assertions)]
+    if let Some(path) = option_env!("FORGEPAD_QA_DATA_DIR") {
+        return path.into();
+    }
     std::path::PathBuf::from(std::env::var_os("HOME").expect("HOME is required"))
         .join("Library/Application Support/ForgePad")
 }

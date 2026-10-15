@@ -265,7 +265,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
     def dashboard_activity(date: str, timezone: str = "UTC"):
         from zoneinfo import ZoneInfo
 
-        from .dashboard import snapshot
+        from .dashboard import snapshot, supplemental_events
         try:
             target = datetime.fromisoformat(date).date()
             snapshot(store(), timezone)  # Validates the configured timezone.
@@ -276,7 +276,9 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                     events.append({'id': attempt['id'], 'kind': 'solution_submitted',
                         'question_id': attempt['question_id'], 'occurred_at': attempt['created_at'],
                         'title': attempt.get('title', attempt['question_id'])})
-            return {'date': date, 'timezone': timezone, 'events': events}
+            events.extend(event for event in supplemental_events(store())
+                          if datetime.fromisoformat(event['occurred_at']).astimezone(ZoneInfo(timezone)).date() == target)
+            return {'date': date, 'timezone': timezone, 'events': sorted(events,key=lambda event:event['occurred_at'],reverse=True)}
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
 

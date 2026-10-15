@@ -5,7 +5,24 @@ async fn main() -> anyhow::Result<()> {
     let dir = forgepad_core::data_dir();
     let seeds = std::env::var_os("FORGEPAD_QUESTIONS")
         .map(std::path::PathBuf::from)
-        .unwrap_or(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../questions"));
+        .unwrap_or_else(|| {
+            let bundled = std::env::current_exe()
+                .expect("Executable path")
+                .parent()
+                .unwrap()
+                .join("../Resources/_up_/questions");
+            if bundled.is_dir() {
+                return bundled;
+            }
+            #[cfg(debug_assertions)]
+            {
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../questions")
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                bundled
+            }
+        });
     let service = Service::open(&dir, &seeds)?;
     let executable = std::env::current_exe()?
         .parent()

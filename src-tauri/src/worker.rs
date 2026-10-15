@@ -14,12 +14,15 @@ use tokio_util::sync::CancellationToken;
 pub struct RunnerConfig {
     pub image: String,
     pub docker_context: String,
+    #[serde(default)]
+    pub scratch_directory: String,
 }
 impl Default for RunnerConfig {
     fn default() -> Self {
         Self {
             image: std::env::var("FORGEPAD_RUNNER_IMAGE").unwrap_or("forgepad-runner:local".into()),
             docker_context: std::env::var("DOCKER_CONTEXT").unwrap_or_default(),
+            scratch_directory: std::env::var("FORGEPAD_RUNNER_TMPDIR").unwrap_or_default(),
         }
     }
 }
@@ -38,6 +41,12 @@ impl RunnerConfig {
                 .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
         {
             bail!("Use a Docker image name and an existing local Docker context name");
+        }
+        if !self.scratch_directory.is_empty()
+            && (self.scratch_directory.len() > 1024
+                || !std::path::Path::new(&self.scratch_directory).is_absolute())
+        {
+            bail!("The shared scratch directory must be an absolute local path");
         }
         Ok(())
     }
@@ -72,9 +81,16 @@ impl Worker {
                 config: Arc::new(Mutex::new(RunnerConfig::default())),
             };
         }
+        #[cfg(debug_assertions)]
+        let (executable, python_module) = (
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.venv/bin/python"),
+            true,
+        );
+        #[cfg(not(debug_assertions))]
+        let (executable, python_module) = (installed, false);
         Self {
-            executable: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.venv/bin/python"),
-            python_module: true,
+            executable,
+            python_module,
             directory: directory.into(),
             config: Arc::new(Mutex::new(RunnerConfig::default())),
         }
@@ -91,11 +107,15 @@ impl Worker {
         }
         let path = std::env::var("PATH").unwrap_or_default();
         cmd.env("PATH", format!("/opt/homebrew/bin:/usr/local/bin:{path}"));
-        cmd.env("FORGEPAD_RUNNER_TMPDIR", self.directory.join("runner"))
-            .env(
-                "FORGEPAD_COMPILE_CACHE",
-                self.directory.join("compiler-cache"),
-            );
+        let scratch = if config.scratch_directory.is_empty() {
+            self.directory.join("runner")
+        } else {
+            PathBuf::from(&config.scratch_directory)
+        };
+        cmd.env("FORGEPAD_RUNNER_TMPDIR", scratch).env(
+            "FORGEPAD_COMPILE_CACHE",
+            self.directory.join("compiler-cache"),
+        );
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

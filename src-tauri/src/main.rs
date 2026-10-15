@@ -39,7 +39,7 @@ fn main() {
             } else if cfg!(debug_assertions) {
                 std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../questions")
             } else {
-                anyhow::bail!("Bundled question resources are missing");
+                return Err("Bundled question resources are missing".into());
             };
             let service = Service::open(&dir, &seeds)?;
             let exe = std::env::current_exe()?

@@ -6,6 +6,41 @@ from importlib.resources import files
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
+def supplemental_events(store):
+    events = []
+    for session in store.records("interviews"):
+        if session["state"] != "COMPLETE" or not session.get("completed_at"):
+            continue
+        events.append(
+            {
+                "id": "session:" + session["id"],
+                "kind": "mock_interview_completed",
+                "question_id": session["question_id"],
+                "session_id": session["id"],
+                "occurred_at": session["completed_at"],
+                "title": "Mock interview completed",
+                "data": {"meaningful": any(m["role"] == "candidate" for m in session.get("transcript", []))},
+            }
+        )
+    for run in store.records("runs"):
+        if run.get("status") != "complete" or run.get("mode") != "run" or not run.get("completed_at"):
+            continue
+        if (run.get("result") or {}).get("status") in {None, "unavailable", "cancelled", "unsupported"}:
+            continue
+        events.append(
+            {
+                "id": "run:" + run["id"],
+                "kind": "tests_run",
+                "question_id": run["question_id"],
+                "session_id": run.get("session_id"),
+                "occurred_at": run["completed_at"],
+                "title": "Tests run",
+                "data": {"meaningful": True, "result": run["result"]["status"]},
+            }
+        )
+    return events
+
+
 def snapshot(store, timezone="UTC"):
     try:
         zone = ZoneInfo(timezone)
@@ -43,11 +78,18 @@ def snapshot(store, timezone="UTC"):
         }
         recent.append(event)
         if (a.get("result") or {}).get("status") == "passed":
-            successful_days.setdefault(a["question_id"], set()).add(date)
+            successful_days.setdefault(a["question_id"], set()).add(
+                datetime.fromisoformat(a["created_at"]).astimezone(UTC).date().isoformat()
+            )
         if (a.get("result") or {}).get("status") == "passed" and a["question_id"] not in solved:
             solved.add(a["question_id"])
             if date in days:
                 days[date]["solved"] += 1
+    for event in supplemental_events(store):
+        recent.append(event)
+        date = datetime.fromisoformat(event["occurred_at"]).astimezone(zone).date().isoformat()
+        if date in days and event["data"]["meaningful"]:
+            days[date]["activity"] += 1
     active_days = {date for date, d in days.items() if d["activity"]}
     streak = 0
     cursor = today if str(today) in active_days else today - timedelta(days=1)
@@ -85,7 +127,7 @@ def snapshot(store, timezone="UTC"):
                     "status": status,
                 }
             )
-        count = sum(s["status"] in {"solved", "mastered"} for s in steps)
+        count = sum(s["question_id"] in solved for s in steps)
         roadmaps.append(
             {
                 **r,
@@ -94,11 +136,15 @@ def snapshot(store, timezone="UTC"):
                 "solved": count,
                 "mastered": sum(s["status"] == "mastered" for s in steps),
                 "completion_percent": 100 * count / len(steps),
-                "mastery_rule": "Two deterministic passing submissions on separate calendar days, with latest attempt passing. Theory self-review is tracked separately.",
+                "mastery_rule": "Two deterministic passing submissions on separate UTC dates, with latest attempt passing. Theory self-review is tracked separately.",
             }
         )
     roadmap = roadmaps[0]
     sessions = store.records("interviews")
+    from .interviews import update_clock
+
+    for session in sessions:
+        update_clock(session)
     active = next(
         (s for s in sessions if s["state"] != "COMPLETE" and s.get("remaining_seconds", 0) > 0), None
     )
@@ -167,7 +213,7 @@ def snapshot(store, timezone="UTC"):
             "current_streak": streak,
         },
         "roadmaps": roadmaps,
-        "recent_activity": list(reversed(recent))[:8],
+        "recent_activity": sorted(recent, key=lambda event: event["occurred_at"], reverse=True)[:8],
         "due_reviews": due,
         "tracking": {
             "available": False,

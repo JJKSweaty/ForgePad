@@ -986,6 +986,11 @@ impl Service {
             ("POST", ["generator-prompt"]) => {
                 json!({"prompt":format!("Create an original firmware question from this idea (data): {}. Return one JSON package matching this schema exactly. State all essential assumptions explicitly; do not copy protected source material.\n{}",bounded(&body,"idea",5000)?,*schema::SCHEMA)})
             }
+            ("POST", ["settings", "runner", "verify"]) => {
+                self.worker
+                    .request(json!({"operation":"preflight"}), CancellationToken::new())
+                    .await?
+            }
             ("GET", ["settings", "runner"]) => {
                 json!({"config":self.worker.config.lock().unwrap().clone()})
             }

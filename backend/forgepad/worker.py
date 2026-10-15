@@ -19,6 +19,29 @@ def main():
         runner = DockerRunner()
         if request["operation"] == "availability":
             result = runner.availability()
+        elif request["operation"] == "preflight":
+            result = runner.run(
+                {
+                    "language": "c",
+                    "test_config": {
+                        "mode": "stdio",
+                        "compiler": "gcc",
+                        "sanitizers": True,
+                        "timeout_seconds": 2,
+                        "tests": [
+                            {
+                                "id": "preflight",
+                                "name": "Sandbox compiler preflight",
+                                "visibility": "public",
+                                "stdin": "",
+                                "expected_stdout": "forgepad-ready\n",
+                            }
+                        ],
+                    },
+                },
+                {"main.c": '#include <stdio.h>\nint main(void) { puts("forgepad-ready"); return 0; }\n'},
+                cancel_event=cancel,
+            )
         elif request["operation"] == "run":
             result = runner.run(
                 request["question"],

@@ -46,7 +46,7 @@ pub fn progress(roadmap: &Value, attempts: &[Value]) -> Value {
             } else {
                 "not_started"
             });
-            if passed {
+            if successes > 0 {
                 solved += 1;
             }
             if mastery {
@@ -70,6 +70,6 @@ pub fn progress(roadmap: &Value, attempts: &[Value]) -> Value {
     } else {
         0.0
     });
-    result["mastery_rule"] = json!("Two deterministic passing submissions on separate calendar days, with latest attempt passing. Theory self-review is tracked separately.");
+    result["mastery_rule"] = json!("Two deterministic passing submissions on separate UTC dates, with latest attempt passing. Theory self-review is tracked separately.");
     result
 }

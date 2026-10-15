@@ -245,3 +245,57 @@ async fn continuation_opens_the_draft_revision_even_after_question_update() {
         "continued one"
     );
 }
+
+#[test]
+fn idle_cutoff_credits_the_actual_interval_before_midnight() {
+    let (_d, s) = workspace();
+    let q = s.store.question("align-up", None).unwrap();
+    let v = s
+        .store
+        .start_visit(&q, None, "midnight-idle", at("2026-10-15T03:59:20Z"))
+        .unwrap();
+    let id = v["id"].as_str().unwrap();
+    s.store
+        .heartbeat(id, true, true, false, at("2026-10-15T03:59:20Z"))
+        .unwrap();
+    s.store
+        .heartbeat(id, true, false, false, at("2026-10-15T03:59:40Z"))
+        .unwrap();
+    s.store
+        .heartbeat(id, true, false, true, at("2026-10-15T04:00:10Z"))
+        .unwrap();
+    let d = s
+        .dashboard_at("America/Toronto", at("2026-10-15T12:00:00Z"))
+        .unwrap();
+    let days = d["days"].as_array().unwrap();
+    assert_eq!(
+        days.iter().find(|d| d["date"] == "2026-10-14").unwrap()["active_seconds"],
+        30
+    );
+    assert_eq!(
+        days.iter().find(|d| d["date"] == "2026-10-15").unwrap()["active_seconds"],
+        0
+    );
+}
+
+#[test]
+fn a_later_failed_attempt_requires_review_without_erasing_a_unique_solve() {
+    let (_d, s) = workspace();
+    let mut last = passing(&s, "align-up", "2026-10-14T12:00:00Z");
+    last["id"] = json!(forgepad_core::id());
+    last["created_at"] = json!("2026-10-15T12:00:00Z");
+    last["result"]["status"] = json!("failed");
+    last["completion_status"] = json!("needs_review");
+    s.store.save("attempts", &last).unwrap();
+    let roadmap = s.roadmap("firmware-coding-essentials").unwrap();
+    assert_eq!(roadmap["solved"], 1);
+    assert_eq!(
+        roadmap["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["question_id"] == "align-up")
+            .unwrap()["status"],
+        "needs_review"
+    );
+}
