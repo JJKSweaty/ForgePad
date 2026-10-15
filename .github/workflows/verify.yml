@@ -67,3 +67,5 @@ jobs:
         run: python scripts/prepare_native.py
       - name: Build macOS application
         run: npx tauri build --debug --bundles app
+      - name: Seal and verify local macOS bundle
+        run: python scripts/sign_local_bundle.py --bundle src-tauri/target/debug/bundle/macos/ForgePad.app

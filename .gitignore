@@ -35,3 +35,6 @@ htmlcov/
 src-tauri/target/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
+
+# Tauri recreates these ACL schemas during builds.
+src-tauri/gen/

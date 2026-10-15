@@ -1,4 +1,4 @@
-"""Build signed-target sidecars before Tauri bundles the app; no developer paths in releases."""
+"""Build platform sidecars before Tauri bundles the app."""
 
 import os
 import shutil
@@ -11,6 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    python = sys.executable
+    project_python = ROOT / ".venv/bin/python"
+    if sys.prefix == sys.base_prefix and project_python.is_file():
+        python = str(project_python)
     cargo = shutil.which("cargo")
     rustc = shutil.which("rustc")
     if not cargo or not rustc:
@@ -43,7 +47,7 @@ def main():
         entry.write_text("from forgepad.worker import main\nmain()\n")
         subprocess.run(
             [
-                sys.executable,
+                python,
                 "-m",
                 "PyInstaller",
                 "--noconfirm",
