@@ -1,0 +1,20 @@
+{
+  "scope": "Real native service and stdio executable; not a HeyClicky UI acceptance test",
+  "checks": [
+    "Official SDK initializes and discovers all 18 tools",
+    "MCP tasks and unpublished ideas persist in the same store read by desktop commands",
+    "Timed session, reflection, evidence summary and protected-data boundary verified",
+    "Existing connector is revoked immediately; reconnect retains data",
+    "Service restart preserves sessions, tasks, drafts and integration preference",
+    "Closed service returns an actionable MCP error, without launching a second application"
+  ],
+  "timings_ms": {
+    "cold_service_start": 367.043,
+    "roadmap_query_median": 2.462,
+    "mcp_handshake_and_discovery": 199.29,
+    "mcp_progress_median": 3.264,
+    "autosave_median": 0.513,
+    "warm_service_start": 28.113
+  },
+  "models_enabled": false
+}

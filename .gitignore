@@ -30,3 +30,8 @@ htmlcov/
 *.tsbuildinfo
 .vercel
 .env*
+
+# Native build outputs; retain Cargo.lock for reproducible builds.
+src-tauri/target/
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
