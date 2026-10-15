@@ -1,4 +1,54 @@
 /* Consistent reading and editing rhythm across question modes. */
+.voice-input {
+  margin: 14px 0;
+}
+.voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.voice-controls > span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.recording-button {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.dictation-preview {
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.dictation-preview > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.transcript-cleanup .text-button {
+  font-size: 12px;
+}
+.cleanup-proposal {
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cleanup-proposal strong {
+  font-size: 13px;
+}
+.cleanup-proposal .prose {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.cleanup-proposal small {
+  color: var(--muted);
+  display: block;
+  margin-bottom: 12px;
+}
 .practice-page {
   padding: 20px 24px;
 }

@@ -74,6 +74,11 @@ class CoachRequest(StrictModel):
     _files = field_validator("files")(validate_files)
 
 
+class TranscriptCorrection(StrictModel):
+    text: str = Field(min_length=1, max_length=24000)
+    question_id: str | None = Field(default=None, max_length=80)
+
+
 class IdeaRequest(StrictModel):
     idea: str = Field(min_length=1, max_length=5000)
     difficulty: Literal["beginner", "intermediate", "advanced", "expert"] = "intermediate"
@@ -345,9 +350,18 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         return question_or_404(question_id)
 
     @app.get("/api/questions/{question_id}")
-    def get_question(question_id: str):
-        question = question_or_404(question_id)
-        return {**practice_question(question), **summary(question)}
+    def get_question(question_id: str, session_id: str | None = None, version: int | None = None):
+        if session_id:
+            session = load_session(session_id)
+            if session["question_id"] != question_id:
+                raise HTTPException(400, "Question does not belong to this session")
+            version = session["question_version"]
+        question = question_or_404(question_id, version)
+        coaching = not any(s["state"] != "COMPLETE" for s in store().records("interviews"))
+        result = {**practice_question(question), **summary(question), "coaching_available": coaching}
+        if not coaching:
+            result["hints"] = []
+        return result
 
     @app.patch("/api/questions/{question_id}")
     def update_question(question_id: str, request: Flags):
@@ -367,6 +381,8 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                 raise HTTPException(400, "Question does not belong to this session")
             # Mock interviews use the interviewer rather than practice hints.
             raise HTTPException(409, "Use the interviewer during a mock interview. Coaching is available in practice.")
+        if any(s["state"] != "COMPLETE" for s in store().records("interviews")):
+            raise HTTPException(409, "Coaching is available in practice. Finish the active interview to use hints.")
         transcript = [{"role": "candidate" if t.get("role") == "user" else "interviewer",
                        "content": t.get("content", "")[:1200]}
                       for t in request.history if t.get("role") in {"user", "assistant"}]
@@ -749,6 +765,17 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             ) from None
         finally:
             await file.close()
+
+    @app.post("/api/speech/correct")
+    def correct_transcript(request: TranscriptCorrection):
+        question = question_or_404(request.question_id) if request.question_id else {}
+        vocabulary = {key: question.get(key) for key in ("title", "topics", "prompt")}
+        try:
+            text = app.state.ai.correct_transcript(request.text, vocabulary)
+            return {"text": text, "provider": "local"}
+        except Exception:
+            logging.getLogger(__name__).exception("Transcript cleanup failed")
+            raise HTTPException(503, "Local transcript cleanup is unavailable. Your original answer is preserved.") from None
 
     @app.post("/api/commands")
     def recognize_command(request: TextRequest):

@@ -15,7 +15,9 @@ import {
 import { api, download, message, post, readable } from "./api";
 import type { Health, Question, Session } from "./api";
 import { native, nativeEvents } from "./native";
-import { watchSpeechActivity } from "./speechActivity";
+import VoiceInput from "./VoiceInput";
+import TranscriptCleanup from "./TranscriptCleanup";
+import { questionMode, modeNames } from "./questionMode";
 import { SessionReport } from "./SessionReport";
 import { InterviewReplay } from "./InterviewReplay";
 const Practice = lazy(() => import("./Practice"));
@@ -39,11 +41,6 @@ export default function Interview({
   theme: string;
   onSettings?: () => void;
 }) {
-  const [voiceActive, setVoiceActive] = useState(false);
-  const startingMic = useRef(false);
-  const vadStop = useRef<(() => void) | null>(null),
-    recordingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [audioMode, setAudioMode] = useState("external_assistant");
   const [workspace, setWorkspace] = useState<
       "conversation" | "code" | "replay"
     >("conversation"),
@@ -55,10 +52,9 @@ export default function Interview({
     [personality, setPersonality] = useState("neutral"),
     [text, setText] = useState(""),
     [busy, setBusy] = useState(false),
+    [dictating, setDictating] = useState(false),
     [error, setError] = useState(""),
     [remaining, setRemaining] = useState(0),
-    [recording, setRecording] = useState(false),
-    [transcribing, setTranscribing] = useState(false),
     [finishConfirm, setFinishConfirm] = useState(false);
   usePracticeActivity(
     session?.question_id,
@@ -69,16 +65,10 @@ export default function Interview({
     session?.state === "COMPLETE" && workspace === "code"
       ? "replay"
       : workspace;
-  const recorder = useRef<MediaRecorder | null>(null),
-    stream = useRef<MediaStream | null>(null),
-    transcript = useRef<HTMLDivElement | null>(null),
+  const transcript = useRef<HTMLDivElement | null>(null),
     clockAnchor = useRef({ at: Date.now(), remaining: 0 }),
     live = useRef(true);
   useEffect(() => {
-    if (native)
-      void api<{ mode: string }>("/settings/audio")
-        .then((c) => setAudioMode(c.mode))
-        .catch((e) => setError(message(e)));
     let disposed = false;
     let stop: (() => void) | undefined;
     void nativeEvents((event) => {
@@ -86,10 +76,6 @@ export default function Interview({
         setError(
           event.data?.detail ??
             "The interviewer could not reply. Check your AI connection in Settings.",
-        );
-      if (event.type === "audio_mode")
-        void api<{ mode: string }>("/settings/audio").then((c) =>
-          setAudioMode(c.mode),
         );
       if (
         ["session_updated", "session_started", "navigate"].includes(event.type)
@@ -123,10 +109,6 @@ export default function Interview({
       .catch((e) => setError(message(e)));
     return () => {
       live.current = false;
-      recorder.current?.state === "recording" && recorder.current.stop();
-      stream.current?.getTracks().forEach((track) => track.stop());
-      vadStop.current?.();
-      if (recordingTimer.current) clearTimeout(recordingTimer.current);
     };
   }, []);
   useEffect(() => {
@@ -199,87 +181,6 @@ export default function Interview({
       setError(message(e));
     } finally {
       setBusy(false);
-    }
-  }
-  async function microphone() {
-    if (native && audioMode !== "interview") {
-      setError(
-        "Switch audio mode to Interview in Settings to let ForgePad capture your explanation.",
-      );
-      return;
-    }
-    if (recording) {
-      recorder.current?.stop();
-      return;
-    }
-    if (startingMic.current) return;
-    startingMic.current = true;
-    setError("");
-    try {
-      const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!live.current) {
-        media.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      stream.current = media;
-      const rec = new MediaRecorder(media);
-      try {
-        vadStop.current = await watchSpeechActivity(media, (active) => {
-          if (live.current) setVoiceActive(active);
-        });
-      } catch {
-        /* Push-to-talk remains usable if AudioWorklet is unavailable. */
-      }
-      if (!live.current) {
-        vadStop.current?.();
-        media.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      recorder.current = rec;
-      const chunks: BlobPart[] = [];
-      rec.ondataavailable = (e) => {
-        if (e.data.size) chunks.push(e.data);
-      };
-      rec.onstop = async () => {
-        vadStop.current?.();
-        vadStop.current = null;
-        if (recordingTimer.current) clearTimeout(recordingTimer.current);
-        setVoiceActive(false);
-        media.getTracks().forEach((track) => track.stop());
-        if (!live.current) return;
-        setRecording(false);
-        setTranscribing(true);
-        try {
-          const form = new FormData();
-          form.append(
-            "file",
-            new Blob(chunks, { type: rec.mimeType }),
-            "recording.webm",
-          );
-          const result = await api<{ text: string }>("/speech/transcribe", {
-            method: "POST",
-            body: form,
-          });
-          if (live.current)
-            setText(
-              (previous) => `${previous}${previous ? " " : ""}${result.text}`,
-            );
-        } catch (e) {
-          if (live.current) setError(message(e));
-        } finally {
-          if (live.current) setTranscribing(false);
-        }
-      };
-      rec.start();
-      recordingTimer.current = setTimeout(() => {
-        if (rec.state === "recording") rec.stop();
-      }, 60000);
-      setRecording(true);
-    } catch (e) {
-      stream.current?.getTracks().forEach((track) => track.stop());
-      setError(message(e));
-    } finally {
-      startingMic.current = false;
     }
   }
   return (
@@ -554,7 +455,13 @@ export default function Interview({
                 onClick={() => switchWorkspace(t)}
               >
                 {t === "code"
-                  ? "Code workspace"
+                  ? modeNames[
+                      questionMode(
+                        questions.find((q) => q.id === session.question_id) ?? {
+                          type: "theory",
+                        },
+                      )
+                    ]
                   : t === "replay"
                     ? "Session replay"
                     : "Conversation"}
@@ -629,44 +536,37 @@ export default function Interview({
                     }
                   />
                   <div className="message-actions">
-                    <button
-                      type="button"
-                      className={recording ? "danger" : "secondary"}
-                      disabled={
-                        !health?.speech.available ||
-                        transcribing ||
-                        session.paused ||
-                        (native && audioMode !== "interview")
+                    <VoiceInput
+                      questionId={session.question_id}
+                      sessionId={session.id}
+                      disabled={busy || session.paused}
+                      onBusyChange={setDictating}
+                      onText={(part) =>
+                        setText(
+                          (previous) =>
+                            `${previous}${previous ? " " : ""}${part}`,
+                        )
                       }
-                      title={
-                        health?.speech.available
-                          ? "Record locally; click again to stop"
-                          : "Configure local speech transcription to enable microphone"
-                      }
-                      onClick={() => void microphone()}
-                    >
-                      <Mic size={15} />
-                      {recording
-                        ? voiceActive
-                          ? "Voice detected · stop"
-                          : "Recording · stop"
-                        : transcribing
-                          ? "Transcribing…"
-                          : "Microphone"}
-                    </button>
+                    />
                     <button
                       className="primary"
                       disabled={
-                        busy || session.paused || !text.trim() || recording
+                        busy || dictating || session.paused || !text.trim()
                       }
                     >
                       <Send size={14} />
                       Send response
                     </button>
                   </div>
+                  <TranscriptCleanup
+                    text={text}
+                    questionId={session.question_id}
+                    onApply={setText}
+                    disabled={busy || dictating || session.paused}
+                  />
                   <small>
-                    Microphone starts only when pressed in Interview audio mode.
-                    Stop to transcribe; review text before sending.
+                    Live dictation stays editable. Review your answer, then send
+                    it.
                   </small>
                 </form>
               )}
@@ -692,11 +592,11 @@ export default function Interview({
                     onClick={() => switchWorkspace("code")}
                     disabled={session.state === "COMPLETE"}
                   >
-                    Open interview editor <ChevronRight size={14} />
+                    Open question workspace <ChevronRight size={14} />
                   </button>
                   <p className="small muted-text">
-                    Code changes and test runs in the interview editor are saved
-                    to Session replay.
+                    Your question opens in its own workspace. Responses and test
+                    runs are saved for review.
                   </p>
                 </div>
               </section>

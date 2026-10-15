@@ -271,6 +271,12 @@ impl Store {
         })
     }
     pub fn save_draft(&self, q: &Value, body: &Value) -> Result<Value> {
+        self.write_draft(q, body, false)
+    }
+    pub fn save_draft_if_current(&self, q: &Value, body: &Value) -> Result<Value> {
+        self.write_draft(q, body, true)
+    }
+    fn write_draft(&self, q: &Value, body: &Value, check_current: bool) -> Result<Value> {
         crate::schema::files(&body["files"], false)?;
         let answer = body["answer"].as_str().unwrap_or("");
         if answer.len() > 50000 {
@@ -281,6 +287,18 @@ impl Store {
             let tx = db.transaction()?;
             let id = q["id"].as_str();
             let version = q["version"].as_i64();
+            if check_current || body.get("updated_at").is_some() {
+                let current: Option<String> = tx
+                    .query_row(
+                        "SELECT updated_at FROM draft_versions WHERE question_id=? AND version=?",
+                        params![id, version],
+                        |r| r.get(0),
+                    )
+                    .optional()?;
+                if current.as_deref() != body["updated_at"].as_str() {
+                    bail!("The saved draft changed. Reload the latest draft before saving; your local recovery is kept.");
+                }
+            }
             let files = body["files"].to_string();
             let at = crate::now();
             tx.execute("INSERT INTO draft_versions VALUES(?,?,?,?,?) ON CONFLICT(question_id,version) DO UPDATE SET files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",params![id,version,files,answer,at])?;

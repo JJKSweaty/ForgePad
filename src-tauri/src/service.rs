@@ -19,6 +19,7 @@ pub struct Service {
     pub store: Arc<Store>,
     pub worker: Worker,
     pub models: Models,
+    pub speech_runtime: crate::speech::SpeechRuntime,
     pub events: broadcast::Sender<Value>,
     pub jobs: Mutex<HashMap<String, CancellationToken>>,
     workers: Arc<Semaphore>,
@@ -46,6 +47,7 @@ impl Service {
             store,
             worker: Worker::discover(directory),
             models,
+            speech_runtime: crate::speech::SpeechRuntime::default(),
             events,
             jobs: Mutex::new(HashMap::new()),
             workers: Arc::new(Semaphore::new(2)),
@@ -82,6 +84,7 @@ impl Service {
             stop.cancel();
         }
         self.shutdown_token.cancel();
+        self.speech_runtime.close().await;
         for _ in 0..100 {
             if self.jobs.lock().unwrap().is_empty() {
                 break;
@@ -661,8 +664,48 @@ impl Service {
         let last = logs.iter().find(|l| l["success"] == true);
         let socket = self.store.directory.join("service.sock");
         Ok(
-            json!({"enabled":enabled,"connector_status":if !enabled{"disconnected"}else if last.is_some(){"tool_calls_recorded"}else{"ready_for_setup"},"preferred_transport":"stdio","executable_path":path,"arguments":["--socket",socket],"command":path.as_ref().map(|p|format!("'{}' --socket '{}'",p.replace('\'',"'\\''"),socket.display().to_string().replace('\'',"'\\''"))),"local_mcp_url":self.http_url.lock().unwrap().clone(),"authentication":{"stdio":"private Unix socket (0700 directory, 0600 socket)","http":"API key stored in macOS Keychain; endpoint disabled until enabled"},"last_successful_tool_call":last,"permissions":{"progress":true,"search":true,"start_sessions":true,"unpublished_drafts":true,"tasks":true,"publish":false,"delete":false,"hidden_tests":false,"solutions":false,"raw_audio":false,"full_transcripts":false},"privacy":"Information returned to HeyClicky may be processed by its external AI services. Local transport does not guarantee end-to-end local processing.","setup_instructions":"HeyClicky → Settings → Integrations → Add custom connector → Name: ForgePad → Advanced → Command on this Mac. Paste the generated executable command. Use no API key for stdio. Field layout must match your installed version.","coach_instructions":include_str!("../../docs/firmware-coach.txt")}),
+            json!({"enabled":enabled,"connector_status":if !enabled{"disconnected"}else if last.is_some(){"tool_calls_recorded"}else{"ready_for_setup"},"preferred_transport":"stdio","executable_path":path,"arguments":["--socket",socket],"command":path.as_ref().map(|p|format!("'{}' --socket '{}'",p.replace('\'',"'\\''"),socket.display().to_string().replace('\'',"'\\''"))),"local_mcp_url":self.http_url.lock().unwrap().clone(),"authentication":{"stdio":"private Unix socket (0700 directory, 0600 socket)","http":"API key stored in macOS Keychain; endpoint disabled until enabled"},"last_successful_tool_call":last,"permissions":{"progress":true,"search":true,"start_sessions":true,"public_questions":true,"working_drafts":true,"public_test_runs":true,"session_controls":true,"practice_hints":true,"unpublished_drafts":true,"tasks":true,"publish":false,"delete":false,"hidden_tests":false,"solutions":false,"raw_audio":false,"full_transcripts":false},"privacy":"Information returned to HeyClicky may be processed by its external AI services. Local transport does not guarantee end-to-end local processing.","setup_instructions":"HeyClicky → Settings → Integrations → Add custom connector → Name: ForgePad → Advanced → Command on this Mac. Paste the generated executable command. Use no API key for stdio. Field layout must match your installed version.","coach_instructions":include_str!("../../docs/firmware-coach.txt")}),
         )
+    }
+    pub fn session_event(self: &Arc<Self>, id: &str, body: &Value) -> Result<Value> {
+        let s = {
+            let _g = self.sessions.lock().unwrap();
+            let mut s = self.load_session_unlocked(id)?;
+            let q = self.store.question(
+                s["question_id"].as_str().unwrap(),
+                s["question_version"].as_i64(),
+            )?;
+            sessions::apply(&mut s, &q, body)?;
+            if s["state"] == "COMPLETE" {
+                let outcomes=self.store.replay(id)?.iter().filter(|e|e["kind"]=="test_result").map(|e|json!({"run_id":e["data"]["run_id"],"status":e["data"]["result"]["status"],"passed":e["data"]["result"]["passed"],"total":e["data"]["result"]["total"]})).collect::<Vec<_>>();
+                s["report"]["test_outcomes"] = json!(outcomes);
+            }
+
+            self.store.save("interviews", &s)?;
+            let kind = if body["type"] == "message" {
+                if s["state"] == "CLARIFICATION" {
+                    "clarification_requested"
+                } else if s["state"] == "FOLLOW_UP" {
+                    "follow_up_response"
+                } else {
+                    "candidate_explanation"
+                }
+            } else if body["type"] == "finish" || s["state"] == "COMPLETE" {
+                "session_completion"
+            } else {
+                "control"
+            };
+            self.store.event(Some(id), kind, body.clone())?;
+            s
+        };
+        self.notify("session_updated", Self::session_metadata(&s));
+        if body["type"] == "message"
+            && s["state"] != "COMPLETE"
+            && (self.openrouter_enabled() || !self.models.list().is_empty())
+        {
+            self.interview_inference(&s)?;
+        }
+        Ok(s)
     }
     pub async fn route(self: &Arc<Self>, method: &str, path: &str, body: Value) -> Result<Value> {
         if body.to_string().len()
@@ -687,10 +730,17 @@ impl Service {
                 if self.openrouter_enabled() {
                     ai = json!({"available":self.openrouter_settings()["connected"]==true,"provider":"openrouter","detail":"OpenRouter is configured. Model access is checked when requesting replies."});
                 }
-                let config = self.store.get("settings","speech").unwrap_or(json!({"engine":"builtin","model":"ultra"}));
+                let config = self
+                    .store
+                    .get("settings", "speech")
+                    .unwrap_or(json!({"engine":"builtin","model":"ultra"}));
                 let speech = if config["engine"] == "builtin" {
                     let catalog = self.speech_catalog().await;
-                    let available = catalog["models"].as_array().is_some_and(|models|models.iter().any(|m|m["id"]==config["model"] && m["installed"]==true));
+                    let available = catalog["models"].as_array().is_some_and(|models| {
+                        models
+                            .iter()
+                            .any(|m| m["id"] == config["model"] && m["installed"] == true)
+                    });
                     json!({"available":available,"detail":"Speech is processed on this Mac. Download a model in Settings to enable voice answers."})
                 } else {
                     json!({"available":config["endpoint"].as_str().is_some_and(|s|!s.is_empty()),"detail":"Local speech endpoint is checked at transcription time."})
@@ -765,6 +815,7 @@ impl Service {
                     json!({"question_id":id,"version":q["version"]}),
                 )?;
                 let mut out = schema::candidate(&q);
+                out["coaching_available"] = json!(self.active_session()?["strict"] != true);
                 // Strict sessions never expose prepared hints or follow-up answers to assistants or candidates.
                 if self.active_session()?.get("strict") == Some(&json!(true)) {
                     out["hints"] = json!([]);
@@ -783,7 +834,11 @@ impl Service {
                 if self.active_session()?["strict"] == true {
                     bail!("Coaching is available in practice. Finish the strict interview to use hints.");
                 }
-                let q = self.question_revision(id, body["session_id"].as_str(), body["question_version"].as_i64())?;
+                let q = self.question_revision(
+                    id,
+                    body["session_id"].as_str(),
+                    body["question_version"].as_i64(),
+                )?;
                 self.coach(&schema::candidate(&q), &body).await?
             }
             ("GET", ["drafts", id]) => self.store.draft(
@@ -909,46 +964,7 @@ impl Service {
                 let _g = self.sessions.lock().unwrap();
                 json!({"session":self.load_session_unlocked(id)?,"events":self.store.replay(id)?})
             }
-            ("POST", ["interviews", id, "events"]) => {
-                let s = {
-                    let _g = self.sessions.lock().unwrap();
-                    let mut s = self.load_session_unlocked(id)?;
-                    let q = self.store.question(
-                        s["question_id"].as_str().unwrap(),
-                        s["question_version"].as_i64(),
-                    )?;
-                    sessions::apply(&mut s, &q, &body)?;
-                    if s["state"] == "COMPLETE" {
-                        let outcomes=self.store.replay(id)?.iter().filter(|e|e["kind"]=="test_result").map(|e|json!({"run_id":e["data"]["run_id"],"status":e["data"]["result"]["status"],"passed":e["data"]["result"]["passed"],"total":e["data"]["result"]["total"]})).collect::<Vec<_>>();
-                        s["report"]["test_outcomes"] = json!(outcomes);
-                    }
-
-                    self.store.save("interviews", &s)?;
-                    let kind = if body["type"] == "message" {
-                        if s["state"] == "CLARIFICATION" {
-                            "clarification_requested"
-                        } else if s["state"] == "FOLLOW_UP" {
-                            "follow_up_response"
-                        } else {
-                            "candidate_explanation"
-                        }
-                    } else if body["type"] == "finish" || s["state"] == "COMPLETE" {
-                        "session_completion"
-                    } else {
-                        "control"
-                    };
-                    self.store.event(Some(id), kind, body.clone())?;
-                    s
-                };
-                self.notify("session_updated", Self::session_metadata(&s));
-                if body["type"] == "message"
-                    && s["state"] != "COMPLETE"
-                    && (self.openrouter_enabled() || !self.models.list().is_empty())
-                {
-                    self.interview_inference(&s)?;
-                }
-                s
-            }
+            ("POST", ["interviews", id, "events"]) => self.session_event(id, &body)?,
             ("GET", ["context"]) | ("GET", ["preparation-context"]) => {
                 self.preparation_context()?
             }
@@ -1054,6 +1070,21 @@ impl Service {
                 self.enqueue_job("benchmark", "models", json!({}))?
             }
             ("GET", ["speech", "catalog"]) => self.speech_catalog().await,
+            ("GET", ["speech", "status"]) => self.speech_status().await,
+            ("POST", ["permissions", "microphone", "settings"]) => {
+                let status = tokio::process::Command::new("/usr/bin/open").arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone").status().await.context("Could not open microphone settings")?;
+                if !status.success() {
+                    bail!("Open System Settings → Privacy & Security → Microphone manually.");
+                }
+                json!({"opened":true})
+            }
+            ("POST", ["permissions", "heyclicky", "settings"]) => {
+                let status = tokio::process::Command::new("/usr/bin/open").arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility").status().await.context("Could not open device control settings")?;
+                if !status.success() {
+                    bail!("Open System Settings → Privacy & Security manually.");
+                }
+                json!({"opened":true})
+            }
             ("POST", ["speech", "download"]) => {
                 let model = required(&body, "model")?;
                 crate::speech::validate_model(model)?;
@@ -1071,7 +1102,8 @@ impl Service {
             ("GET", ["settings", "openrouter"]) => self.openrouter_settings(),
             ("PUT", ["settings", "openrouter"]) => self.configure_openrouter(&body)?,
             ("DELETE", ["settings", "openrouter"]) => self.disconnect_openrouter()?,
-            ("POST", ["settings", "speech", "models"]) | ("POST", ["settings", "models", "discover"]) => {
+            ("POST", ["settings", "speech", "models"])
+            | ("POST", ["settings", "models", "discover"]) => {
                 let endpoint = required(&body, "endpoint")?;
                 crate::ai::validate_models(&[Model {
                     id: "speech".into(),
@@ -1143,6 +1175,7 @@ impl Service {
                 config
             }
             ("POST", ["speech", "transcribe"]) => self.transcribe(&body).await?,
+            ("POST", ["speech", "correct"]) => self.correct_transcript(&body).await?,
             ("GET", ["integrations", "heyclicky"]) => self.integration_settings()?,
             ("POST", ["integrations", "heyclicky", "connect"]) => {
                 *self.mcp_enabled.lock().unwrap() = true;
@@ -1248,23 +1281,42 @@ impl Service {
     }
     async fn transcribe(&self, body: &Value) -> Result<Value> {
         let audio_mode = self.store.get("settings", "audio")?;
-        if audio_mode["mode"] != "interview" || self.active_session()?.is_null() {
-            bail!("Switch to Interview audio mode and start a session before capturing audio");
+        if audio_mode["mode"] != "interview" {
+            bail!("Enable Interview audio in Settings before capturing voice answers");
+        }
+        let session = if let Some(id) = body["session_id"].as_str() {
+            let session = self.load_session(id)?;
+            if session["paused"] == true || session["state"] == "COMPLETE" {
+                bail!("Resume an active interview before dictating");
+            }
+            session
+        } else {
+            Value::Null
+        };
+        if let Some(id) = body["question_id"].as_str() {
+            self.store.question(id, None)?;
+            if !session.is_null() && session["question_id"] != id {
+                bail!("Question does not belong to this session");
+            }
+        } else if session.is_null() {
+            bail!("Open a question or interview before dictating");
         }
         let bytes: Vec<u8> = serde_json::from_value(body["audio"].clone())?;
         if bytes.is_empty() || bytes.len() > 8 * 1024 * 1024 {
             bail!("Audio must contain 1 byte to 8 MiB");
         }
-        let speech = self.store.get("settings", "speech")?;
+        let speech = self
+            .store
+            .get("settings", "speech")
+            .unwrap_or(json!({"engine":"builtin","model":"ultra"}));
         let mime = body["mime_type"].as_str().unwrap_or("audio/webm");
         if !["audio/webm", "audio/ogg", "audio/wav", "audio/mp4"].contains(&mime) {
             bail!("Unsupported compressed audio type");
         }
         let mut recording_id = Value::Null;
-        if audio_mode["record_audio"] == true {
+        if audio_mode["record_audio"] == true && body["partial"] != true && !session.is_null() {
             use std::io::Write;
             use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-            let session = self.active_session()?;
             let id = crate::id();
             let extension = match mime {
                 "audio/mp4" => "m4a",
@@ -1295,7 +1347,12 @@ impl Service {
             let result = self
                 .builtin_transcribe(&bytes, mime, speech["model"].as_str().unwrap_or("ultra"))
                 .await?;
-            let text = bounded(&result, "text", 30000)?;
+            let text = result["text"]
+                .as_str()
+                .unwrap_or("")
+                .chars()
+                .take(30000)
+                .collect::<String>();
             return Ok(
                 json!({"text":text,"provider":"local","raw_audio_saved":!recording_id.is_null(),"recording_id":recording_id}),
             );

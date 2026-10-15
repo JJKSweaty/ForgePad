@@ -15,8 +15,8 @@ struct ForgePadSpeech {
                 }))
                 return
             }
-            guard args.count >= 3, ["prepare", "transcribe"].contains(args[1]) else {
-                throw SpeechError.message("Expected prepare|transcribe ultra|v3|v2 [audio-path]")
+            guard args.count >= 3, ["prepare", "transcribe", "serve"].contains(args[1]) else {
+                throw SpeechError.message("Expected prepare|transcribe|serve ultra|v3|v2 [audio-path]")
             }
             let version: AsrModelVersion
             switch args[2] {
@@ -34,9 +34,25 @@ struct ForgePadSpeech {
                 throw SpeechError.message("Speech model is not downloaded. Download it in Settings first.")
             }
             let models = try await AsrModels.loadFromCache(version: version)
-            guard args.count == 4 else { throw SpeechError.message("An audio file is required") }
             let manager = AsrManager(config: .default)
             try await manager.loadModels(models)
+            if args[1] == "serve" {
+                // Keep CoreML loaded across live previews and utterances. No network or mic capture.
+                emit(["ready": true])
+                while let line = readLine() {
+                    do {
+                        guard let data = line.data(using: .utf8),
+                              let request = try JSONSerialization.jsonObject(with: data) as? [String: String],
+                              let path = request["path"] else { throw SpeechError.message("An audio path is required") }
+                        // Each complete WAV is independent; do not carry decoder text across previews.
+                        var state = try TdtDecoderState(decoderLayers: await manager.decoderLayerCount)
+                        let result = try await manager.transcribe(URL(fileURLWithPath: path), decoderState: &state)
+                        emit(["text": result.text])
+                    } catch { emit(["error": error.localizedDescription]) }
+                }
+                return
+            }
+            guard args.count == 4 else { throw SpeechError.message("An audio file is required") }
             var state = try TdtDecoderState(decoderLayers: await manager.decoderLayerCount)
             let result = try await manager.transcribe(URL(fileURLWithPath: args[3]), decoderState: &state)
             emit(["text": result.text])
@@ -47,10 +63,12 @@ struct ForgePadSpeech {
     }
     static func emit(_ object: [String: Any]) {
         if let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
-           let line = String(data: data, encoding: .utf8) { print(line) }
+           let line = String(data: data, encoding: .utf8) {
+            FileHandle.standardOutput.write(Data((line + "\n").utf8))
+        }
     }
 }
 enum SpeechError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case let .message(text) = self { return text } }
+    var errorDescription: String? { switch self { case let .message(text): return text } }
 }

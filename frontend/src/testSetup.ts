@@ -6,6 +6,7 @@ globalThis.ResizeObserver = class {
   disconnect() {}
 };
 HTMLElement.prototype.scrollIntoView = vi.fn();
+window.scrollTo = vi.fn();
 // Node's experimental storage globals must not shadow jsdom's browser storage.
 function browserStorage(): Storage {
   const values = new Map<string, string>();

@@ -275,8 +275,8 @@ export function SettingsPage({
                     <span>
                       <strong>Voice answers</strong>
                       <p>
-                        Use the microphone during mock interviews. You can
-                        review each transcript before sending.
+                        Dictate in practice, hints, and interviews. Review the
+                        live text before sending.
                       </p>
                     </span>
                     <input
@@ -325,7 +325,7 @@ export function SettingsPage({
                   </details>
                   <p className="privacy-note">
                     {mode === "interview"
-                      ? "ForgePad captures after you press Microphone in an active interview. Pause HeyClicky capture yourself if needed; the applications do not share a microphone stream."
+                      ? "Press Speak your answer in practice, hints, or an interview to start local dictation. Stop releases the microphone. HeyClicky controls its microphone independently."
                       : "ForgePad does not capture in this mode. HeyClicky controls its own microphone independently."}
                   </p>
                   <label className="approval-check">
@@ -764,16 +764,43 @@ export function SettingsPage({
                   </details>
                   <details>
                     <summary>Permissions</summary>
+                    <p>
+                      ForgePad grants the connected assistant access to public
+                      questions, your working drafts, public test runs, and
+                      session controls. Reconnect the ForgePad connector in
+                      HeyClicky after an update to refresh its tools.
+                    </p>
                     <div className="permission-grid">
                       {Object.entries(integration.permissions).map(
                         ([key, allowed]) => (
                           <div key={key}>
                             <span>{readable(key)}</span>
-                            <span>{allowed ? "Allowed" : "Denied"}</span>
+                            <span>
+                              {allowed && integration.enabled
+                                ? "Allowed"
+                                : "Unavailable"}
+                            </span>
                           </div>
                         ),
                       )}
                     </div>
+                    <p>
+                      For HeyClicky’s voice and app controls, check macOS
+                      Privacy & Security → Microphone, Device Control and Data
+                      Access (Accessibility), and Screen & System Audio
+                      Recording. These are separate from the ForgePad connector.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void action(
+                          () => post("/permissions/heyclicky/settings", {}),
+                          "",
+                        )
+                      }
+                    >
+                      Open macOS permissions
+                    </button>
                   </details>
                   <details>
                     <summary>Optional loopback HTTP transport</summary>

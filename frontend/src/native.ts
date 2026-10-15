@@ -27,6 +27,9 @@ export async function nativeRequest<T>(
     body = {
       audio: Array.from(new Uint8Array(await file.arrayBuffer())),
       mime_type: file.type.split(";")[0],
+      question_id: init.body.get("question_id") ?? undefined,
+      session_id: init.body.get("session_id") ?? undefined,
+      partial: init.body.get("partial") === "true",
     };
   }
   return invoke<T>("api_request", {

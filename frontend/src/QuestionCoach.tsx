@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Send, Sparkles } from "lucide-react";
 import { message, post } from "./api";
 import type { Question } from "./api";
+import VoiceInput from "./VoiceInput";
 
 type Turn = { role: "user" | "assistant"; content: string };
 export default function QuestionCoach({
@@ -20,6 +21,7 @@ export default function QuestionCoach({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dictating, setDictating] = useState(false);
   const [error, setError] = useState("");
   const live = useRef(true);
   useEffect(() => {
@@ -29,7 +31,7 @@ export default function QuestionCoach({
     };
   }, []);
   async function ask(content: string) {
-    if (busy || !content.trim()) return;
+    if (busy || dictating || !content.trim()) return;
     setBusy(true);
     setError("");
     try {
@@ -70,7 +72,7 @@ export default function QuestionCoach({
       {!turns.length && (
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || dictating}
           onClick={() =>
             void ask(
               "Help me reason about the next step in my answer. Ask one focused question instead of giving the solution.",
@@ -112,8 +114,21 @@ export default function QuestionCoach({
           maxLength={4000}
           disabled={busy}
         />
-        {voice}
-        <button className="secondary" disabled={busy || !text.trim()}>
+        {voice ?? (
+          <VoiceInput
+            questionId={question.id}
+            sessionId={sessionId}
+            disabled={busy}
+            onBusyChange={setDictating}
+            onText={(part) =>
+              setText((previous) => `${previous}${previous ? " " : ""}${part}`)
+            }
+          />
+        )}
+        <button
+          className="secondary"
+          disabled={busy || dictating || !text.trim()}
+        >
           <Send size={14} /> Ask coach
         </button>
       </form>

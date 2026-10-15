@@ -2,10 +2,12 @@ import { PaneDivider } from "./PaneDivider";
 import { usePracticeActivity } from "./usePracticeActivity";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type * as monaco from "monaco-editor/esm/vs/editor/editor.api";
-import { native } from "./native";
+import { native, nativeEvents } from "./native";
 import ReasoningWorkspace from "./ReasoningWorkspace";
 import QuestionCoach from "./QuestionCoach";
 import { questionMode, modeNames } from "./questionMode";
+import VoiceInput from "./VoiceInput";
+import TranscriptCleanup from "./TranscriptCleanup";
 import {
   Check,
   ChevronLeft,
@@ -58,6 +60,7 @@ export default function Practice({
     [saveStatus, setSaveStatus] = useState("Loading draft"),
     [run, setRun] = useState<Run | null>(null),
     [busy, setBusy] = useState(false),
+    [dictating, setDictating] = useState(false),
     [fontSize, setFontSize] = useState(
       () => Number(localStorage.getItem("forgepad.editor.fontSize")) || 14,
     ),
@@ -67,6 +70,7 @@ export default function Practice({
     [reflection, setReflection] = useState(""),
     [showCheckpoint, setShowCheckpoint] = useState(false),
     [resetConfirm, setResetConfirm] = useState(false),
+    [externalDraft, setExternalDraft] = useState<Draft | null>(null),
     [checkpoint, setCheckpoint] = useState<Checkpoint | null>(() => {
       try {
         return JSON.parse(
@@ -82,6 +86,8 @@ export default function Practice({
     editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null),
     loadedVersion = useRef<number | undefined>(questionVersion),
     saveSequence = useRef(0),
+    savedAt = useRef<string | null>(null),
+    savedContent = useRef(""),
     saveQueue = useRef(Promise.resolve());
   useEffect(() => {
     let live = true;
@@ -107,6 +113,8 @@ export default function Practice({
         setAnswer(next.answer);
         setActiveFile(Object.keys(next.files)[0] ?? "");
         draft.current = next;
+        savedAt.current = d.updated_at ?? null;
+        savedContent.current = JSON.stringify(next);
         ready.current = true;
         setSaveStatus("All changes saved");
       })
@@ -119,14 +127,22 @@ export default function Practice({
         const finalDraft = {
           ...draft.current,
           session_id: sessionId,
-          ...(native ? { question_version: loadedVersion.current } : {}),
+          ...(native
+            ? {
+                question_version: loadedVersion.current,
+                updated_at: savedAt.current,
+              }
+            : {}),
         };
         saveQueue.current = saveQueue.current
           .catch(() => {})
           .then(async () => {
             await api(`/drafts/${encodeURIComponent(questionId)}`, {
               method: "PUT",
-              body: JSON.stringify(finalDraft),
+              body: JSON.stringify({
+                ...finalDraft,
+                ...(native ? { updated_at: savedAt.current } : {}),
+              }),
               keepalive: true,
             });
           })
@@ -142,14 +158,24 @@ export default function Practice({
     const request = saveQueue.current
       .catch(() => {})
       .then(async () => {
-        await api(`/drafts/${encodeURIComponent(questionId)}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            ...next,
-            session_id: sessionId,
-            ...(native ? { question_version: question?.version } : {}),
-          }),
-        });
+        const result = await api<Draft>(
+          `/drafts/${encodeURIComponent(questionId)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              ...next,
+              session_id: sessionId,
+              ...(native
+                ? {
+                    question_version: question?.version,
+                    updated_at: savedAt.current,
+                  }
+                : {}),
+            }),
+          },
+        );
+        savedAt.current = result.updated_at ?? null;
+        savedContent.current = JSON.stringify(next);
       });
     saveQueue.current = request;
     try {
@@ -171,6 +197,44 @@ export default function Practice({
     window.addEventListener("forgepad:flush", flush);
     return () => window.removeEventListener("forgepad:flush", flush);
   }, [question?.version, sessionId]);
+  useEffect(() => {
+    if (!native) return;
+    let live = true;
+    let stop: (() => void) | undefined;
+    void nativeEvents((event) => {
+      if (
+        event.type !== "draft_updated" ||
+        (event.data as { question_id?: string })?.question_id !== questionId
+      )
+        return;
+      void saveQueue.current
+        .catch(() => {})
+        .then(async () => {
+          const latest = await api<Draft>(
+            `/drafts/${encodeURIComponent(questionId)}?version=${loadedVersion.current}`,
+          );
+          if (!live) return;
+          if (JSON.stringify(draft.current) === savedContent.current) {
+            savedAt.current = latest.updated_at ?? null;
+            const next = { files: latest.files, answer: latest.answer };
+            savedContent.current = JSON.stringify(next);
+            draft.current = next;
+            setFiles(next.files);
+            setAnswer(next.answer);
+          } else setExternalDraft(latest);
+        })
+        .catch((e) => {
+          if (live) setError(message(e));
+        });
+    }).then((fn) => {
+      if (live) stop = fn;
+      else fn();
+    });
+    return () => {
+      live = false;
+      stop?.();
+    };
+  }, [questionId]);
   useEffect(() => {
     draft.current = { files, answer };
     if (!ready.current) return;
@@ -328,6 +392,36 @@ export default function Practice({
           </button>
         </div>
       )}
+      {externalDraft && (
+        <div className="notice" role="status">
+          <p>
+            HeyClicky saved a newer draft. Your edits are kept in local
+            recovery.
+          </p>
+          <div className="button-row">
+            <button
+              onClick={() => {
+                savedAt.current = externalDraft.updated_at ?? null;
+                setFiles(externalDraft.files);
+                setAnswer(externalDraft.answer);
+                setExternalDraft(null);
+                setError("");
+              }}
+            >
+              Load HeyClicky draft
+            </button>
+            <button
+              onClick={() => {
+                savedAt.current = externalDraft.updated_at ?? null;
+                setExternalDraft(null);
+                void save().catch(() => {});
+              }}
+            >
+              Keep my edits
+            </button>
+          </div>
+        </div>
+      )}
       <div
         className="practice-layout"
         ref={layout}
@@ -431,12 +525,19 @@ export default function Practice({
                 {!question.hints?.length && (
                   <p>No hints provided for this question.</p>
                 )}
-                <QuestionCoach
-                  question={question}
-                  sessionId={sessionId}
-                  answer={answer}
-                  files={files}
-                />
+                {question.coaching_available === false ? (
+                  <p className="muted-text">
+                    Coaching is available in practice. Use the interviewer for
+                    clarifications during a strict interview.
+                  </p>
+                ) : (
+                  <QuestionCoach
+                    question={question}
+                    sessionId={sessionId}
+                    answer={answer}
+                    files={files}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -627,6 +728,27 @@ export default function Practice({
                 question={question}
                 answer={answer}
                 onChange={setAnswer}
+                voice={
+                  <>
+                    <VoiceInput
+                      questionId={questionId}
+                      sessionId={sessionId}
+                      onBusyChange={setDictating}
+                      onText={(text) =>
+                        setAnswer(
+                          (previous) =>
+                            `${previous}${previous ? " " : ""}${text}`,
+                        )
+                      }
+                    />
+                    <TranscriptCleanup
+                      text={answer}
+                      questionId={questionId}
+                      onApply={setAnswer}
+                      disabled={dictating || busy}
+                    />
+                  </>
+                }
               />
               <div className="response-meta">
                 <label>
@@ -692,7 +814,7 @@ export default function Practice({
               ) : (
                 <button
                   className="primary"
-                  disabled={busy || !answer.trim()}
+                  disabled={busy || dictating || !answer.trim()}
                   onClick={async () => {
                     setBusy(true);
                     setError("");
@@ -700,6 +822,12 @@ export default function Practice({
                       await save();
                       await post("/attempts", {
                         question_id: questionId,
+                        ...(native
+                          ? {
+                              question_version: question.version,
+                              session_id: sessionId,
+                            }
+                          : {}),
                         answer,
                         confidence,
                         reflection,

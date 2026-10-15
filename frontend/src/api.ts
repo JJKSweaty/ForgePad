@@ -18,6 +18,7 @@ export type Question = {
   bookmarked?: boolean;
   archived?: boolean;
   completion_status?: string;
+  coaching_available?: boolean;
   test_config?: {
     mode?: string;
     tests: {
