@@ -15,7 +15,7 @@
 - HeyClicky can work with drafts, question workspaces, and interview controls through the local connector.
 
 ### Fixed
-- Compiler connection selection and missing VM file sharing for the installed app.
+- Compiler connection selection, missing VM file sharing, and command lookup that could request unrelated Desktop permissions.
 - Draft navigation and written interview response persistence.
 - The native speech build error that blocked GitHub verification.
 - Outdated test dependencies with published security advisories.

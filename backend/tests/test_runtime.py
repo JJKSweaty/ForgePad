@@ -82,3 +82,18 @@ def test_setup_repairs_only_managed_mount(environment, monkeypatch):
     start = next(c for c in environment if c[:2] == ("colima", "start"))
     assert "--mount" in start and start[-1].endswith("/jobs:w")
     assert ("colima", "stop", "--profile", "forgepad") in environment
+
+
+def test_timed_out_runtime_command_cleans_up_descendants():
+    import sys
+    import time
+
+    started = time.monotonic()
+    with pytest.raises(ValueError, match="did not respond"):
+        runtime.command(
+            sys.executable,
+            "-c",
+            "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import time; time.sleep(10)']); time.sleep(10)",
+            timeout=1,
+        )
+    assert time.monotonic() - started < 4

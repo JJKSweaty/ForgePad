@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import subprocess
 from pathlib import Path
 
@@ -12,7 +13,25 @@ CONTEXT = "colima-forgepad"
 
 
 def command(*args: str, timeout: int = 15) -> subprocess.CompletedProcess:
-    return subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
+    with subprocess.Popen(
+        args,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    ) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # Colima invokes Lima children. Killing only the CLI leaves blocked children
+            # holding pipes and makes every retry accumulate another process.
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+            raise ValueError(
+                "The compiler service did not respond. Start Docker or Colima, then try Repair runner."
+            ) from None
+        return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
 
 
 def context_candidates(selected: str, current: str) -> list[str]:

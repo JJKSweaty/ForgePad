@@ -167,8 +167,13 @@ impl Worker {
             .filter(|p| p.is_dir())
             .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sandbox"));
         cmd.env("FORGEPAD_RUNNER_RECIPE", recipe);
-        let path = std::env::var("PATH").unwrap_or_default();
-        cmd.env("PATH", format!("/opt/homebrew/bin:/usr/local/bin:{path}"));
+        // Finder may inherit developer PATH entries inside protected Desktop folders.
+        // CLI lookup must not request unrelated file permissions or block on those paths.
+        cmd.env(
+            "PATH",
+            "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        );
+        cmd.current_dir(&self.directory);
         let scratch = if config.scratch_directory.is_empty() {
             self.directory.join("runner")
         } else {
