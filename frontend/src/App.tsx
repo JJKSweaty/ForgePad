@@ -1,3 +1,4 @@
+import { flushDrafts } from "./drafts";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   BookOpen,
@@ -119,9 +120,7 @@ export default function App() {
     return () => media.removeEventListener("change", apply);
   }, [theme]);
   const navigate = useCallback((target: Page, prepare?: () => void) => {
-    const waits: Promise<unknown>[] = [];
-    window.dispatchEvent(new CustomEvent("forgepad:flush", { detail: waits }));
-    void Promise.all(waits)
+    void flushDrafts()
       .then(() => {
         prepare?.();
         setPage(target);

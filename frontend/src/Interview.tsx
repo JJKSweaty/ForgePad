@@ -1,3 +1,4 @@
+import { flushDrafts } from "./drafts";
 import { usePracticeActivity } from "./usePracticeActivity";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
@@ -144,26 +145,42 @@ export default function Interview({
   }, [session]);
   useEffect(() => {
     if (!session || session.paused || session.state === "COMPLETE") return;
-    const timer = setInterval(
-      () =>
-        void api<Session>(`/interviews/${session.id}`)
-          .then(setSession)
-          .catch((e) => setError(message(e))),
-      15000,
-    );
+    const refreshSession = () =>
+      void api<Session>(`/interviews/${session.id}`)
+        .then(setSession)
+        .catch((e) => setError(message(e)));
+    if (native) {
+      const deadline = setTimeout(
+        refreshSession,
+        (session.remaining_seconds + 0.1) * 1000,
+      );
+      return () => clearTimeout(deadline);
+    }
+    const timer = setInterval(refreshSession, 15000);
     return () => clearInterval(timer);
-  }, [session?.id, session?.paused, session?.state]);
+  }, [
+    session?.id,
+    session?.paused,
+    session?.state,
+    session?.remaining_seconds,
+  ]);
   useEffect(() => {
     transcript.current?.scrollTo({
       top: transcript.current.scrollHeight,
       behavior: "smooth",
     });
   }, [session?.transcript.length]);
+  function switchWorkspace(target: typeof workspace) {
+    void flushDrafts()
+      .then(() => setWorkspace(target))
+      .catch((e) => setError(message(e)));
+  }
   async function event(type: string, content?: string) {
     if (!session) return;
     setBusy(true);
     setError("");
     try {
+      await flushDrafts();
       setSession(
         await post<Session>(`/interviews/${session.id}/events`, {
           type,
@@ -477,8 +494,11 @@ export default function Interview({
               )}
               <button
                 onClick={() => {
-                  setSession(null);
-                  void api<Session[]>("/interviews")
+                  void flushDrafts()
+                    .then(() => {
+                      setSession(null);
+                      return api<Session[]>("/interviews");
+                    })
                     .then(setSessions)
                     .catch((e) => setError(message(e)));
                 }}
@@ -516,7 +536,7 @@ export default function Interview({
                 aria-selected={view === t}
                 className={view === t ? "active" : ""}
                 disabled={t === "code" && session.state === "COMPLETE"}
-                onClick={() => setWorkspace(t)}
+                onClick={() => switchWorkspace(t)}
               >
                 {t === "code"
                   ? "Code workspace"
@@ -534,7 +554,7 @@ export default function Interview({
                 theme={theme}
                 sessionId={session.id}
                 onSaved={async () => {}}
-                onBrowse={() => setWorkspace("conversation")}
+                onBrowse={() => switchWorkspace("conversation")}
               />
             </Suspense>
           )}
@@ -654,7 +674,7 @@ export default function Interview({
                   </p>
                   <button
                     className="secondary"
-                    onClick={() => setWorkspace("code")}
+                    onClick={() => switchWorkspace("code")}
                     disabled={session.state === "COMPLETE"}
                   >
                     Open interview editor <ChevronRight size={14} />

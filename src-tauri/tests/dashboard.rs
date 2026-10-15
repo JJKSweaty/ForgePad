@@ -299,3 +299,38 @@ fn a_later_failed_attempt_requires_review_without_erasing_a_unique_solve() {
         "needs_review"
     );
 }
+
+#[tokio::test]
+async fn final_autosave_survives_session_completion_without_reopening_execution() {
+    let (_d, s) = workspace();
+    let mut session = s
+        .start_session(
+            &json!({"question_id":"align-up","duration_minutes":30}),
+            "interview",
+        )
+        .unwrap();
+    let q = s.store.question("align-up", None).unwrap();
+    forgepad_core::sessions::complete(&mut session, &q, "finished");
+    s.store.save("interviews", &session).unwrap();
+    let body = json!({"session_id":session["id"],"files":{"solution.c":"// final editor change"},"answer":""});
+    s.route("PUT", "/drafts/align-up", body.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        s.store.draft(&q).unwrap()["files"]["solution.c"],
+        "// final editor change"
+    );
+    let mut run = body.clone();
+    run["question_id"] = json!("align-up");
+    assert!(s.enqueue_run(&run).is_err());
+    assert!(s
+        .route("PUT", "/drafts/register-field", body)
+        .await
+        .is_err());
+    assert_eq!(
+        s.store
+            .get("interviews", session["id"].as_str().unwrap())
+            .unwrap()["state"],
+        "COMPLETE"
+    );
+}

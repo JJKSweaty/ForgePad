@@ -274,8 +274,12 @@ impl Service {
             s["question_id"].as_str().unwrap(),
             s["question_version"].as_i64(),
         )?;
+        let before = s["state"].clone();
         sessions::update_clock(&mut s, &q)?;
         self.store.save("interviews", &s)?;
+        if before != s["state"] {
+            self.notify("session_updated", Self::session_metadata(&s));
+        }
         Ok(s)
     }
     pub fn load_session(&self, id: &str) -> Result<Value> {
@@ -765,11 +769,16 @@ impl Service {
                 )?,
             )?,
             ("PUT", ["drafts", id]) => {
-                let q = self.question_revision(
-                    id,
-                    body["session_id"].as_str(),
-                    body["question_version"].as_i64(),
-                )?;
+                let q = if let Some(session_id) = body["session_id"].as_str() {
+                    let session = self.store.get("interviews", session_id)?;
+                    if session["question_id"] != *id {
+                        bail!("Question does not belong to this session");
+                    }
+                    self.store
+                        .question(id, session["question_version"].as_i64())?
+                } else {
+                    self.question_revision(id, None, body["question_version"].as_i64())?
+                };
                 let saved = self.store.save_draft(&q, &body)?;
                 // Autosave does not create replay snapshots; runs and explicit checkpoints do.
                 if body["checkpoint"] == true {
@@ -903,6 +912,7 @@ impl Service {
                     self.store.event(Some(id), kind, body.clone())?;
                     s
                 };
+                self.notify("session_updated", Self::session_metadata(&s));
                 if body["type"] == "message"
                     && s["state"] != "COMPLETE"
                     && !self.models.list().is_empty()
