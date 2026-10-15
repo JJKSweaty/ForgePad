@@ -57,6 +57,7 @@ pub struct Worker {
     pub python_module: bool,
     pub directory: PathBuf,
     pub config: Arc<Mutex<RunnerConfig>>,
+    ready: Arc<tokio::sync::Mutex<Option<(String, std::time::Instant)>>>,
 }
 impl Worker {
     pub fn discover(directory: &std::path::Path) -> Self {
@@ -66,6 +67,7 @@ impl Worker {
                 python_module: false,
                 directory: directory.into(),
                 config: Arc::new(Mutex::new(RunnerConfig::default())),
+                ready: Arc::new(tokio::sync::Mutex::new(None)),
             };
         }
         let installed = std::env::current_exe()
@@ -79,6 +81,7 @@ impl Worker {
                 python_module: false,
                 directory: directory.into(),
                 config: Arc::new(Mutex::new(RunnerConfig::default())),
+                ready: Arc::new(tokio::sync::Mutex::new(None)),
             };
         }
         #[cfg(debug_assertions)]
@@ -93,18 +96,67 @@ impl Worker {
             python_module,
             directory: directory.into(),
             config: Arc::new(Mutex::new(RunnerConfig::default())),
+            ready: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
+    pub async fn prepare(&self, setup: bool) -> Result<Value> {
+        let mut ready = self.ready.lock().await;
+        let key = serde_json::to_string(&*self.config.lock().unwrap())?;
+        if !setup
+            && ready
+                .as_ref()
+                .is_some_and(|(k, t)| k == &key && t.elapsed() < Duration::from_secs(30))
+        {
+            return Ok(json!({"available":true,"detail":"Compiler verified"}));
+        }
+        *ready = None;
+        let result = self
+            .raw_request(
+                json!({"operation":if setup {"setup"} else {"prepare"}}),
+                CancellationToken::new(),
+            )
+            .await?;
+        if result["available"] != true {
+            bail!(
+                "{}",
+                result["compiler_output"]
+                    .as_str()
+                    .unwrap_or("Runner setup did not pass")
+            );
+        }
+        let config: RunnerConfig = serde_json::from_value(result["config"].clone())?;
+        config.validate()?;
+        *self.config.lock().unwrap() = config;
+        *ready = Some((
+            serde_json::to_string(&*self.config.lock().unwrap())?,
+            std::time::Instant::now(),
+        ));
+        Ok(result)
+    }
     pub async fn request(&self, request: Value, cancel: CancellationToken) -> Result<Value> {
+        if request["operation"] == "run" {
+            tokio::select! { result = self.prepare(false) => { result?; }, _ = cancel.cancelled() => return Ok(json!({"status":"cancelled","tests":[],"passed":0,"total":0})) }
+        }
+        self.raw_request(request, cancel).await
+    }
+    async fn raw_request(&self, request: Value, cancel: CancellationToken) -> Result<Value> {
         let mut cmd = Command::new(&self.executable);
         if self.python_module {
             cmd.args(["-m", "forgepad.worker"]);
         }
         let config = self.config.lock().unwrap().clone();
         cmd.env("FORGEPAD_RUNNER_IMAGE", &config.image);
-        if !config.docker_context.is_empty() {
-            cmd.env("DOCKER_CONTEXT", &config.docker_context);
-        }
+        cmd.env("DOCKER_CONTEXT", &config.docker_context);
+        let recipe = std::env::current_exe()
+            .ok()
+            .and_then(|p| {
+                p.parent()?
+                    .parent()
+                    .map(|p| p.join("Resources/_up_/sandbox"))
+            })
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sandbox"));
+        cmd.env("FORGEPAD_RUNNER_RECIPE", recipe);
         let path = std::env::var("PATH").unwrap_or_default();
         cmd.env("PATH", format!("/opt/homebrew/bin:/usr/local/bin:{path}"));
         let scratch = if config.scratch_directory.is_empty() {
@@ -159,14 +211,8 @@ impl Worker {
         Ok(value)
     }
     pub async fn availability(&self) -> Value {
-        match self
-            .request(
-                json!({"operation":"availability"}),
-                CancellationToken::new(),
-            )
-            .await
-        {
-            Ok(v) => v,
+        match self.prepare(false).await {
+            Ok(_) => json!({"available":true,"detail":"Compile and execution verified"}),
             Err(e) => json!({"available":false,"detail":e.to_string()}),
         }
     }

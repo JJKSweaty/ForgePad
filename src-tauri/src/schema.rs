@@ -105,7 +105,11 @@ pub fn candidate(q: &Value) -> Value {
             obj.remove(k);
         }
     }
-    if let Some(tests) = q["test_config"]["tests"].as_array_mut() {
+    if let Some(tests) = q
+        .get_mut("test_config")
+        .and_then(|c| c.get_mut("tests"))
+        .and_then(Value::as_array_mut)
+    {
         tests.retain(|t| t["visibility"] == "public");
     }
     q

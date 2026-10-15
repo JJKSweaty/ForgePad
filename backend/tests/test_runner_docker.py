@@ -1,6 +1,7 @@
 """Real compiler and isolation checks; skip only when Docker/image is unavailable."""
 
 import json
+import os
 import threading
 import time
 
@@ -16,6 +17,8 @@ def runner():
     instance = DockerRunner()
     state = instance.availability()
     if not state["available"]:
+        if os.getenv("FORGEPAD_REQUIRE_DOCKER") == "1":
+            pytest.fail(state["detail"])
         pytest.skip(state["detail"])
     return instance
 

@@ -489,3 +489,15 @@ async fn autosaves_preserve_drafts_for_each_revision_and_export_all_history() {
         1
     );
 }
+
+#[test]
+fn written_question_projection_does_not_create_an_executable_test_config() {
+    for question in [
+        serde_json::json!({"type":"design"}),
+        serde_json::json!({"type":"theory","test_config":null}),
+    ] {
+        let candidate = forgepad_core::schema::candidate(&question);
+        assert_eq!(candidate, question);
+        assert!(!candidate["test_config"].is_object());
+    }
+}

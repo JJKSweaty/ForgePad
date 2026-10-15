@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { api, download, message, post, readable } from "./api";
 import { native } from "./native";
+import RunnerSetup from "./RunnerSetup";
 import LocalCoachSettings from "./LocalCoachSettings";
 import type { GitHubStatus } from "./dashboardData";
 import { PageHeader } from "./ui";
@@ -411,77 +412,7 @@ export function SettingsPage({
               )}
               {section === "audio" && <LocalCoachSettings />}
               {section === "compiler" && native && (
-                <section className="settings-section">
-                  <h2>Compiler</h2>
-                  <p className="settings-description">
-                    C/C++ code runs inside a restricted Linux Docker VM.
-                  </p>
-                  <label>
-                    Runner image
-                    <input
-                      value={runner.image}
-                      onChange={(e) =>
-                        setRunner({ ...runner, image: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Docker context
-                    <input
-                      value={runner.docker_context}
-                      onChange={(e) =>
-                        setRunner({ ...runner, docker_context: e.target.value })
-                      }
-                      placeholder="Use Docker's active context"
-                    />
-                  </label>
-                  <label>
-                    Shared scratch directory (optional)
-                    <input
-                      value={runner.scratch_directory ?? ""}
-                      onChange={(e) =>
-                        setRunner({
-                          ...runner,
-                          scratch_directory: e.target.value,
-                        })
-                      }
-                      placeholder="Default: workspace runner directory"
-                    />
-                  </label>
-                  <p>
-                    For a VM with restricted file sharing, choose a writable
-                    directory shared with that VM. It contains only temporary
-                    compiler jobs.
-                  </p>
-                  <p>
-                    Choose an existing context if the desktop environment
-                    differs from your terminal. ForgePad does not change
-                    Docker’s global context.
-                  </p>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() =>
-                      void action(async () => {
-                        await api("/settings/runner", {
-                          method: "PUT",
-                          body: JSON.stringify(runner),
-                        });
-                        const result = await post<{
-                          status: string;
-                          compiler_output?: string;
-                        }>("/settings/runner/verify", {});
-                        if (result.status !== "passed")
-                          throw new Error(
-                            result.compiler_output ??
-                              "Sandbox preflight did not pass.",
-                          );
-                      }, "Runner configuration saved and sandbox verified.")
-                    }
-                  >
-                    Save and test runner
-                  </button>
-                </section>
+                <RunnerSetup config={runner} onConfig={setRunner} />
               )}
               {section === "github" && (
                 <section className="settings-section">

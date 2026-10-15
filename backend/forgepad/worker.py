@@ -3,9 +3,11 @@
 import json
 import signal
 import sys
+import subprocess
 from threading import Event
 
 from .runner import DockerRunner
+from .runtime import prepare
 
 
 def main():
@@ -17,10 +19,9 @@ def main():
         cancel = Event()
         signal.signal(signal.SIGTERM, lambda *_: cancel.set())
         runner = DockerRunner()
-        if request["operation"] == "availability":
-            result = runner.availability()
-        elif request["operation"] == "preflight":
-            result = runner.run(
+
+        def preflight():
+            return runner.run(
                 {
                     "language": "c",
                     "test_config": {
@@ -31,7 +32,7 @@ def main():
                         "tests": [
                             {
                                 "id": "preflight",
-                                "name": "Sandbox compiler preflight",
+                                "name": "Compiler check",
                                 "visibility": "public",
                                 "stdin": "",
                                 "expected_stdout": "forgepad-ready\n",
@@ -42,6 +43,13 @@ def main():
                 {"main.c": '#include <stdio.h>\nint main(void) { puts("forgepad-ready"); return 0; }\n'},
                 cancel_event=cancel,
             )
+
+        if request["operation"] in ("prepare", "setup"):
+            result = prepare(runner, preflight, setup=request["operation"] == "setup")
+        elif request["operation"] == "availability":
+            result = runner.availability()
+        elif request["operation"] == "preflight":
+            result = preflight()
         elif request["operation"] == "run":
             result = runner.run(
                 request["question"],
@@ -52,7 +60,7 @@ def main():
         else:
             raise ValueError("Unknown worker operation")
         print(json.dumps(result, separators=(",", ":")))
-    except (OSError, ValueError, KeyError, TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
         print(f"ForgePad worker: {type(error).__name__}: {error}", file=sys.stderr)
         print(
             json.dumps(
@@ -61,7 +69,7 @@ def main():
                     "tests": [],
                     "passed": 0,
                     "total": 0,
-                    "compiler_output": "Sandbox worker failed. Check worker logs.",
+                    "compiler_output": str(error),
                 }
             )
         )

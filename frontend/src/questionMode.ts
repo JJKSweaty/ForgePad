@@ -3,7 +3,11 @@ import type { Question } from "./api";
 export function questionMode(
   question: Pick<Question, "type" | "test_config" | "has_tests">,
 ) {
-  if (question.test_config || question.has_tests || question.type === "coding")
+  if (
+    question.test_config?.tests?.length ||
+    question.has_tests ||
+    question.type === "coding"
+  )
     return "coding";
   if (question.type === "design") return "design";
   if (question.type === "debugging" || question.type === "code_review")

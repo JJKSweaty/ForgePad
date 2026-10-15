@@ -92,6 +92,12 @@ fn main() {
                     }
                 }
             });
+            let runner_service = service.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = runner_service.prepare_runner(false).await {
+                    eprintln!("Runner setup required: {error}");
+                }
+            });
             app.manage(service);
             Ok(())
         })
