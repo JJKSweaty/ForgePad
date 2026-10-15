@@ -27,6 +27,7 @@ desktop = ["dep:tauri", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-single-i
 [dependencies]
 anyhow = "1"
 axum = "0.8"
+chrono-tz = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
 fs2 = "0.4"
 jsonschema = { version = "0.33", default-features = false }
@@ -50,5 +51,5 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"], option
 tauri-build = { version = "2", optional = true , features = [] }
 
 [dev-dependencies]
-tower = {version="0.5",features=["util"]}
+tower = {version="0.5",features= ["util"] }
 tempfile = "3"

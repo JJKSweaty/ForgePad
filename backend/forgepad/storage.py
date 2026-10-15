@@ -29,7 +29,7 @@ class Store:
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 4:
+            if version > 5:
                 raise RuntimeError("Database was created by a newer ForgePad version")
             if version < 1:
                 db.executescript("""

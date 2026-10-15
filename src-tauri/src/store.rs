@@ -32,7 +32,7 @@ impl Store {
             "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
         )?;
         let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version > 4 {
+        if version > 5 {
             bail!("Workspace was created by a newer ForgePad version");
         }
         // Compatible with the web edition's v2 database, with native-only records in a separate migration.
@@ -53,6 +53,7 @@ impl Store {
             CREATE TABLE IF NOT EXISTS draft_versions(question_id TEXT NOT NULL,version INTEGER NOT NULL,files TEXT NOT NULL,answer TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(question_id,version),FOREIGN KEY(question_id,version) REFERENCES questions(id,version));
             INSERT OR IGNORE INTO draft_versions SELECT * FROM drafts;
             PRAGMA user_version=4; COMMIT;")?;
+        crate::activity::migrate(&db)?;
         let store = Self {
             db: Mutex::new(db),
             _lock: lock,
@@ -75,6 +76,9 @@ impl Store {
             }
         }
         Ok(store)
+    }
+    pub(crate) fn with_db<T>(&self, f: impl FnOnce(&mut Connection) -> Result<T>) -> Result<T> {
+        f(&mut self.db.lock().unwrap())
     }
     fn insert_question(db: &Connection, question: &Value) -> Result<()> {
         let mut q = question.clone();
@@ -224,6 +228,15 @@ impl Store {
                 db.execute("INSERT INTO native_records VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET payload=excluded.payload",params![kind,id,payload])?;
             }
         }
+        if kind == "attempts" {
+            crate::activity::attempt(&db, record)?;
+        }
+        if kind == "runs" {
+            crate::activity::run_completed(&db, record)?;
+        }
+        if kind == "interviews" && record["state"] == "COMPLETE" {
+            crate::activity::session_completed(&db, record)?;
+        }
         Ok(())
     }
     pub fn replace_if_unchanged(&self, kind: &str, before: &Value, after: &Value) -> Result<()> {
@@ -300,6 +313,7 @@ impl Store {
         ] {
             out[kind] = json!(self.records(kind)?);
         }
+        out["activity"] = json!(self.activity_rows(chrono::DateTime::<chrono::Utc>::UNIX_EPOCH)?);
         let db = self.db.lock().unwrap();
         let mut st =
             db.prepare("SELECT question_id,version,files,answer,updated_at FROM draft_versions")?;
@@ -345,10 +359,16 @@ impl Store {
             "draft_versions",
             "question_flags",
             "imports",
+            "activity_events",
+            "practice_visits",
         ] {
             tx.execute(&format!("DELETE FROM {table}"), [])?;
         }
         tx.execute("DELETE FROM native_records WHERE kind IN ('events','reflections','jobs','code_drafts','recordings')",[])?;
+        tx.execute(
+            "UPDATE activity_revision SET revision=revision+1 WHERE id=1",
+            [],
+        )?;
         tx.commit()?;
         Ok(())
     }

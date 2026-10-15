@@ -191,14 +191,14 @@ impl Models {
         if models.is_empty() {
             return json!({"available":false,"detail":"Local inference is disabled; all practice workflows remain usable."});
         }
-        let check = async {
+        let check = async move {
             let client = reqwest::Client::builder()
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
                 .timeout(std::time::Duration::from_secs(2))
                 .build()
                 .ok()?;
-            let requests = models.iter().map(|m| {
+            let requests = models.into_iter().map(|m| {
                 let client = client.clone();
                 async move {
                     let r = client

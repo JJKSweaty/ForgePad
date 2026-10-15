@@ -253,6 +253,38 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             "storage": "supabase" if os.getenv("SUPABASE_URL") else "sqlite",
         }
 
+    @app.get("/api/dashboard")
+    def dashboard(timezone: str = "UTC"):
+        from .dashboard import snapshot
+        try:
+            return snapshot(store(), timezone)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+
+    @app.get("/api/activity/{date}")
+    def dashboard_activity(date: str, timezone: str = "UTC"):
+        from zoneinfo import ZoneInfo
+
+        from .dashboard import snapshot
+        try:
+            target = datetime.fromisoformat(date).date()
+            snapshot(store(), timezone)  # Validates the configured timezone.
+            # The dashboard limits its recent list; day details include all persisted submissions.
+            events = []
+            for attempt in store().records('attempts'):
+                if datetime.fromisoformat(attempt['created_at']).astimezone(ZoneInfo(timezone)).date() == target:
+                    events.append({'id': attempt['id'], 'kind': 'solution_submitted',
+                        'question_id': attempt['question_id'], 'occurred_at': attempt['created_at'],
+                        'title': attempt.get('title', attempt['question_id'])})
+            return {'date': date, 'timezone': timezone, 'events': events}
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+
+    @app.get("/api/integrations/github")
+    def github_status():
+        return {"connected": False, "login": None, "last_sync_at": None,
+                "calendar": None, "error": None, "publishing_available": False}
+
     @app.get("/api/questions")
     def list_questions(
         q: str = "",

@@ -1,5 +1,7 @@
+pub mod activity;
 pub mod ai;
 pub mod audit;
+pub mod github;
 pub mod mcp;
 pub mod roadmaps;
 pub mod schema;

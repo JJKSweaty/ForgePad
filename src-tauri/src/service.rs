@@ -15,6 +15,7 @@ use tokio::sync::{broadcast, Semaphore};
 use tokio_util::sync::CancellationToken;
 
 pub struct Service {
+    pub(crate) dashboard_cache: Mutex<HashMap<String, (i64, chrono::NaiveDate, Value)>>,
     pub store: Arc<Store>,
     pub worker: Worker,
     pub models: Models,
@@ -41,6 +42,7 @@ impl Service {
             .get("settings", "integration")
             .is_ok_and(|v| v["enabled"] == true);
         let service = Arc::new(Self {
+            dashboard_cache: Mutex::new(HashMap::new()),
             store,
             worker: Worker::discover(directory),
             models,
@@ -371,6 +373,18 @@ impl Service {
             self.store.question(id, None)
         }
     }
+    fn question_revision(
+        &self,
+        id: &str,
+        session: Option<&str>,
+        version: Option<i64>,
+    ) -> Result<Value> {
+        if session.is_some() {
+            self.question_for_request(id, session)
+        } else {
+            self.store.question(id, version)
+        }
+    }
     pub fn attempt(
         &self,
         q: &Value,
@@ -407,8 +421,11 @@ impl Service {
         self.store.get("runs", id)
     }
     pub fn enqueue_run(self: &Arc<Self>, body: &Value) -> Result<Value> {
-        let q =
-            self.question_for_request(required(body, "question_id")?, body["session_id"].as_str())?;
+        let q = self.question_revision(
+            required(body, "question_id")?,
+            body["session_id"].as_str(),
+            body["question_version"].as_i64(),
+        )?;
         if !q["test_config"].is_object() {
             bail!("This question has no executable tests");
         }
@@ -650,13 +667,73 @@ impl Service {
         }
         let parts: Vec<&str> = url.path().trim_matches('/').split('/').collect();
         let result = match (method, parts.as_slice()) {
-            ("GET", ["health"]) => {let (runner,ai)=tokio::join!(self.worker.availability(),self.models.availability());json!({"status":"ok","hosting":"native","storage":"sqlite","runner":runner,"ai":ai,"speech":{"available":self.store.get("settings","speech").is_ok_and(|c|c["endpoint"].as_str().is_some_and(|s|!s.is_empty())),"detail":"Local ASR endpoint is verified at transcription time. Capture requires Interview mode."}})},
+            ("GET", ["health"]) => {
+                let (runner, ai) =
+                    tokio::join!(self.worker.availability(), self.models.availability());
+                json!({"status":"ok","hosting":"native","storage":"sqlite","runner":runner,"ai":ai,"speech":{"available":self.store.get("settings","speech").is_ok_and(|c|c["endpoint"].as_str().is_some_and(|s|!s.is_empty())),"detail":"Local ASR endpoint is verified at transcription time. Capture requires Interview mode."}})
+            }
+            ("GET", ["settings", "profile"]) => self
+                .store
+                .get("settings", "profile")
+                .or_else(|_| Ok::<Value, anyhow::Error>(json!({"id":"profile","timezone":null})))?,
+            ("PUT", ["settings", "profile"]) => {
+                let timezone = required(&body, "timezone")?;
+                let _: chrono_tz::Tz = timezone.parse().context("Choose a valid IANA timezone")?;
+                let profile = json!({"id":"profile","timezone":timezone});
+                self.store.save("settings", &profile)?;
+                profile
+            }
+            ("GET", ["dashboard"]) => self.dashboard_at(
+                query["timezone"].as_str().unwrap_or("UTC"),
+                chrono::Utc::now(),
+            )?,
+            ("GET", ["activity", date]) => {
+                self.activity_day(date, query["timezone"].as_str().unwrap_or("UTC"))?
+            }
+            ("POST", ["activity", "start"]) => {
+                let q = self.question_for_request(
+                    required(&body, "question_id")?,
+                    body["session_id"].as_str(),
+                )?;
+                self.store.start_visit(
+                    &q,
+                    body["session_id"].as_str(),
+                    required(&body, "window_id")?,
+                    chrono::Utc::now(),
+                )?
+            }
+            ("POST", ["activity", "heartbeat"]) => {
+                let r = self.store.heartbeat(
+                    required(&body, "visit_id")?,
+                    body["focused"] == true,
+                    body["interacted"] == true,
+                    body["close"] == true,
+                    chrono::Utc::now(),
+                )?;
+                if r["credited_seconds"].as_i64().unwrap_or(0) > 0 {
+                    self.notify("activity_changed", json!({}));
+                }
+                r
+            }
+            ("GET", ["integrations", "github"]) => self.github_status()?,
+            ("POST", ["integrations", "github", "connect"]) => {
+                self.github_connect(required(&body, "token")?).await?
+            }
+            ("POST", ["integrations", "github", "refresh"]) => self.github_sync().await?,
+            ("POST", ["integrations", "github", "disconnect"]) => self.github_disconnect()?,
             ("GET", ["schema"]) => schema::SCHEMA.clone(),
             ("GET", ["questions"]) => json!(self.questions(&query)?),
             ("GET", ["questions", "export", "all"]) => json!(self.store.questions()?),
             ("GET", ["questions", id, "export"]) => self.store.question(id, None)?,
             ("GET", ["questions", id]) => {
-                let q = self.question_for_request(id, query["session_id"].as_str())?;
+                let q = self.question_revision(
+                    id,
+                    query["session_id"].as_str(),
+                    query["version"]
+                        .as_str()
+                        .map(str::parse::<i64>)
+                        .transpose()?,
+                )?;
                 self.store.event(
                     None,
                     "question_opened",
@@ -677,11 +754,22 @@ impl Service {
                 self.store.flags(id, Some(&body))?;
                 self.summary(&q)?
             }
-            ("GET", ["drafts", id]) => self
-                .store
-                .draft(&self.question_for_request(id, query["session_id"].as_str())?)?,
+            ("GET", ["drafts", id]) => self.store.draft(
+                &self.question_revision(
+                    id,
+                    query["session_id"].as_str(),
+                    query["version"]
+                        .as_str()
+                        .map(str::parse::<i64>)
+                        .transpose()?,
+                )?,
+            )?,
             ("PUT", ["drafts", id]) => {
-                let q = self.question_for_request(id, body["session_id"].as_str())?;
+                let q = self.question_revision(
+                    id,
+                    body["session_id"].as_str(),
+                    body["question_version"].as_i64(),
+                )?;
                 let saved = self.store.save_draft(&q, &body)?;
                 // Autosave does not create replay snapshots; runs and explicit checkpoints do.
                 if body["checkpoint"] == true {
@@ -697,7 +785,11 @@ impl Service {
             ("GET", ["runs", id]) => self.store.get("runs", id)?,
             ("DELETE", ["runs", id]) => self.cancel(id)?,
             ("POST", ["attempts"]) => {
-                let q = self.store.question(required(&body, "question_id")?, None)?;
+                let q = self.question_revision(
+                    required(&body, "question_id")?,
+                    body["session_id"].as_str(),
+                    body["question_version"].as_i64(),
+                )?;
                 if q["test_config"].is_object() {
                     bail!("Executable results must be recorded through Submit");
                 }
@@ -977,14 +1069,30 @@ impl Service {
                 logs.truncate(100);
                 json!(logs)
             }
-            ("POST",["integrations","heyclicky","test"]) => {
-                let client=reqwest::Client::builder().unix_socket(self.store.directory.join("service.sock")).no_proxy().timeout(std::time::Duration::from_secs(5)).build()?;
+            ("POST", ["integrations", "heyclicky", "test"]) => {
+                let client = reqwest::Client::builder()
+                    .unix_socket(self.store.directory.join("service.sock"))
+                    .no_proxy()
+                    .timeout(std::time::Duration::from_secs(5))
+                    .build()?;
                 let init:Value=client.post("http://localhost/mcp").json(&json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"ForgePad self-check","version":"1"},"capabilities":{}}})).send().await.context("Private service unavailable. Reopen ForgePad.")?.error_for_status()?.json().await?;
-                if init["result"]["serverInfo"]["name"]!="ForgePad"{bail!("MCP initialization failed. Enable the integration and retry.");}
-                let tools:Value=client.post("http://localhost/mcp").json(&json!({"jsonrpc":"2.0","id":2,"method":"tools/list"})).send().await?.error_for_status()?.json().await?;
-                let count=tools["result"]["tools"].as_array().context("MCP tool discovery failed")?.len();
+                if init["result"]["serverInfo"]["name"] != "ForgePad" {
+                    bail!("MCP initialization failed. Enable the integration and retry.");
+                }
+                let tools: Value = client
+                    .post("http://localhost/mcp")
+                    .json(&json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}))
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .json()
+                    .await?;
+                let count = tools["result"]["tools"]
+                    .as_array()
+                    .context("MCP tool discovery failed")?
+                    .len();
                 json!({"service":"ready","tool_count":count,"external_client_verified":false,"detail":"Private-socket MCP initialization and discovery passed. Verify the external connector with an actual HeyClicky tool call."})
-            },
+            }
             ("POST", ["integrations", "heyclicky", "http"]) => {
                 crate::transport::enable_http(self.clone()).await?
             }
@@ -1012,7 +1120,7 @@ impl Service {
             }
             _ => bail!("Unsupported application operation: {method} {}", url.path()),
         };
-        if method != "GET" && !matches!(parts.first(), Some(&"drafts")) {
+        if method != "GET" && !matches!(parts.first(), Some(&"drafts") | Some(&"activity")) {
             self.notify("workspace_changed", json!({"path":path}));
         }
         Ok(result)

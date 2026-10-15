@@ -33,10 +33,13 @@ fn main() {
         .invoke_handler(tauri::generate_handler![api_request, validate_deep_link])
         .setup(|app| {
             let dir = forgepad_core::data_dir();
-            let seeds = if cfg!(debug_assertions) {
+            let bundled = app.path().resource_dir()?.join("_up_/questions");
+            let seeds = if bundled.is_dir() {
+                bundled
+            } else if cfg!(debug_assertions) {
                 std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../questions")
             } else {
-                app.path().resource_dir()?.join("_up_/questions")
+                anyhow::bail!("Bundled question resources are missing");
             };
             let service = Service::open(&dir, &seeds)?;
             let exe = std::env::current_exe()?
