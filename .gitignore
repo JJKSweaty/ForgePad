@@ -23,3 +23,6 @@ data/
 recordings/
 backups/
 .local/
+*.egg-info/
+.coverage
+htmlcov/
