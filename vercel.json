@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci && npm ci --prefix frontend",
+  "outputDirectory": "frontend/dist",
+  "functions": {
+    "api/index.py": {"maxDuration": 300, "includeFiles": "{backend/forgepad/**,questions/**}"},
+    "api/runner.mjs": {"maxDuration": 300, "includeFiles": "cloud/lib/supervisor.py"}
+  },
+  "rewrites": [
+    {"source": "/api/runner", "destination": "/api/runner.mjs"},
+    {"source": "/api/:path*", "destination": "/api/index.py"},
+    {"source": "/((?!api/).*)", "destination": "/index.html"}
+  ],
+  "headers": [{"source": "/api/:path*", "headers": [{"key":"Cache-Control","value":"no-store"}]}]
+}

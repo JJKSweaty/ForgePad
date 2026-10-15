@@ -24,16 +24,17 @@ def prompt_for(session, question):
         return "Describe your approach, then work through the problem. Explain how you would test it."
     if state == "FOLLOW_UP":
         follow_ups = question.get("follow_ups", [])
-        index = session["follow_up_index"]
+        ordinal = session["follow_up_index"]
+        index = session.get("follow_up_order", list(range(len(follow_ups))))[ordinal] if ordinal < len(follow_ups) else ordinal
         return (
             follow_ups[index] if index < len(follow_ups) else "What failure mode would you investigate first?"
         )
     if state == "REVIEW":
         return "Review your result. Which edge cases or trade-offs need further work?"
-    return "Session complete. Your transcript and review are saved locally."
+    return "Session complete. Your transcript and replay are saved in your workspace."
 
 
-def create_session(question, duration, kind, personality):
+def create_session(question, duration, kind, personality, memory=None):
     session = {
         "id": str(uuid4()),
         "question_id": question["id"],
@@ -50,8 +51,21 @@ def create_session(question, duration, kind, personality):
         "follow_up_index": 0,
         "follow_ups_attempted": [],
         "events": [],
+        "technical_memory": memory or [],
     }
+    weak_words = {word.casefold() for item in memory or [] if (item.get("result") or {}).get("status") not in {None, "passed"}
+                  for topic in item.get("topics", []) for word in topic.split() if len(word) > 2}
+    follow_ups = question.get("follow_ups", [])
+    session["follow_up_order"] = sorted(range(len(follow_ups)), key=lambda i: -sum(
+        word in follow_ups[i].casefold() for word in weak_words))
     add_message(session, "interviewer", prompt_for(session, question))
+    for evidence in memory or []:
+        result = evidence.get("result")
+        if result and "passed" in result and "total" in result:
+            add_message(session, "interviewer", f"Your recorded submission for {evidence['title']} on "
+                        f"{evidence['created_at'][:10]} passed {result['passed']} of {result['total']} tests. "
+                        "Which boundary would you check first in today's problem?")
+            break
     return session
 
 
@@ -108,7 +122,8 @@ def apply_event(session, question, event_type, content=None):
         # Deliberately no fabricated answer grading; optional providers operate on this transcript.
     elif event_type == "advance":
         if session["state"] == "FOLLOW_UP":
-            session["follow_ups_attempted"].append(session["follow_up_index"])
+            ordinal = session["follow_up_index"]
+            session["follow_ups_attempted"].append(session.get("follow_up_order", list(range(len(question.get("follow_ups", [])))))[ordinal])
             if session["follow_up_index"] + 1 < len(question.get("follow_ups", [])):
                 session["follow_up_index"] += 1
             else:

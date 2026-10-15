@@ -63,6 +63,8 @@ class OllamaProvider:
                     f"State: {context['state']}. Personality: {context['personality']}. "
                     f"Problem: {context['prompt']}. Constraints: {context['constraints']}. "
                     f"Approved follow-ups: {context['follow_ups']}."
+                    f"Recorded attempt evidence: {context.get('technical_memory', [])}. "
+                    "Distinguish compiler results from self-reported confidence; never invent past performance."
                 ),
             }
         ]

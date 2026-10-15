@@ -84,6 +84,9 @@ class Question(StrictModel):
     follow_ups: list[str] = Field(default_factory=list, max_length=30)
     hints: list[str] = Field(default_factory=list, max_length=10)
     source: Source
+    solution_notes: str = Field(default="", max_length=15000)
+    time_complexity: str = Field(default="", max_length=1000)
+    space_complexity: str = Field(default="", max_length=1000)
 
     _safe_files = field_validator("starter_files", "reference_solution")(validate_files)
 
@@ -98,6 +101,8 @@ class Question(StrictModel):
     def executable_contract(self):
         if self.type == "coding" and not self.test_config:
             raise ValueError("Coding questions require executable tests")
+        if self.type in {"theory", "design"} and self.test_config:
+            raise ValueError("Theory and design questions use rubric criteria, not executable tests")
         if self.test_config:
             if self.language == "independent" or not self.reference_solution or not self.starter_files:
                 raise ValueError("Executable questions require C/C++, starter files, and reference solution")
@@ -107,7 +112,9 @@ class Question(StrictModel):
 
 
 def practice_question(question: dict) -> dict:
-    result = {key: value for key, value in question.items() if key != "reference_solution"}
+    result = {key: value for key, value in question.items() if key not in {
+        "reference_solution", "solution_notes", "time_complexity", "space_complexity"
+    }}
     if result.get("test_config"):
         result["test_config"] = {
             **result["test_config"],
@@ -116,3 +123,39 @@ def practice_question(question: dict) -> dict:
             ],
         }
     return result
+
+
+def authoring_errors(question: dict) -> list[str]:
+    """New packages meet the complete interview contract; legacy seeds remain readable."""
+    errors = []
+    if not question.get("hints"):
+        errors.append("Provide at least one technically useful hint")
+    if len(question.get("follow_ups", [])) != 3:
+        errors.append("Provide exactly three technical interview follow-ups")
+    if question.get("test_config"):
+        tests = question["test_config"]["tests"]
+        if sum(t["visibility"] == "public" for t in tests) < 3:
+            errors.append("Executable packages require at least three public tests")
+        if sum(t["visibility"] == "hidden" for t in tests) < 5:
+            errors.append("Executable packages require at least five additional hidden tests")
+        for field in ("solution_notes", "time_complexity", "space_complexity"):
+            if not question.get(field, "").strip():
+                errors.append(f"Executable packages require {field}")
+    return errors
+
+
+def authoring_schema() -> dict:
+    schema = Question.model_json_schema()
+    schema["required"] += ["hints", "follow_ups"]
+    schema["properties"]["hints"]["minItems"] = 1
+    schema["properties"]["follow_ups"].update(minItems=3, maxItems=3)
+    tests = schema["$defs"]["TestConfig"]["properties"]["tests"]
+    tests["minItems"] = 8
+    tests["allOf"] = [{"contains": {"properties": {"visibility": {"const": visibility}},
+                                    "required": ["visibility"]}, "minContains": count}
+                       for visibility, count in (("public", 3), ("hidden", 5))]
+    schema["allOf"] = [{"if": {"properties": {"test_config": {"type": "object"}}, "required": ["test_config"]},
+                        "then": {"required": ["solution_notes", "time_complexity", "space_complexity"],
+                                 "properties": {key: {"minLength": 1} for key in (
+                                     "solution_notes", "time_complexity", "space_complexity")}}}]
+    return schema

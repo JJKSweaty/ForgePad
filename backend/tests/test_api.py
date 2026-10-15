@@ -15,7 +15,7 @@ from forgepad.storage import Store
 
 @pytest.fixture
 def package():
-    return {
+    result = {
         "schema_version": "1.0",
         "id": "test-counter",
         "version": 1,
@@ -59,6 +59,13 @@ def package():
         "hints": ["Check the return value"],
         "source": {"name": "Test", "url": "", "license": "MIT"},
     }
+    for i in range(2):
+        result["test_config"]["tests"].append({**result["test_config"]["tests"][0], "id": f"public-{i}"})
+    for i in range(4):
+        result["test_config"]["tests"].append({**result["test_config"]["tests"][1], "id": f"hidden-{i}"})
+    result["follow_ups"].append("Which counter access is atomic on this target?")
+    result.update(solution_notes="Print the constant one.", time_complexity="O(1)", space_complexity="O(1)")
+    return result
 
 
 class FakeRunner:
@@ -127,6 +134,64 @@ def test_practice_privacy_and_authoring_export(tmp_path, package):
         assert exported == Question.model_validate(package).model_dump()
         assert len(client.get("/api/questions/export/all").json()) == 1
         assert client.get("/api/questions?topic=unrelated").json() == []
+
+
+def test_solution_storage_is_separate_and_new_imports_are_complete(tmp_path, package):
+    with client_for(tmp_path, package) as client:
+        with client.app.state.store.connect() as db:
+            stored = db.execute("SELECT package FROM questions").fetchone()[0]
+            solution = db.execute("SELECT payload FROM solutions").fetchone()[0]
+        assert "REFERENCE_SECRET" not in stored and "REFERENCE_SECRET" in solution
+        candidate = client.get("/api/questions/test-counter").json()
+        assert "solution_notes" not in candidate and "time_complexity" not in candidate
+        incomplete = deepcopy(package)
+        incomplete["id"] = "incomplete"
+        incomplete["test_config"]["tests"] = incomplete["test_config"]["tests"][:2]
+        result = client.post("/api/imports/validate", json={"question": incomplete}).json()
+        assert not result["valid"] and len(result["errors"]) == 2
+
+
+def test_generator_uses_options_and_live_authoring_contract(tmp_path, package):
+    with client_for(tmp_path, package) as client:
+        prompt = client.post("/api/generator-prompt", json={"idea":"Timer wraparound", "difficulty":"advanced",
+            "duration_minutes":45, "language":"cpp", "type":"coding"}).json()["prompt"]
+        assert "C++17" in prompt and "45 minutes" in prompt and "advanced" in prompt
+        assert "THREE public" in prompt and "FIVE additional hidden" in prompt
+        schema = client.get("/api/schema").json()
+        assert schema["$defs"]["TestConfig"]["properties"]["tests"]["minItems"] == 8
+
+
+def test_replay_preserves_code_messages_and_redacts_hidden_outputs(tmp_path, package):
+    with client_for(tmp_path, package) as client:
+        session = client.post("/api/interviews", json={"question_id":package["id"]}).json()
+        sid = session["id"]
+        draft = {"files":{"main.c":"first snapshot"}, "session_id":sid}
+        assert client.put("/api/drafts/test-counter", json=draft).status_code == 200
+        client.put("/api/drafts/test-counter", json=draft)
+        client.post(f"/api/interviews/{sid}/events", json={"type":"message", "content":"Bound the counter."})
+        run = client.post("/api/runs", json={**draft, "question_id":"test-counter", "mode":"submit"}).json()
+        wait_run(client, run["id"])
+        for _ in range(3):
+            client.get(f"/api/interviews/{sid}")
+        replay = client.get(f"/api/interviews/{sid}/replay").json()
+        assert [e["kind"] for e in replay["events"]].count("code") == 1
+        assert [e["kind"] for e in replay["events"]].count("interviewer") == 1
+        assert any(e.get("content") == "Bound the counter." for e in replay["events"])
+        assert any(e.get("result", {}).get("status") == "passed" for e in replay["events"])
+        assert "OUTPUT_SECRET" not in json.dumps(replay) and "REFERENCE_SECRET" not in json.dumps(replay)
+    with client_for(tmp_path, package) as client:
+        assert len(client.get(f"/api/interviews/{sid}/replay").json()["events"]) == len(replay["events"])
+
+
+def test_interview_memory_uses_compiler_evidence(tmp_path, package):
+    with client_for(tmp_path, package, FakeRunner("wrong_answer")) as client:
+        run = client.post("/api/runs", json={"question_id":package["id"], "files":{"main.c":"code"}, "mode":"submit"}).json()
+        wait_run(client, run["id"])
+        session = client.post("/api/interviews", json={"question_id":package["id"]}).json()
+        evidence = session["technical_memory"][0]
+        assert evidence["result"] == {"status":"wrong_answer", "passed":0, "total":8}
+        assert "passed 0 of 8 tests" in session["transcript"][-1]["content"]
+        assert "tests" not in evidence["result"]
 
 
 def test_schema_errors_and_reference_validation_gate(tmp_path, package):
@@ -217,6 +282,7 @@ def test_interview_persistence_pause_followups_finish(tmp_path, package):
             "SOLVING",
             "FOLLOW_UP",
             "FOLLOW_UP",
+            "FOLLOW_UP",
             "REVIEW",
             "COMPLETE",
         ):
@@ -229,7 +295,7 @@ def test_interview_persistence_pause_followups_finish(tmp_path, package):
                     ).status_code
                     == 200
                 )
-        assert record["follow_ups_attempted"] == [0, 1]
+        assert record["follow_ups_attempted"] == [0, 1, 2]
         assert "1 responses recorded" in record["report"]["interview_communication"]
         assert "REFERENCE_SECRET" not in json.dumps(record)
         assert client.post(path + "/events", json={"type": "message", "content": "late"}).status_code == 409

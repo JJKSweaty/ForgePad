@@ -1,5 +1,7 @@
 # ForgePad architecture
 
+Hosted deployments preserve this application and use Supabase plus Vercel Sandbox instead of local SQLite and Docker. See [hosting.md](hosting.md) for the deployment boundary, required server settings, privacy model, and current setup status.
+
 ForgePad is a local modular monolith: React/TypeScript and Monaco, a FastAPI API, SQLite in WAL mode, and disposable Docker workers. The backend binds to loopback. The browser uses the same-origin `/api` route through Vite in development. Runtime data lives in ignored `data/`; credentials belong only in server environment variables.
 
 The runner is the only component allowed to execute submitted code. It must fail closed if Docker is unavailable. Compiler results determine correctness; interview dialogue never changes a test result. Authoring exports contain reference solutions and hidden tests; practice responses exclude both. Historical attempts retain the question version and submitted source.

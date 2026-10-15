@@ -26,3 +26,7 @@ backups/
 *.egg-info/
 .coverage
 htmlcov/
+.vercel/
+*.tsbuildinfo
+.vercel
+.env*

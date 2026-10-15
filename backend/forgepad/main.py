@@ -1,12 +1,10 @@
 """Loopback FastAPI application. Run with: uvicorn forgepad.main:app --host 127.0.0.1."""
 
-import json
 import logging
 import os
 import secrets
-import sqlite3
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from typing import Literal
@@ -19,11 +17,19 @@ from pydantic import Field, ValidationError, field_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import interviews
+from .generator import authoring_prompt
 from .providers import LocalSpeechProvider, OllamaProvider, command
 from .queue import RunQueue, attempt
 from .runner import DockerRunner
-from .schema import Question, StrictModel, practice_question, validate_files
-from .storage import Store, encode, now
+from .schema import (
+    Question,
+    StrictModel,
+    authoring_errors,
+    authoring_schema,
+    practice_question,
+    validate_files,
+)
+from .storage import StorageConflict, Store, now
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,6 +42,7 @@ class Flags(StrictModel):
 class Draft(StrictModel):
     files: dict[str, str]
     answer: str = Field(default="", max_length=50000)
+    session_id: str | None = Field(default=None, max_length=80)
     _files = field_validator("files")(validate_files)
 
 
@@ -58,6 +65,10 @@ class TextRequest(StrictModel):
 
 class IdeaRequest(StrictModel):
     idea: str = Field(min_length=1, max_length=5000)
+    difficulty: Literal["beginner", "intermediate", "advanced", "expert"] = "intermediate"
+    duration_minutes: Literal[15, 30, 45] = 30
+    language: Literal["c", "cpp", "independent"] = "c"
+    type: Literal["coding", "theory", "debugging", "design"] = "coding"
 
 
 class AttemptRequest(StrictModel):
@@ -94,20 +105,50 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
 
     @asynccontextmanager
     async def lifespan(app):
-        app.state.store = Store(data_path)
+        if os.getenv("VERCEL") and not all(os.getenv(key) for key in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY")):
+            app.state.setup_pending = True
+            yield
+            return
+        if os.getenv("SUPABASE_URL"):
+            from .supabase_store import SupabaseStore
+            app.state.store = SupabaseStore()
+        else:
+            app.state.store = Store(data_path)
         app.state.store.seed(seed_path)
-        app.state.runner = runner or DockerRunner()
+        if not runner and os.getenv("FORGEPAD_RUNNER_URL"):
+            from .cloud_runner import CloudRunner
+            runner_instance = CloudRunner()
+        else:
+            runner_instance = runner or DockerRunner()
+        app.state.runner = runner_instance
         app.state.ai = ai or OllamaProvider()
         app.state.speech = speech or LocalSpeechProvider()
-        app.state.queue = RunQueue(app.state.store, app.state.runner)
+        if os.getenv("VERCEL"):
+            from .cloud_runner import SynchronousQueue
+            app.state.queue = SynchronousQueue(app.state.store, app.state.runner)
+        else:
+            app.state.queue = RunQueue(app.state.store, app.state.runner)
         yield
         app.state.queue.shutdown()
 
     app = FastAPI(title="ForgePad", version="0.1.0", lifespan=lifespan)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]"])
+
+    @app.exception_handler(StorageConflict)
+    async def storage_conflict(request, error):
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+    cloud_host = os.getenv("FORGEPAD_HOST", "")
+    hosts = ["localhost", "127.0.0.1", "[::1]"]
+    if cloud_host:
+        hosts += [cloud_host, "*.vercel.app"]
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
 
     @app.middleware("http")
     async def local_origin(request: Request, call_next):
+        if getattr(app.state, "setup_pending", False):
+            return JSONResponse(status_code=503, content={"detail":
+                "Backend setup is incomplete: connect Supabase and configure the server database environment."})
+        from .cloud_runner import request_oidc
+        oidc_token = request_oidc.set(request.headers.get("x-vercel-oidc-token", ""))
         origin = request.headers.get("origin")
         if origin:
             parsed = urlparse(origin)
@@ -127,6 +168,11 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                     "::1",
                 }:
                     allowed.add(configured.rstrip("/"))
+            if cloud_host:
+                allowed.add(f"https://{cloud_host}")
+                deployment_host = os.getenv("VERCEL_URL", "")
+                if deployment_host:
+                    allowed.add(f"https://{deployment_host}")
             if origin.rstrip("/") not in allowed or parsed.username or parsed.password:
                 return JSONResponse(
                     status_code=403,
@@ -145,7 +191,10 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                     return JSONResponse(status_code=413, content={"detail": "Request exceeds 10 MiB."})
                 chunks.append(chunk)
             request._body = b"".join(chunks)
-        return await call_next(request)
+        try:
+            return await call_next(request)
+        finally:
+            request_oidc.reset(oidc_token)
 
     def store():
         return app.state.store
@@ -156,15 +205,9 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             raise HTTPException(404, "Question not found")
         return question
 
-    def summary(question):
-        with store().connect() as db:
-            flags = db.execute(
-                "SELECT bookmarked,archived FROM question_flags WHERE question_id=?", (question["id"],)
-            ).fetchone()
-            latest = db.execute(
-                "SELECT payload FROM attempts WHERE question_id=? ORDER BY created_at DESC LIMIT 1",
-                (question["id"],),
-            ).fetchone()
+    def summary(question, state=None):
+        flags = state[0].get(question["id"], {"bookmarked": False, "archived": False}) if state else store().flags(question["id"])
+        latest = state[1].get(question["id"]) if state else store().latest_attempt(question["id"])
         result = {
             key: question[key]
             for key in (
@@ -181,9 +224,9 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             )
         }
         result.update(
-            bookmarked=bool(flags[0]) if flags else False,
-            archived=bool(flags[1]) if flags else False,
-            completion_status=json.loads(latest[0])["completion_status"] if latest else "not_started",
+            bookmarked=bool(flags["bookmarked"]),
+            archived=bool(flags["archived"]),
+            completion_status=latest["completion_status"] if latest else "not_started",
         )
         return result
 
@@ -194,6 +237,8 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             "runner": app.state.runner.availability(),
             "ai": app.state.ai.availability(),
             "speech": app.state.speech.availability(),
+            "hosting": "cloud" if os.getenv("VERCEL") else "local",
+            "storage": "supabase" if os.getenv("SUPABASE_URL") else "sqlite",
         }
 
     @app.get("/api/questions")
@@ -208,6 +253,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         max_duration: int | None = None,
     ):
         items = []
+        state = store().summary_state()
         for question in store().questions():
             if (
                 q
@@ -228,7 +274,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                 continue
             if source and source.casefold() not in question["source"]["name"].casefold():
                 continue
-            item = summary(question)
+            item = summary(question, state)
             if completion_status and item["completion_status"] != completion_status:
                 continue
             items.append(item)
@@ -251,34 +297,19 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
     def update_question(question_id: str, request: Flags):
         question = question_or_404(question_id)
         existing = summary(question)
-        with store().connect() as db:
-            db.execute(
-                "INSERT INTO question_flags VALUES (?,?,?) ON CONFLICT(question_id) DO UPDATE SET bookmarked=excluded.bookmarked,archived=excluded.archived",
-                (
-                    question_id,
-                    request.bookmarked if request.bookmarked is not None else existing["bookmarked"],
-                    request.archived if request.archived is not None else existing["archived"],
-                ),
-            )
+        store().save_flags(question_id,
+                           request.bookmarked if request.bookmarked is not None else existing["bookmarked"],
+                           request.archived if request.archived is not None else existing["archived"])
         return summary(question)
 
     @app.get("/api/schema")
     def schema():
-        return Question.model_json_schema()
+        return authoring_schema()
 
     @app.post("/api/generator-prompt")
     def generator_prompt(request: IdeaRequest):
-        return {
-            "prompt": "Create an original embedded engineering question from this idea: "
-            + request.idea
-            + "\nReturn only one JSON object matching the schema below. Use original content and accurate source/license metadata. "
-            "Include a correct reference solution, public and hidden tests, representative normal and boundary cases, "
-            "and negative cases where the contract permits invalid input. Use flat safe C/C++ source filenames. "
-            "Fixture tests must provide a complete main function; stdio tests must not have fixtures. "
-            "Do not claim hardware timing, atomicity, or memory ordering is established by host tests. "
-            "Theory/design questions must have a concrete rubric and no executable test configuration.\n"
-            + json.dumps(Question.model_json_schema(), indent=2)
-        }
+        return {"prompt": authoring_prompt(request.idea, request.difficulty, request.duration_minutes,
+                                           request.language, request.type)}
 
     @app.post("/api/imports/validate")
     def validate_import(request: ImportRequest):
@@ -295,6 +326,9 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                 "valid": False,
                 "errors": ["Question ID exists. Publish a strictly higher version, or choose a new ID."],
             }
+        errors = authoring_errors(question)
+        if errors:
+            return {"valid": False, "errors": errors}
         validation = None
         if question.get("test_config"):
             try:
@@ -315,12 +349,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                     "validation": validation,
                 }
         token = secrets.token_urlsafe(32)
-        with store().connect() as db:
-            db.execute(
-                "DELETE FROM imports WHERE created_at<?",
-                ((datetime.now(UTC) - timedelta(hours=1)).isoformat(),),
-            )
-            db.execute("INSERT INTO imports VALUES (?,?,?)", (token, encode(question), now()))
+        store().stage_import(token, question)
         return {
             "valid": True,
             "errors": [],
@@ -332,38 +361,18 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
     @app.post("/api/imports/publish", status_code=201)
     def publish_import(request: TokenRequest):
         try:
-            with store().connect() as db:
-                db.execute("BEGIN IMMEDIATE")
-                row = db.execute(
-                    "SELECT package,created_at FROM imports WHERE token=?", (request.token,)
-                ).fetchone()
-                if not row or datetime.fromisoformat(row[1]) < datetime.now(UTC) - timedelta(hours=1):
-                    raise HTTPException(
-                        409, "Validation token expired or was already published; validate again"
-                    )
-                question = json.loads(row[0])
-                latest = db.execute(
-                    "SELECT MAX(version) FROM questions WHERE id=?", (question["id"],)
-                ).fetchone()[0]
-                if latest is not None and latest >= question["version"]:
-                    raise HTTPException(409, "A same or newer question version already exists")
-                db.execute(
-                    "INSERT INTO questions VALUES (?,?,?,?)",
-                    (question["id"], question["version"], row[0], now()),
-                )
-                db.execute("DELETE FROM imports WHERE token=?", (request.token,))
-        except sqlite3.IntegrityError:
-            raise HTTPException(409, "This question version already exists") from None
+            question = store().publish_import(request.token)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from None
         return practice_question(question)
 
     @app.get("/api/drafts/{question_id}")
     def get_draft(question_id: str):
         question = question_or_404(question_id)
-        with store().connect() as db:
-            row = db.execute("SELECT * FROM drafts WHERE question_id=?", (question_id,)).fetchone()
+        row = store().draft(question_id)
         return (
             {
-                "files": json.loads(row["files"]),
+                "files": row["files"],
                 "answer": row["answer"],
                 "updated_at": row["updated_at"],
                 "question_version": row["version"],
@@ -380,18 +389,15 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
     @app.put("/api/drafts/{question_id}")
     def save_draft(question_id: str, request: Draft):
         question = question_or_404(question_id)
-        timestamp = now()
-        with store().connect() as db:
-            db.execute(
-                "INSERT INTO drafts VALUES (?,?,?,?,?) ON CONFLICT(question_id) DO UPDATE SET version=excluded.version,files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",
-                (question_id, question["version"], encode(request.files), request.answer, timestamp),
-            )
-        return {
-            "files": request.files,
-            "answer": request.answer,
-            "updated_at": timestamp,
-            "question_version": question["version"],
-        }
+        if request.session_id:
+            session = load_session(request.session_id)
+            if session["question_id"] != question_id or session["state"] == "COMPLETE":
+                raise HTTPException(409, "Draft does not belong to an active interview")
+        previous = store().draft(question_id)
+        record = store().save_draft(question, request.files, request.answer)
+        if request.session_id and (not previous or previous["files"] != request.files or previous["answer"] != request.answer):
+            store().add_replay(request.session_id, "code", {"files": request.files, "answer": request.answer})
+        return record
 
     @app.post("/api/runs", status_code=202)
     def create_run(request: RunRequest):
@@ -400,8 +406,16 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             raise HTTPException(422, "This question has no executable tests. Save a theory response instead.")
         if not request.files:
             raise HTTPException(422, "Add at least one source file before running")
+        if request.session_id:
+            session = load_session(request.session_id)
+            if session["question_id"] != request.question_id or session["state"] == "COMPLETE":
+                raise HTTPException(409, "Run does not belong to an active interview")
         try:
-            return app.state.queue.enqueue(question, request.files, request.mode)
+            run = app.state.queue.enqueue(question, request.files, request.mode)
+            if request.session_id:
+                store().add_replay(request.session_id, "run", {"run_id": run["id"], "files": request.files,
+                                                              "mode": request.mode})
+            return run
         except ValueError as error:
             raise HTTPException(429, str(error)) from None
 
@@ -511,15 +525,26 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             ]
             if not options:
                 raise HTTPException(404, "No questions match this interview kind")
-            # Favor questions with the fewest attempts; stable ordering makes selection explainable.
             counts = {}
+            weak_topics = set()
             for record in store().records("attempts"):
                 counts[record["question_id"]] = counts.get(record["question_id"], 0) + 1
-            question = min(options, key=lambda item: counts.get(item["id"], 0))
+                if record.get("result") and record["result"].get("status") != "passed":
+                    weak_topics.update(record["topics"])
+            question = min(options, key=lambda item: (
+                not bool(set(item["topics"]) & weak_topics), counts.get(item["id"], 0)))
+        memory = [{key: item[key] for key in ("id", "title", "topics", "created_at", "result", "confidence")}
+                  for item in store().records("attempts") if set(item["topics"]) & set(question["topics"])][:5]
+        for evidence in memory:
+            if evidence.get("result"):
+                evidence["result"] = {key: evidence["result"][key] for key in ("status", "passed", "total")
+                                      if key in evidence["result"]}
         record = interviews.create_session(
-            question, request.duration_minutes, request.kind, request.personality
+            question, request.duration_minutes, request.kind, request.personality, memory
         )
         store().save_record("interviews", record)
+        for entry in record["transcript"]:
+            store().add_replay(record["id"], "interviewer", {"content": entry["content"]})
         return record
 
     @app.get("/api/interviews")
@@ -532,16 +557,30 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         with session_lock:
             return load_session(session_id)
 
+    @app.get("/api/interviews/{session_id}/replay")
+    def replay_interview(session_id: str):
+        session = load_session(session_id)
+        events = store().replay(session_id)
+        for event in events:
+            if event["kind"] == "run":
+                run = store().record("runs", event["run_id"])
+                event["result"] = run.get("result") if run else None
+        return {"session": session, "events": events}
+
     @app.post("/api/interviews/{session_id}/events")
     def interview_event(session_id: str, request: InterviewEvent):
         with session_lock:
             record = load_session(session_id)
             question = question_or_404(record["question_id"], record["question_version"])
+            previous_messages = len(record["transcript"])
             try:
                 interviews.apply_event(record, question, request.type, request.content)
             except ValueError as error:
                 raise HTTPException(409, str(error)) from None
             store().save_record("interviews", record)
+            for entry in record["transcript"][previous_messages:]:
+                store().add_replay(session_id, entry["role"], {"content": entry["content"]})
+            store().add_replay(session_id, "control", {"action": request.type, "state": record["state"]})
         if request.type == "message" and record["state"] != "COMPLETE" and getattr(app.state.ai, "model", ""):
             try:
                 reply = app.state.ai.respond(
@@ -552,6 +591,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                         "constraints": question["constraints"],
                         "follow_ups": question["follow_ups"],
                         "transcript": record["transcript"],
+                        "technical_memory": record.get("technical_memory", []),
                     }
                 )
                 with session_lock:
@@ -559,6 +599,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                     if latest["state"] == record["state"] and not latest["paused"]:
                         interviews.add_message(latest, "interviewer", reply)
                         store().save_record("interviews", latest)
+                        store().add_replay(session_id, "interviewer", {"content": reply})
                         record = latest
             except Exception:
                 logging.getLogger(__name__).exception("Local interview inference failed")

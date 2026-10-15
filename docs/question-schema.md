@@ -1,6 +1,6 @@
 # Question package 1.0
 
-`GET /api/schema` is the machine-readable JSON Schema generated from the same Pydantic model used by the importer. The complete original packages in `questions/` are working authoring examples.
+`GET /api/schema` is the complete authoring JSON Schema. New imports require three public tests, five additional hidden tests, at least one hint, exactly three follow-ups, and author-only algorithm/time/space notes for executable questions. Earlier bundled packages remain readable through the compatibility model; the new UART fault scenario is a complete authoring example.
 
 Required fields include the stable `id`, integer `version`, title/description, type, difficulty, topic array, duration, language, prompt, rubric, and source/license metadata. `schema_version` is `1.0`. Increment `version` for a revision of the same question. A duplicate ID/version cannot be published; earlier versions remain available to historical attempts.
 
@@ -50,4 +50,4 @@ Theory questions use `test_config: null`, empty source maps, and concrete rubric
 3. Inspect the rendered preview and validation result.
 4. Confirm publication using the validation token.
 
-Docker must be available to publish an executable package. A syntactically valid package or failed reference implementation does not receive a publish token. Authoring exports include full tests and solutions and should only be opened intentionally. Practice views omit reference solutions and hidden test data.
+An execution service must be available to publish an executable package: Docker locally, or the authenticated Vercel Sandbox service when hosted. A syntactically valid package or failed reference implementation does not receive a publish token. Authoring exports include full tests and solutions and should only be opened intentionally. Practice views omit reference solutions, solution notes, complexity answers, and hidden test data. Solutions are stored in a separate table from question content.
