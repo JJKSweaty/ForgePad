@@ -21,8 +21,8 @@ from mcp.client.stdio import stdio_client
 ROOT = Path(__file__).resolve().parents[1]
 
 
-async def verify(output):
-    binaries = ROOT / "src-tauri" / "target" / "debug"
+async def verify(output, binaries=None):
+    binaries = Path(binaries) if binaries else ROOT / "src-tauri" / "target" / "debug"
     report = {
         "scope": "Real native service and stdio executable; not a HeyClicky UI acceptance test",
         "checks": [],
@@ -220,4 +220,6 @@ async def verify(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output")
-    asyncio.run(verify(parser.parse_args().output))
+    parser.add_argument("--binaries", help="Directory containing packaged service and MCP executables")
+    args = parser.parse_args()
+    asyncio.run(verify(args.output, args.binaries))

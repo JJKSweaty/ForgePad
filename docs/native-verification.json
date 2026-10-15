@@ -9,12 +9,12 @@
     "Closed service returns an actionable MCP error, without launching a second application"
   ],
   "timings_ms": {
-    "cold_service_start": 367.043,
-    "roadmap_query_median": 2.462,
-    "mcp_handshake_and_discovery": 199.29,
-    "mcp_progress_median": 3.264,
-    "autosave_median": 0.513,
-    "warm_service_start": 28.113
+    "cold_service_start": 27.826,
+    "roadmap_query_median": 0.831,
+    "mcp_handshake_and_discovery": 9.276,
+    "mcp_progress_median": 1.752,
+    "autosave_median": 0.489,
+    "warm_service_start": 27.641
   },
   "models_enabled": false
 }

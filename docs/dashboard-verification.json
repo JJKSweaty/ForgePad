@@ -1,0 +1,16 @@
+{
+  "scope": "Isolated real native service, bundled worker and Docker; no AI models",
+  "checks": [
+    "Saved draft selected by continuation",
+    "Two real submissions pass all eight tests",
+    "Repeated success counts as one solve",
+    "Shared roadmap progress updates",
+    "Matching local-day detail records",
+    "Disconnected GitHub never blocks local progress"
+  ],
+  "timings_ms": {
+    "submission_1": 4186.24,
+    "submission_2": 2157.28,
+    "dashboard_two_reads": 5.65
+  }
+}
