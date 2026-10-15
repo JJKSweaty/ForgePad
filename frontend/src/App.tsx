@@ -3,26 +3,41 @@ import {
   BookOpen,
   ChevronRight,
   CircuitBoard,
-  Command,
+  Code2,
+  FilePenLine,
   LayoutDashboard,
   Mic,
   Moon,
   PanelLeftClose,
-  Play,
   RefreshCw,
+  Route,
+  Search,
+  Settings,
   Sun,
   TrendingUp,
 } from "lucide-react";
-import { api, download, message } from "./api";
+import { api, message } from "./api";
 import { nativeEvents } from "./native";
-import { RoadmapsPage } from "./RoadmapsPage";
-import { AuthoringPage } from "./AuthoringPage";
-import { SettingsPage } from "./SettingsPage";
 import type { Health, Progress, Question } from "./api";
-import { QuestionBank } from "./QuestionBank";
-import { ProgressPage } from "./ProgressPage";
+import { Dashboard } from "./Dashboard";
+import { CommandPalette } from "./CommandPalette";
 const Practice = lazy(() => import("./Practice"));
 const Interview = lazy(() => import("./Interview"));
+const QuestionBank = lazy(() =>
+  import("./QuestionBank").then((m) => ({ default: m.QuestionBank })),
+);
+const ProgressPage = lazy(() =>
+  import("./ProgressPage").then((m) => ({ default: m.ProgressPage })),
+);
+const RoadmapsPage = lazy(() =>
+  import("./RoadmapsPage").then((m) => ({ default: m.RoadmapsPage })),
+);
+const AuthoringPage = lazy(() =>
+  import("./AuthoringPage").then((m) => ({ default: m.AuthoringPage })),
+);
+const SettingsPage = lazy(() =>
+  import("./SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
 export type Page =
   | "dashboard"
   | "questions"
@@ -33,13 +48,11 @@ export type Page =
   | "authoring"
   | "settings";
 const navigation = [
-  { id: "dashboard", label: "Overview", icon: LayoutDashboard },
-  { id: "roadmaps", label: "Roadmaps", icon: BookOpen },
-  { id: "authoring", label: "Question studio", icon: Command },
-  { id: "settings", label: "Settings", icon: CircuitBoard },
-  { id: "questions", label: "Question bank", icon: BookOpen },
-  { id: "practice", label: "Practice", icon: Command },
-  { id: "interview", label: "Interview", icon: Mic },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "roadmaps", label: "Roadmaps", icon: Route },
+  { id: "practice", label: "Practice", icon: Code2 },
+  { id: "questions", label: "Question Library", icon: BookOpen },
+  { id: "interview", label: "Mock Interview", icon: Mic },
   { id: "progress", label: "Progress", icon: TrendingUp },
 ] as const;
 const emptyProgress: Progress = {
@@ -59,45 +72,108 @@ export default function App() {
     [selected, setSelected] = useState(
       () => localStorage.getItem("forgepad.v1.question") ?? "",
     ),
+    [version, setVersion] = useState<number | undefined>(),
     [theme, setTheme] = useState(
       () => localStorage.getItem("forgepad.v1.theme") ?? "dark",
     ),
-    [compact, setCompact] = useState(false);
+    [resolvedTheme, setResolvedTheme] = useState("dark"),
+    [compact, setCompact] = useState(false),
+    [search, setSearch] = useState(false);
   const refresh = useCallback(async () => {
-    setError("");
     try {
-      const [q, p, h] = await Promise.all([
+      const [q, p] = await Promise.all([
         api<Question[]>("/questions"),
         api<Progress>("/progress"),
-        api<Health>("/health"),
       ]);
       setQuestions(q);
       setProgress(p);
-      setHealth(h);
+      setError("");
     } catch (e) {
       setError(message(e));
     } finally {
       setLoading(false);
     }
   }, []);
+  const environment = useCallback(
+    () =>
+      void api<Health>("/health")
+        .then(setHealth)
+        .catch((e) => setError(message(e))),
+    [],
+  );
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    environment();
+  }, [refresh, environment]);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const value =
+        theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.dataset.theme = value;
+      setResolvedTheme(value);
+    };
+    apply();
+    localStorage.setItem("forgepad.v1.theme", theme);
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+  const navigate = useCallback((target: Page, prepare?: () => void) => {
+    const waits: Promise<unknown>[] = [];
+    window.dispatchEvent(new CustomEvent("forgepad:flush", { detail: waits }));
+    void Promise.all(waits)
+      .then(() => {
+        prepare?.();
+        setPage(target);
+        window.scrollTo({ top: 0 });
+      })
+      .catch((e) => setError(`Draft could not be saved: ${message(e)}`));
+  }, []);
+  const practice = useCallback(
+    (id: string, revision?: number) => {
+      navigate("practice", () => {
+        setSelected(id);
+        setVersion(revision);
+        localStorage.setItem("forgepad.v1.question", id);
+      });
+    },
+    [navigate],
+  );
+  const openSession = useCallback(
+    (id: string) => {
+      sessionStorage.setItem("forgepad.session", id);
+      navigate("interview");
+    },
+    [navigate],
+  );
+  const openRoadmap = useCallback(
+    (id: string) => {
+      sessionStorage.setItem("forgepad.roadmap", id);
+      navigate("roadmaps");
+    },
+    [navigate],
+  );
+  function settings(section = "general") {
+    sessionStorage.setItem("forgepad.settings.section", section);
+    navigate("settings");
+  }
   useEffect(() => {
     let live = true;
     let stop: (() => void) | undefined;
     void nativeEvents((event) => {
       if (!live) return;
+      if (
+        event.type === "workspace_changed" &&
+        event.data?.path?.startsWith("/settings/")
+      )
+        environment();
       if (event.type === "navigate" && event.data) {
         const t = event.data;
         if (t.action === "question" || t.action === "practice") practice(t.id);
-        else if (t.action === "roadmap") {
-          sessionStorage.setItem("forgepad.roadmap", t.id);
-          setPage("roadmaps");
-        } else if (t.action === "interview" || t.action === "report") {
-          sessionStorage.setItem("forgepad.session", t.id);
-          setPage("interview");
-        } else setPage("dashboard");
+        else if (t.action === "roadmap") openRoadmap(t.id);
+        else if (t.action === "interview" || t.action === "report")
+          openSession(t.id);
+        else navigate("dashboard");
       }
       if (
         ["workspace_changed", "run_complete", "session_started"].includes(
@@ -105,7 +181,7 @@ export default function App() {
         )
       )
         void refresh();
-    })
+    }, true)
       .then((fn) => {
         if (live) stop = fn;
         else fn();
@@ -115,41 +191,41 @@ export default function App() {
       live = false;
       stop?.();
     };
-  }, [refresh]);
+  }, [refresh, environment, practice, navigate, openRoadmap, openSession]);
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("forgepad.v1.theme", theme);
-  }, [theme]);
-  function practice(id: string) {
-    setSelected(id);
-    localStorage.setItem("forgepad.v1.question", id);
-    setPage("practice");
-  }
-  const current = questions.find((q) => q.id === selected);
-  const completed = questions.filter((q) =>
-    ["complete", "completed", "passed"].includes(q.completion_status ?? ""),
-  ).length;
+    const key = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearch((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
+  const title =
+    page === "authoring"
+      ? "Question Studio"
+      : page === "settings"
+        ? "Settings"
+        : navigation.find((n) => n.id === page)?.label;
   return (
     <div className={`app ${compact ? "compact" : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
       <aside className="sidebar">
-        <a
-          href="#"
+        <button
           className="brand"
-          onClick={(e) => {
-            e.preventDefault();
-            setPage("dashboard");
-          }}
+          onClick={() => navigate("dashboard")}
+          aria-label="ForgePad dashboard"
         >
           <span className="brand-mark">
-            <CircuitBoard size={23} />
+            <CircuitBoard size={22} />
           </span>
           <span>
-            ForgePad<small>EMBEDDED SYSTEMS</small>
+            ForgePad<small>Firmware practice</small>
           </span>
-        </a>
+        </button>
         <div className="workspace-label">WORKSPACE</div>
         <nav aria-label="Main navigation">
           {navigation.map(({ id, label, icon: Icon }) => (
@@ -157,15 +233,32 @@ export default function App() {
               key={id}
               className={`nav-item ${page === id ? "active" : ""}`}
               aria-current={page === id ? "page" : undefined}
-              onClick={() => setPage(id)}
+              onClick={() => navigate(id)}
+              title={compact ? label : undefined}
             >
-              <Icon size={18} />
+              <Icon size={17} />
               <span>{label}</span>
-              {page === id && <span className="nav-indicator" />}
             </button>
           ))}
         </nav>
+        <div className="workspace-label authoring-label">AUTHORING</div>
+        <button
+          className={`nav-item ${page === "authoring" ? "active" : ""}`}
+          aria-current={page === "authoring" ? "page" : undefined}
+          onClick={() => navigate("authoring")}
+        >
+          <FilePenLine size={17} />
+          <span>Question Studio</span>
+        </button>
         <div className="sidebar-bottom">
+          <button
+            className={`nav-item ${page === "settings" ? "active" : ""}`}
+            aria-current={page === "settings" ? "page" : undefined}
+            onClick={() => settings()}
+          >
+            <Settings size={17} />
+            <span>Settings</span>
+          </button>
           <div className="local-card">
             <span className="status-dot" />
             <span>
@@ -174,27 +267,32 @@ export default function App() {
                 : "Local workspace"}
               <small>
                 {health?.storage === "supabase"
-                  ? "Progress saved in Supabase"
-                  : "Code and progress stay here"}
+                  ? "Supabase persistence"
+                  : "Saved on this Mac"}
               </small>
             </span>
           </div>
           <div className="sidebar-tools">
             <button
               className="icon-button"
-              title={`Use ${theme === "dark" ? "light" : "dark"} theme`}
-              aria-label={`Use ${theme === "dark" ? "light" : "dark"} theme`}
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label={`Use ${resolvedTheme === "dark" ? "light" : "dark"} appearance`}
+              onClick={() =>
+                setTheme(resolvedTheme === "dark" ? "light" : "dark")
+              }
             >
-              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+              {resolvedTheme === "dark" ? (
+                <Sun size={16} />
+              ) : (
+                <Moon size={16} />
+              )}
             </button>
-            <span className="version">v0.2</span>
+            <span className="version">ForgePad 0.2</span>
             <button
-              className="icon-button collapse"
+              className="icon-button"
               aria-label="Toggle sidebar"
-              onClick={() => setCompact(!compact)}
+              onClick={() => setCompact((v) => !v)}
             >
-              <PanelLeftClose size={17} />
+              <PanelLeftClose size={16} />
             </button>
           </div>
         </div>
@@ -203,23 +301,33 @@ export default function App() {
         <header className="topbar">
           <div className="breadcrumbs">
             <span>Workspace</span>
-            <ChevronRight size={14} />
-            <strong>{navigation.find((n) => n.id === page)?.label}</strong>
+            <ChevronRight size={13} />
+            <strong>{title}</strong>
           </div>
-          <div className="topbar-status">
-            <span
-              className={`status-dot ${health?.runner.available ? "" : "muted"}`}
-            />
-            <span>
+          <div className="topbar-actions">
+            <button className="search-trigger" onClick={() => setSearch(true)}>
+              <Search size={14} />
+              <span>Search</span>
+              <kbd>⌘ K</kbd>
+            </button>
+            <button
+              className="runner-status"
+              onClick={() => settings("compiler")}
+            >
+              <span
+                className={`status-dot ${health?.runner.available ? "" : "muted"}`}
+              />
               {health?.runner.available ? "Runner ready" : "Runner unavailable"}
-            </span>
+            </button>
             <button
               className="icon-button"
-              title="Refresh workspace"
               aria-label="Refresh workspace"
-              onClick={() => void refresh()}
+              onClick={() => {
+                void refresh();
+                environment();
+              }}
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={14} />
             </button>
           </div>
         </header>
@@ -231,220 +339,31 @@ export default function App() {
             </div>
           )}
           {loading ? (
-            <div className="empty">Loading workspace…</div>
+            <div className="page dashboard-loading" role="status">
+              Opening workspace…
+            </div>
           ) : (
             <Suspense
-              fallback={<div className="empty">Opening workspace…</div>}
+              fallback={
+                <div className="page dashboard-loading" role="status">
+                  Opening {title?.toLowerCase()}…
+                </div>
+              }
             >
               {page === "dashboard" && (
-                <div className="page overview">
-                  <div className="page-heading">
-                    <div>
-                      <div className="eyebrow">YOUR WORKSPACE</div>
-                      <h1>
-                        Build understanding.
-                        <br />
-                        <span>One problem at a time.</span>
-                      </h1>
-                      <p>
-                        Practice embedded C and C++, examine your reasoning, and
-                        keep a record.
-                      </p>
-                    </div>
-                    <button
-                      className="primary"
-                      onClick={() =>
-                        current ? practice(current.id) : setPage("questions")
-                      }
-                    >
-                      <Play size={15} />
-                      {current ? "Continue practice" : "Choose a problem"}
-                    </button>
-                  </div>
-                  <div className="stats-grid">
-                    <Stat
-                      label="Questions available"
-                      value={questions.length}
-                      note="In your question bank"
-                    />
-                    <Stat
-                      label="Completed"
-                      value={completed}
-                      note="Questions with passing submissions"
-                    />
-                    <Stat
-                      label="Attempts recorded"
-                      value={progress.attempts.length}
-                      note="Code and written responses"
-                    />
-                    <Stat
-                      label="Reviews due"
-                      value={progress.due_reviews.length}
-                      note="Revisit and check understanding"
-                    />
-                  </div>
-                  <div className="dashboard-grid">
-                    <section className="panel">
-                      <div className="section-header">
-                        <div>
-                          <h2>
-                            {current
-                              ? "Pick up where you left off"
-                              : "Start a practice session"}
-                          </h2>
-                          <p>
-                            {current
-                              ? "Your draft is saved automatically."
-                              : "Work through a problem at your own pace."}
-                          </p>
-                        </div>
-                        <Command size={19} />
-                      </div>
-                      {(current ? [current] : questions.slice(0, 3)).map(
-                        (q) => (
-                          <button
-                            className="question-row"
-                            key={q.id}
-                            onClick={() => practice(q.id)}
-                          >
-                            <span className="question-icon">
-                              <CircuitBoard size={20} />
-                            </span>
-                            <span className="row-main">
-                              <strong>{q.title}</strong>
-                              <small>{q.topics.slice(0, 3).join(" · ")}</small>
-                            </span>
-                            <span className={`badge ${q.difficulty}`}>
-                              {q.difficulty}
-                            </span>
-                            <ChevronRight size={16} />
-                          </button>
-                        ),
-                      )}
-                      {questions.length === 0 && (
-                        <div className="empty">
-                          Your question bank is empty. Import a question to
-                          begin.
-                        </div>
-                      )}
-                      <button
-                        className="text-button panel-footer"
-                        onClick={() => setPage("questions")}
-                      >
-                        Browse question bank <ChevronRight size={14} />
-                      </button>
-                    </section>
-                    <section className="panel">
-                      <div className="section-header">
-                        <div>
-                          <h2>Interview rehearsal</h2>
-                          <p>Make time for the explanation.</p>
-                        </div>
-                        <Mic size={19} />
-                      </div>
-                      <div className="interview-intro">
-                        <div className="large-icon">
-                          <Mic size={28} />
-                        </div>
-                        <h3>Work through it out loud.</h3>
-                        <p>
-                          A timed session with clarification, follow-up
-                          questions, and a review of your responses.
-                        </p>
-                        <button
-                          className="secondary"
-                          onClick={() => setPage("interview")}
-                        >
-                          Set up interview <ChevronRight size={15} />
-                        </button>
-                      </div>
-                    </section>
-                    <section className="panel">
-                      <div className="section-header">
-                        <div>
-                          <h2>Recent activity</h2>
-                          <p>Your last saved submissions</p>
-                        </div>
-                        <button
-                          className="text-button"
-                          onClick={() => setPage("progress")}
-                        >
-                          View all <ChevronRight size={14} />
-                        </button>
-                      </div>
-                      {progress.attempts.slice(0, 4).map((a) => (
-                        <div className="activity-row" key={a.id}>
-                          <span className="status-dot" />
-                          <div className="row-main">
-                            <strong>
-                              {a.question_title ??
-                                a.title ??
-                                questions.find((q) => q.id === a.question_id)
-                                  ?.title ??
-                                a.question_id}
-                            </strong>
-                            <small>
-                              {new Date(a.created_at).toLocaleString()}
-                            </small>
-                          </div>
-                          <span className="badge">
-                            {a.result?.status ??
-                              a.status ??
-                              a.confidence ??
-                              "recorded"}
-                          </span>
-                        </div>
-                      ))}
-                      {!progress.attempts.length && (
-                        <div className="empty">
-                          No submissions yet.
-                          <small>
-                            Run a problem, then submit to save an attempt.
-                          </small>
-                        </div>
-                      )}
-                    </section>
-                    <section className="panel">
-                      <div className="section-header">
-                        <div>
-                          <h2>Environment</h2>
-                          <p>Workspace capabilities</p>
-                        </div>
-                      </div>
-                      <div className="environment">
-                        <Capability
-                          name="Isolated code runner"
-                          ready={!!health?.runner.available}
-                          detail={health?.runner.detail}
-                        />
-                        <Capability
-                          name="Local interview model"
-                          ready={!!health?.ai.available}
-                          detail={health?.ai.detail}
-                        />
-                        <Capability
-                          name="Local speech transcription"
-                          ready={!!health?.speech.available}
-                          detail={health?.speech.detail}
-                        />
-                      </div>
-                    </section>
-                  </div>
-                </div>
+                <Dashboard
+                  onPractice={practice}
+                  onSession={openSession}
+                  onRoadmap={openRoadmap}
+                  onSettings={() => settings("github")}
+                />
               )}
               {page === "roadmaps" && (
-                <RoadmapsPage
-                  onPractice={practice}
-                  onInterview={(id) => {
-                    sessionStorage.setItem("forgepad.session", id);
-                    setPage("interview");
-                  }}
-                />
+                <RoadmapsPage onPractice={practice} onInterview={openSession} />
               )}
               {page === "authoring" && (
                 <AuthoringPage questions={questions} refresh={refresh} />
               )}
-              {page === "settings" && <SettingsPage />}
               {page === "questions" && (
                 <QuestionBank
                   questions={questions}
@@ -455,22 +374,26 @@ export default function App() {
               {page === "practice" &&
                 (selected ? (
                   <Practice
-                    key={selected}
+                    key={`${selected}:${version ?? "latest"}`}
                     questionId={selected}
-                    theme={theme}
+                    questionVersion={version}
+                    theme={resolvedTheme}
                     onSaved={refresh}
-                    onBrowse={() => setPage("questions")}
+                    onBrowse={() => navigate("questions")}
                   />
                 ) : (
                   <div className="page">
-                    <div className="empty">
-                      <h2>Choose a problem to practice</h2>
-                      <p>Open a question to start an editor session.</p>
+                    <h1>Practice</h1>
+                    <div className="empty-state">
+                      <strong>Choose a question to begin</strong>
+                      <p>
+                        Browse the library or continue your preparation roadmap.
+                      </p>
                       <button
                         className="primary"
-                        onClick={() => setPage("questions")}
+                        onClick={() => navigate("roadmaps")}
                       >
-                        Browse questions
+                        Open roadmaps <ChevronRight size={14} />
                       </button>
                     </div>
                   </div>
@@ -479,7 +402,7 @@ export default function App() {
                 <Interview
                   questions={questions}
                   health={health}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               )}
               {page === "progress" && (
@@ -490,61 +413,20 @@ export default function App() {
                   onPractice={practice}
                 />
               )}
+              {page === "settings" && (
+                <SettingsPage theme={theme} onTheme={setTheme} />
+              )}
             </Suspense>
           )}
         </main>
-        <footer className="app-footer">
-          <span>ForgePad / Embedded systems practice</span>
-          <button
-            className="text-button"
-            onClick={() =>
-              void api("/data/export")
-                .then((data) => download("forgepad-workspace.json", data))
-                .catch((e) => setError(message(e)))
-            }
-          >
-            Export workspace
-          </button>
-        </footer>
       </div>
-    </div>
-  );
-}
-function Stat({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: number;
-  note: string;
-}) {
-  return (
-    <div className="stat">
-      <span>{label}</span>
-      <strong>{value.toString().padStart(2, "0")}</strong>
-      <small>{note}</small>
-    </div>
-  );
-}
-function Capability({
-  name,
-  ready,
-  detail,
-}: {
-  name: string;
-  ready: boolean;
-  detail?: string;
-}) {
-  return (
-    <div className="capability">
-      <div>
-        <strong>{name}</strong>
-        {detail && <small>{detail}</small>}
-      </div>
-      <span className={`badge ${ready ? "success" : ""}`}>
-        {ready ? "Ready" : "Unavailable"}
-      </span>
+      <CommandPalette
+        open={search}
+        onOpenChange={setSearch}
+        questions={questions}
+        onPractice={practice}
+        onNavigate={navigate}
+      />
     </div>
   );
 }

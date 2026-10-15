@@ -1,3 +1,4 @@
+import { usePracticeActivity } from "./usePracticeActivity";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
@@ -56,6 +57,11 @@ export default function Interview({
     [recording, setRecording] = useState(false),
     [transcribing, setTranscribing] = useState(false),
     [finishConfirm, setFinishConfirm] = useState(false);
+  usePracticeActivity(
+    session?.question_id,
+    session?.id,
+    workspace !== "code" && session?.state !== "COMPLETE" && !session?.paused,
+  );
   const view =
     session?.state === "COMPLETE" && workspace === "code"
       ? "replay"

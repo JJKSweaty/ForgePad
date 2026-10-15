@@ -189,6 +189,15 @@ export function Heatmap({
             </button>
           }
         />
+      ) : dataset === "github" && !github?.calendar ? (
+        <EmptyState
+          compact
+          title="Calendar not synchronized"
+          description={
+            github?.error ??
+            "Use Refresh to fetch your GitHub contribution calendar."
+          }
+        />
       ) : (
         <Popover.Root
           open={!!selected}

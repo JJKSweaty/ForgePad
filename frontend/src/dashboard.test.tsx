@@ -103,6 +103,30 @@ describe("calendar semantics", () => {
     ).toBeTruthy();
     expect(document.querySelectorAll(".calendar-cell")).toHaveLength(0);
   });
+  it("does not present an unsynchronized GitHub account as zero contributions", () => {
+    render(
+      <Heatmap
+        days={days}
+        timezone="UTC"
+        github={{
+          ...disconnected,
+          connected: true,
+          login: "fixture-account",
+          error: "Offline",
+        }}
+        onPractice={vi.fn()}
+        onSession={vi.fn()}
+        onSettings={vi.fn()}
+        onSync={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Activity dataset"), {
+      target: { value: "github" },
+    });
+    expect(screen.getByText("Calendar not synchronized")).toBeTruthy();
+    expect(screen.getByText("Offline")).toBeTruthy();
+    expect(document.querySelectorAll(".calendar-cell")).toHaveLength(0);
+  });
   it("loads actual matching date records and opens their question", async () => {
     api.mockResolvedValue({
       events: [

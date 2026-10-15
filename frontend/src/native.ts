@@ -8,7 +8,7 @@ export type NavigationTarget = {
 };
 export type NativeEvent = {
   type: string;
-  data?: NavigationTarget;
+  data?: NavigationTarget & { path?: string };
   detail?: string;
   job_id?: string;
   text?: string;
@@ -35,12 +35,15 @@ export async function nativeRequest<T>(
     body,
   });
 }
-export async function nativeEvents(callback: (event: NativeEvent) => void) {
+export async function nativeEvents(
+  callback: (event: NativeEvent) => void,
+  initialLinks = false,
+) {
   if (!native) return () => {};
   const dispose = await listen<NativeEvent>("forgepad-event", (event) =>
     callback(event.payload),
   );
-  const links = await getCurrent();
+  const links = initialLinks ? await getCurrent() : null;
   for (const link of links ?? []) {
     try {
       const target = await invoke<NavigationTarget>("validate_deep_link", {

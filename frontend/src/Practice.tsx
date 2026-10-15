@@ -1,3 +1,5 @@
+import { PaneDivider } from "./PaneDivider";
+import { usePracticeActivity } from "./usePracticeActivity";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import { native } from "./native";
@@ -20,17 +22,31 @@ const Editor = lazy(() => import("./CodeEditor"));
 type Checkpoint = { at: string; files: Record<string, string>; answer: string };
 export default function Practice({
   questionId,
+  questionVersion,
   theme,
   onSaved,
   onBrowse,
   sessionId,
 }: {
   questionId: string;
+  questionVersion?: number;
   theme: string;
   onSaved: () => Promise<void>;
   onBrowse: () => void;
   sessionId?: string;
 }) {
+  usePracticeActivity(questionId, sessionId);
+  const layout = useRef<HTMLDivElement>(null);
+  const [paneWidth, setPaneWidth] = useState(() =>
+    Math.max(
+      25,
+      Math.min(60, Number(localStorage.getItem("forgepad.pane.width")) || 36),
+    ),
+  );
+  const resizePane = (value: number) => {
+    setPaneWidth(value);
+    localStorage.setItem("forgepad.pane.width", String(value));
+  };
   const [question, setQuestion] = useState<Question | null>(null),
     [files, setFiles] = useState<Record<string, string>>({}),
     [answer, setAnswer] = useState(""),
@@ -59,16 +75,17 @@ export default function Practice({
   const ready = useRef(false),
     draft = useRef<Draft>({ files: {}, answer: "" }),
     editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null),
+    loadedVersion = useRef<number | undefined>(questionVersion),
     saveSequence = useRef(0),
     saveQueue = useRef(Promise.resolve());
   useEffect(() => {
     let live = true;
     Promise.all([
       api<Question>(
-        `/questions/${encodeURIComponent(questionId)}${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`,
+        `/questions/${encodeURIComponent(questionId)}${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : questionVersion ? `?version=${questionVersion}` : ""}`,
       ),
       api<Draft>(
-        `/drafts/${encodeURIComponent(questionId)}${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`,
+        `/drafts/${encodeURIComponent(questionId)}${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : questionVersion ? `?version=${questionVersion}` : ""}`,
       ),
     ])
       .then(([q, d]) => {
@@ -79,6 +96,7 @@ export default function Practice({
             : (q.starter_files ?? {}),
           answer: d.answer ?? "",
         };
+        loadedVersion.current = q.version;
         setQuestion(q);
         setFiles(next.files);
         setAnswer(next.answer);
@@ -92,16 +110,27 @@ export default function Practice({
       });
     return () => {
       live = false;
-      if (ready.current)
-        void api(`/drafts/${encodeURIComponent(questionId)}`, {
-          method: "PUT",
-          body: JSON.stringify({ ...draft.current, session_id: sessionId }),
-          keepalive: true,
-        }).catch(() => {
-          /* draft remains in local recovery */
-        });
+      if (ready.current) {
+        const finalDraft = {
+          ...draft.current,
+          session_id: sessionId,
+          ...(native ? { question_version: loadedVersion.current } : {}),
+        };
+        saveQueue.current = saveQueue.current
+          .catch(() => {})
+          .then(async () => {
+            await api(`/drafts/${encodeURIComponent(questionId)}`, {
+              method: "PUT",
+              body: JSON.stringify(finalDraft),
+              keepalive: true,
+            });
+          })
+          .catch(() => {
+            /* Local recovery remains available. */
+          });
+      }
     };
-  }, [questionId]);
+  }, [questionId, questionVersion, sessionId]);
   async function save(next: Draft = draft.current) {
     const seq = ++saveSequence.current;
     setSaveStatus("Saving…");
@@ -110,7 +139,11 @@ export default function Practice({
       .then(async () => {
         await api(`/drafts/${encodeURIComponent(questionId)}`, {
           method: "PUT",
-          body: JSON.stringify({ ...next, session_id: sessionId }),
+          body: JSON.stringify({
+            ...next,
+            session_id: sessionId,
+            ...(native ? { question_version: question?.version } : {}),
+          }),
         });
       });
     saveQueue.current = request;
@@ -125,6 +158,14 @@ export default function Practice({
       throw e;
     }
   }
+  useEffect(() => {
+    const flush = (event: Event) => {
+      if (ready.current)
+        (event as CustomEvent<Promise<unknown>[]>).detail.push(save());
+    };
+    window.addEventListener("forgepad:flush", flush);
+    return () => window.removeEventListener("forgepad:flush", flush);
+  }, [question?.version, sessionId]);
   useEffect(() => {
     draft.current = { files, answer };
     if (!ready.current) return;
@@ -164,7 +205,7 @@ export default function Practice({
     };
   }, [run?.id, run?.status, onSaved]);
   const running = busy || (!!run && ["queued", "running"].includes(run.status));
-  const coding = !!question && ["coding", "debugging"].includes(question.type);
+  const coding = !!question?.test_config;
   async function execute(mode: "run" | "submit") {
     setError("");
     setBusy(true);
@@ -174,6 +215,7 @@ export default function Practice({
         await post<Run>("/runs", {
           question_id: questionId,
           files: draft.current.files,
+          ...(native ? { question_version: question?.version } : {}),
           mode,
           session_id: sessionId,
         }),
@@ -280,7 +322,15 @@ export default function Practice({
           </button>
         </div>
       )}
-      <div className="practice-layout">
+      <div
+        className="practice-layout"
+        ref={layout}
+        style={{
+          gridTemplateColumns: focus
+            ? "minmax(0, 1fr)"
+            : `minmax(250px, ${paneWidth}%) 8px minmax(0, 1fr)`,
+        }}
+      >
         <section className="problem-pane">
           <div className="tabs" role="tablist" aria-label="Question details">
             {(["problem", "hints", "rubric"] as const).map((t) => (
@@ -392,6 +442,13 @@ export default function Practice({
             )}
           </div>
         </section>
+        {!focus && (
+          <PaneDivider
+            container={layout}
+            value={paneWidth}
+            onChange={resizePane}
+          />
+        )}
         <section className="work-pane">
           {coding ? (
             <>

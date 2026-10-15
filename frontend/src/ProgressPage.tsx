@@ -1,10 +1,387 @@
-import { useState } from 'react';
-import { Check, ChevronRight, Download, Plus, TrendingUp, X } from 'lucide-react';
-import { api, download, message, post, readable } from './api';
-import type { Attempt, Progress, Question } from './api';
-export function ProgressPage({progress,questions,refresh,onPractice}:{progress:Progress;questions:Question[];refresh:()=>Promise<void>;onPractice:(id:string)=>void}){
- const [goal,setGoal]=useState(''),[error,setError]=useState(''),[selected,setSelected]=useState<Attempt|null>(null),[busy,setBusy]=useState(false),[reset,setReset]=useState(false),[resetText,setResetText]=useState('');
- const title=(id:string)=>questions.find(q=>q.id===id)?.title??id;
- async function addGoal(){if(!goal.trim())return;setBusy(true);try{await post('/goals',{title:goal.trim()});setGoal('');await refresh()}catch(e){setError(message(e))}finally{setBusy(false)}}
- return <div className="page"><div className="page-heading"><div><div className="eyebrow">LEARNING RECORD</div><h1>Progress</h1><p>Review your attempts, revisit gaps, and decide what to work on next.</p></div><button className="secondary" onClick={()=>download('forgepad-progress.json',progress)}><Download size={15}/>Export progress</button></div>{error&&<div className="error-banner" role="alert">{error}</div>}<div className="progress-grid"><section className="panel"><div className="section-header"><div><h2>Practice goals</h2><p>Keep the next step specific.</p></div><TrendingUp size={18}/></div><div className="goal-list">{progress.goals.map(g=><label className={`goal ${g.status==='complete'?'done':''}`} key={g.id}><input type="checkbox" checked={g.status==='complete'} onChange={()=>void api(`/goals/${g.id}`,{method:'PATCH',body:JSON.stringify({status:g.status==='complete'?'active':'complete'})}).then(refresh).catch(e=>setError(message(e)))}/><span>{g.title}</span>{g.status==='complete'&&<Check size={14}/>}</label>)}{!progress.goals.length&&<p className="muted-text">No goals yet. Add one to guide your next session.</p>}<form className="inline-form" onSubmit={e=>{e.preventDefault();void addGoal()}}><input aria-label="New practice goal" placeholder="e.g. Explain volatile and its limits" value={goal} onChange={e=>setGoal(e.target.value)}/><button disabled={!goal.trim()||busy} aria-label="Add goal"><Plus size={17}/></button></form></div></section><section className="panel"><div className="section-header"><div><h2>Review queue</h2><p>Questions scheduled for another look</p></div><span className="badge">{progress.due_reviews.length} due</span></div>{progress.due_reviews.map((r,i)=>{const id=typeof r==='string'?r:r.question_id??r.id??'';return <button className="question-row" key={`${id}-${i}`} onClick={()=>onPractice(id)}><span className="row-main">{typeof r==='string'?title(id):r.question_title??r.title??title(id)}</span><ChevronRight size={16}/></button>})}{!progress.due_reviews.length&&<div className="empty">No reviews due.<small>Reviews appear as you record attempts.</small></div>}</section></div><section className="panel topics-panel"><div className="section-header"><div><h2>Topics to revisit</h2><p>Based on recorded attempts and confidence</p></div></div><div className="tags">{progress.weak_topics.map((t,i)=><span key={i}>{typeof t==='string'?t:t.topic}{typeof t!=='string'&&t.count!==undefined?` · ${t.count}`:''}</span>)}{!progress.weak_topics.length&&<p className="muted-text">No topic gaps identified yet.</p>}</div></section><section className="panel"><div className="section-header"><div><h2>Attempt history</h2><p>Each submission preserves the question version and your response.</p></div><span className="badge">{progress.attempts.length} attempts</span></div><div className="table-scroll"><table><thead><tr><th>Question</th><th>Result</th><th>Saved</th><th><span className="sr-only">Details</span></th></tr></thead><tbody>{progress.attempts.map(a=><tr key={a.id}><td><strong>{a.question_title??a.title??title(a.question_id)}</strong><small>{a.question_version?`Version ${a.question_version}`:a.question_id}</small></td><td><span className={`badge ${a.result?.status==='passed'?'success':''}`}>{readable(a.result?.status??a.status??a.confidence??'recorded')}</span></td><td>{new Date(a.created_at).toLocaleString()}</td><td><button className="text-button" onClick={()=>setSelected(a)}>Review <ChevronRight size={14}/></button></td></tr>)}</tbody></table></div>{!progress.attempts.length&&<div className="empty">Your first submission will appear here.</div>}</section><div className="data-controls"><span>Your records are saved by the ForgePad server.</span><button className="text-button danger-text" onClick={()=>setReset(true)}>Reset practice data</button></div>{selected&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="attempt-title"><div className="section-header"><div><h2 id="attempt-title">{selected.question_title??title(selected.question_id)}</h2><p>{new Date(selected.created_at).toLocaleString()}</p></div><button className="icon-button" aria-label="Close attempt" onClick={()=>setSelected(null)}><X size={18}/></button></div><div className="modal-body">{selected.answer&&<><h3>Response</h3><div className="prose">{selected.answer}</div></>}{selected.reflection&&<><h3>Reflection</h3><p>{selected.reflection}</p></>}{Object.entries(selected.files??{}).map(([name,code])=><details key={name} open><summary>{name}</summary><pre>{code}</pre></details>)}{selected.result&&<><h3>Result</h3><pre>{JSON.stringify(selected.result,null,2)}</pre></>}<div className="modal-actions"><button onClick={()=>download(`attempt-${selected.id}.json`,selected)}><Download size={14}/>Export attempt</button><button className="primary" onClick={()=>onPractice(selected.question_id)}>Practice again</button></div></div></section></div>}{reset&&<div className="modal-backdrop"><section className="modal small-modal" role="dialog" aria-modal="true" aria-labelledby="reset-title"><div className="modal-body"><h2 id="reset-title">Reset practice data?</h2><p>This deletes saved attempts, drafts, interviews, and goals. Question packages remain. Export your workspace first if you need a copy.</p><label>Type RESET to confirm<input autoFocus value={resetText} onChange={e=>setResetText(e.target.value)}/></label><div className="modal-actions"><button onClick={()=>{setReset(false);setResetText('')}}>Cancel</button><button className="danger" disabled={resetText!=='RESET'||busy} onClick={async()=>{setBusy(true);try{await api('/data',{method:'DELETE'});Object.keys(localStorage).filter(k=>k.startsWith('forgepad.v1.')&&k!=='forgepad.v1.theme').forEach(k=>localStorage.removeItem(k));await refresh();setReset(false);setResetText('')}catch(e){setError(message(e))}finally{setBusy(false)}}}>Delete practice data</button></div></div></section></div>}</div>
+import { useState } from "react";
+import {
+  Check,
+  ChevronRight,
+  Download,
+  Plus,
+  TrendingUp,
+  X,
+} from "lucide-react";
+import { api, download, message, post, readable } from "./api";
+import type { Attempt, Progress, Question } from "./api";
+export function ProgressPage({
+  progress,
+  questions,
+  refresh,
+  onPractice,
+}: {
+  progress: Progress;
+  questions: Question[];
+  refresh: () => Promise<void>;
+  onPractice: (id: string) => void;
+}) {
+  const [goal, setGoal] = useState(""),
+    [error, setError] = useState(""),
+    [selected, setSelected] = useState<Attempt | null>(null),
+    [busy, setBusy] = useState(false),
+    [reset, setReset] = useState(false),
+    [resetText, setResetText] = useState("");
+  const title = (id: string) => questions.find((q) => q.id === id)?.title ?? id;
+  async function addGoal() {
+    if (!goal.trim()) return;
+    setBusy(true);
+    try {
+      await post("/goals", { title: goal.trim() });
+      setGoal("");
+      await refresh();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="page">
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">LEARNING RECORD</div>
+          <h1>Progress</h1>
+          <p>
+            Review your attempts, revisit gaps, and decide what to work on next.
+          </p>
+        </div>
+        <button
+          className="secondary"
+          onClick={() => download("forgepad-progress.json", progress)}
+        >
+          <Download size={15} />
+          Export progress
+        </button>
+      </div>
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="progress-grid">
+        <section className="panel">
+          <div className="section-header">
+            <div>
+              <h2>Practice goals</h2>
+              <p>Keep the next step specific.</p>
+            </div>
+            <TrendingUp size={18} />
+          </div>
+          <div className="goal-list">
+            {progress.goals.map((g) => (
+              <label
+                className={`goal ${g.status === "complete" ? "done" : ""}`}
+                key={g.id}
+              >
+                <input
+                  type="checkbox"
+                  checked={g.status === "complete"}
+                  onChange={() =>
+                    void api(`/goals/${g.id}`, {
+                      method: "PATCH",
+                      body: JSON.stringify({
+                        status: g.status === "complete" ? "active" : "complete",
+                      }),
+                    })
+                      .then(refresh)
+                      .catch((e) => setError(message(e)))
+                  }
+                />
+                <span>{g.title}</span>
+                {g.status === "complete" && <Check size={14} />}
+              </label>
+            ))}
+            {!progress.goals.length && (
+              <p className="muted-text">
+                No goals yet. Add one to guide your next session.
+              </p>
+            )}
+            <form
+              className="inline-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void addGoal();
+              }}
+            >
+              <input
+                aria-label="New practice goal"
+                placeholder="e.g. Explain volatile and its limits"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+              />
+              <button disabled={!goal.trim() || busy} aria-label="Add goal">
+                <Plus size={17} />
+              </button>
+            </form>
+          </div>
+        </section>
+        <section className="panel">
+          <div className="section-header">
+            <div>
+              <h2>Review queue</h2>
+              <p>Questions scheduled for another look</p>
+            </div>
+            <span className="badge">{progress.due_reviews.length} due</span>
+          </div>
+          {progress.due_reviews.map((r, i) => {
+            const id =
+              typeof r === "string" ? r : (r.question_id ?? r.id ?? "");
+            return (
+              <button
+                className="question-row"
+                key={`${id}-${i}`}
+                onClick={() => onPractice(id)}
+              >
+                <span className="row-main">
+                  {typeof r === "string"
+                    ? title(id)
+                    : (r.question_title ?? r.title ?? title(id))}
+                </span>
+                <ChevronRight size={16} />
+              </button>
+            );
+          })}
+          {!progress.due_reviews.length && (
+            <div className="empty">
+              No reviews due.
+              <small>Reviews appear as you record attempts.</small>
+            </div>
+          )}
+        </section>
+      </div>
+      <section className="panel topics-panel">
+        <div className="section-header">
+          <div>
+            <h2>Topics to revisit</h2>
+            <p>Based on recorded attempts and confidence</p>
+          </div>
+        </div>
+        <div className="tags">
+          {progress.weak_topics.map((t, i) => (
+            <span key={i}>
+              {typeof t === "string" ? t : t.topic}
+              {typeof t !== "string" && t.count !== undefined
+                ? ` · ${t.count}`
+                : ""}
+            </span>
+          ))}
+          {!progress.weak_topics.length && (
+            <p className="muted-text">No topic gaps identified yet.</p>
+          )}
+        </div>
+      </section>
+      <section className="panel">
+        <div className="section-header">
+          <div>
+            <h2>Attempt history</h2>
+            <p>
+              Each submission preserves the question version and your response.
+            </p>
+          </div>
+          <span className="badge">{progress.attempts.length} attempts</span>
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Question</th>
+                <th>Result</th>
+                <th>Saved</th>
+                <th>
+                  <span className="sr-only">Details</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {progress.attempts.map((a) => (
+                <tr key={a.id}>
+                  <td>
+                    <strong>
+                      {a.question_title ?? a.title ?? title(a.question_id)}
+                    </strong>
+                    <small>
+                      {a.question_version
+                        ? `Version ${a.question_version}`
+                        : a.question_id}
+                    </small>
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${a.result?.status === "passed" ? "success" : ""}`}
+                    >
+                      {readable(
+                        a.result?.status ??
+                          a.status ??
+                          a.confidence ??
+                          "recorded",
+                      )}
+                    </span>
+                  </td>
+                  <td>{new Date(a.created_at).toLocaleString()}</td>
+                  <td>
+                    <button
+                      className="text-button"
+                      onClick={() => setSelected(a)}
+                    >
+                      Review <ChevronRight size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!progress.attempts.length && (
+          <div className="empty">Your first submission will appear here.</div>
+        )}
+      </section>
+      <div className="data-controls">
+        <span>
+          Attempts preserve your question revision and submitted work.
+        </span>
+        <button
+          className="text-button danger-text"
+          onClick={() => setReset(true)}
+        >
+          Reset practice data
+        </button>
+      </div>
+      {selected && (
+        <div className="modal-backdrop">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="attempt-title"
+          >
+            <div className="section-header">
+              <div>
+                <h2 id="attempt-title">
+                  {selected.question_title ?? title(selected.question_id)}
+                </h2>
+                <p>{new Date(selected.created_at).toLocaleString()}</p>
+              </div>
+              <button
+                className="icon-button"
+                aria-label="Close attempt"
+                onClick={() => setSelected(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {selected.answer && (
+                <>
+                  <h3>Response</h3>
+                  <div className="prose">{selected.answer}</div>
+                </>
+              )}
+              {selected.reflection && (
+                <>
+                  <h3>Reflection</h3>
+                  <p>{selected.reflection}</p>
+                </>
+              )}
+              {Object.entries(selected.files ?? {}).map(([name, code]) => (
+                <details key={name} open>
+                  <summary>{name}</summary>
+                  <pre>{code}</pre>
+                </details>
+              ))}
+              {selected.result && (
+                <>
+                  <h3>Result</h3>
+                  <pre>{JSON.stringify(selected.result, null, 2)}</pre>
+                </>
+              )}
+              <div className="modal-actions">
+                <button
+                  onClick={() =>
+                    download(`attempt-${selected.id}.json`, selected)
+                  }
+                >
+                  <Download size={14} />
+                  Export attempt
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => onPractice(selected.question_id)}
+                >
+                  Practice again
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+      {reset && (
+        <div className="modal-backdrop">
+          <section
+            className="modal small-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-title"
+          >
+            <div className="modal-body">
+              <h2 id="reset-title">Reset practice data?</h2>
+              <p>
+                This deletes saved attempts, drafts, interviews, and goals.
+                Question packages remain. Export your workspace first if you
+                need a copy.
+              </p>
+              <label>
+                Type RESET to confirm
+                <input
+                  autoFocus
+                  value={resetText}
+                  onChange={(e) => setResetText(e.target.value)}
+                />
+              </label>
+              <div className="modal-actions">
+                <button
+                  onClick={() => {
+                    setReset(false);
+                    setResetText("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="danger"
+                  disabled={resetText !== "RESET" || busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await api("/data", { method: "DELETE" });
+                      Object.keys(localStorage)
+                        .filter(
+                          (k) =>
+                            k.startsWith("forgepad.v1.") &&
+                            k !== "forgepad.v1.theme",
+                        )
+                        .forEach((k) => localStorage.removeItem(k));
+                      await refresh();
+                      setReset(false);
+                      setResetText("");
+                    } catch (e) {
+                      setError(message(e));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Delete practice data
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }

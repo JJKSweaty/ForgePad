@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Check, Clock, Play, Route } from "lucide-react";
 import { api, message, post, readable } from "./api";
 import { native } from "./native";
+import { ProgressMeter } from "./ui";
+import type { DashboardData } from "./dashboardData";
 type Roadmap = {
   id: string;
   title: string;
@@ -52,19 +54,34 @@ export function RoadmapsPage({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (native)
-      void api<Roadmap[]>("/roadmaps")
-        .then(setRoadmaps)
-        .catch((e) => setError(message(e)));
+    void (
+      native
+        ? api<Roadmap[]>("/roadmaps")
+        : api<DashboardData>("/dashboard").then((d) => d.roadmaps)
+    )
+      .then(setRoadmaps)
+      .catch((e) => setError(message(e)));
   }, []);
-  if (!native) return <DesktopFeature />;
+
   const roadmap = roadmaps.find((r) => r.id === selected) ?? roadmaps[0];
   async function next(timed = false) {
     if (!roadmap) return;
     setBusy(true);
     try {
-      await post(`/roadmaps/${roadmap.id}/activate`, {});
-      if (timed) {
+      if (native) await post(`/roadmaps/${roadmap.id}/activate`, {});
+      if (!native && !timed) {
+        const step =
+          roadmap.steps.find(
+            (s) =>
+              s.available && ["not_started", "needs_review"].includes(s.status),
+          ) ??
+          roadmap.steps.find((s) => s.available && s.status !== "mastered");
+        if (step) onPractice(step.question_id);
+        else
+          setError(
+            "Every available question is mastered. Choose a question to review.",
+          );
+      } else if (timed) {
         const r = await post<{ id: string }>("/interviews", {
           roadmap_id: roadmap.id,
           duration_minutes: 30,
@@ -124,10 +141,9 @@ export function RoadmapsPage({
             <span>
               {r.solved} / {r.total} solved · {r.mastered} mastered
             </span>
-            <progress
-              aria-label={`${r.title} completion`}
-              max={100}
+            <ProgressMeter
               value={r.completion_percent}
+              label={`${r.title} completion`}
             />
           </button>
         ))}
@@ -146,33 +162,117 @@ export function RoadmapsPage({
           </div>
           <p className="roadmap-rule">{roadmap.mastery_rule}</p>
           <div className="roadmap-steps">
-            {roadmap.steps.map((step) => (
-              <button
-                key={step.question_id}
-                disabled={!step.available}
-                className={`question-row roadmap-step ${step.status}`}
-                onClick={() => onPractice(step.question_id)}
-              >
-                <span className="step-number">
-                  {step.status === "solved" || step.status === "mastered" ? (
-                    <Check size={17} />
-                  ) : (
-                    step.order
-                  )}
-                </span>
-                <span className="row-main">
-                  <strong>{step.title ?? step.question_id}</strong>
-                  <small>{step.topics?.join(" · ")}</small>
-                </span>
-                <span className="badge">
-                  {step.available ? readable(step.status) : "Not yet available"}
-                </span>
-                <ArrowRight size={16} />
-              </button>
+            {topicGroups(roadmap.steps).map((group, i, groups) => (
+              <section className="topic-node" key={group.title}>
+                <div className="topic-node-heading">
+                  <span className="topic-node-marker">{i + 1}</span>
+                  <div>
+                    <h3>{group.title}</h3>
+                    <p>
+                      {i
+                        ? `Recommended foundation: ${groups[i - 1].title}`
+                        : "Start here · no prerequisites"}
+                    </p>
+                  </div>
+                  <span>
+                    {
+                      group.steps.filter((s) =>
+                        ["solved", "mastered"].includes(s.status),
+                      ).length
+                    }{" "}
+                    / {group.steps.length} solved
+                  </span>
+                </div>
+                <div className="topic-questions">
+                  {group.steps.map((step) => (
+                    <button
+                      key={step.question_id}
+                      disabled={!step.available}
+                      className={`question-row roadmap-step ${step.status}`}
+                      onClick={() => onPractice(step.question_id)}
+                    >
+                      <span className="step-number">
+                        {["solved", "mastered"].includes(step.status) ? (
+                          <Check size={15} />
+                        ) : (
+                          <span className="unstarted-dot" />
+                        )}
+                      </span>
+                      <span className="row-main">
+                        <strong>{step.title ?? step.question_id}</strong>
+                        <small>{step.topics?.join(" · ")}</small>
+                      </span>
+                      <span className="step-status">
+                        {step.available
+                          ? readable(step.status)
+                          : "Not yet available"}
+                      </span>
+                      <ArrowRight size={14} />
+                    </button>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         </section>
       )}
     </div>
   );
+}
+
+function topicGroups(steps: Roadmap["steps"]) {
+  const definitions = [
+    {
+      title: "C and memory foundations",
+      ids: ["volatile-atomicity", "vector-table", "little-endian-read"],
+    },
+    {
+      title: "Bits and integer safety",
+      ids: [
+        "register-field",
+        "popcount32",
+        "saturating-add",
+        "align-up",
+        "reverse-bits",
+      ],
+    },
+    {
+      title: "Time and state machines",
+      ids: ["timer-rollover", "sequence-window", "debounce-state"],
+    },
+    {
+      title: "Buffers and data integrity",
+      ids: ["bounded-ring", "frame-checksum", "crc8-atm", "sample-lower-bound"],
+    },
+    {
+      title: "Peripheral interfaces",
+      ids: [
+        "uart-frame-recovery",
+        "spi-sensor",
+        "i2c-stuck-low",
+        "adc-average",
+      ],
+    },
+    {
+      title: "Concurrency and system design",
+      ids: [
+        "dma-cache",
+        "priority-inversion",
+        "boot-power-loss",
+        "sensor-pipeline",
+        "linux-serial",
+      ],
+    },
+  ];
+  const assigned = new Set(definitions.flatMap((g) => g.ids));
+  return [
+    ...definitions.map((g) => ({
+      title: g.title,
+      steps: steps.filter((s) => g.ids.includes(s.question_id)),
+    })),
+    {
+      title: "Additional exercises",
+      steps: steps.filter((s) => !assigned.has(s.question_id)),
+    },
+  ].filter((g) => g.steps.length);
 }
