@@ -1,0 +1,67 @@
+:root {
+  --bg: #111214;
+  --sidebar: #141518;
+  --panel: #191b1e;
+  --panel-hover: #202328;
+  --surface-2: #202328;
+  --input: #141619;
+  --text: #eceef1;
+  --text-secondary: #bdc1c9;
+  --muted: #979da7;
+  --border: #2b2e34;
+  --border-strong: #454a54;
+  --accent: #94cdb2;
+  --accent-bg: #23392e;
+  --danger: #eeaaa1;
+  --shadow: 0 16px 48px #0006;
+  --activity-0: #24282c;
+  --activity-1: #254235;
+  --activity-2: #37644c;
+  --activity-3: #5a936d;
+  --activity-4: #94cdb2;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 9px;
+  --control-height: 32px;
+  --sidebar-width: 208px;
+  --motion-fast: 110ms;
+  --motion-medium: 180ms;
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-optical-sizing: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  font-variant-numeric: tabular-nums;
+}
+:root[data-theme="light"] {
+  --bg: #f5f6f7;
+  --sidebar: #edeef0;
+  --panel: #fff;
+  --panel-hover: #f2f3f5;
+  --surface-2: #e9ecef;
+  --input: #fafbfc;
+  --text: #1c2026;
+  --text-secondary: #454b55;
+  --muted: #626a77;
+  --border: #d9dde3;
+  --border-strong: #b0b8c4;
+  --accent: #2a6e4c;
+  --accent-bg: #e5f0e8;
+  --danger: #a94035;
+  --activity-0: #e5e8eb;
+  --activity-1: #c9e1d0;
+  --activity-2: #92c4a1;
+  --activity-3: #55926b;
+  --activity-4: #2a6e4c;
+  --shadow: 0 16px 48px #18223020;
+}
