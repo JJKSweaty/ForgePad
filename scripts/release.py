@@ -17,8 +17,8 @@ def version():
 
 def notes(value):
     text = (ROOT / "CHANGELOG.md").read_text()
-    match = re.search(rf"^## {re.escape(value)} — [^\n]+\n(.*?)(?=^## |\Z)", text, re.M | re.S)
-    if not match or len(re.findall(r"^- .+", match[1], re.M)) < 1:
+    match = re.search(rf"^## {re.escape(value)} — [^\n]+\n(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
+    if not match or len(re.findall(r"^- .+", match[1], re.MULTILINE)) < 1:
         raise ValueError(f"Add useful release notes for {value} to CHANGELOG.md")
     return match[1].strip() + "\n"
 
@@ -76,7 +76,9 @@ def set_version(value):
     for path in ("pyproject.toml", "src-tauri/Cargo.toml"):
         file = ROOT / path
         file.write_text(
-            re.sub(r'^version = "[^"]+"', f'version = "{value}"', file.read_text(), count=1, flags=re.M)
+            re.sub(
+                r'^version = "[^"]+"', f'version = "{value}"', file.read_text(), count=1, flags=re.MULTILINE
+            )
         )
     lock = ROOT / "src-tauri/Cargo.lock"
     lock.write_text(

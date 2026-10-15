@@ -2,8 +2,8 @@
 
 import json
 import signal
-import sys
 import subprocess
+import sys
 from threading import Event
 
 from .runner import DockerRunner
