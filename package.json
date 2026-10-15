@@ -1,1 +1,19 @@
-{"name":"forgepad","private":true,"type":"module","scripts":{"build":"npm run build --prefix frontend"},"dependencies":{"@vercel/sandbox":"3.8.0"}}
+{
+  "name": "forgepad",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build --prefix frontend",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "python3 scripts/prepare_native.py && tauri build",
+    "native:check": "cargo test --manifest-path src-tauri/Cargo.toml --no-default-features",
+    "native:prepare": "python3 scripts/prepare_native.py"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "3.8.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.3",
+    "prettier": "^3.9.10"
+  }
+}

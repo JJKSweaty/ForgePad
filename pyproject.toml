@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.32,<1", "pydantic>=2.10,<3", "httpx>=0.28,<1", "python-multipart>=0.0.20,<1", "jsonschema>=4.26,<5"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "ruff>=0.9,<1", "mcp>=1.26,<2", "pyinstaller>=6.22,<7"]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1", "psycopg[binary]>=3.2,<4", "python-dotenv>=1.2,<2", "mcp>=1.26,<2", "pyinstaller>=6.22,<7"]
 
 [project.scripts]
 forgepad = "forgepad.cli:main"

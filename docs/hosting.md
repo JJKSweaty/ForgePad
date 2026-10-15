@@ -9,7 +9,7 @@ The hosted application uses the existing React frontend and FastAPI backend on V
 - Assigned stable URL: `https://forgepad-plum.vercel.app`
 - Vercel Authentication is configured for all deployments. Keep this owner workspace private: the current database adapter stores one workspace, and is not a multi-user authorization implementation.
 
-Supabase must be connected and configured before the workspace can load. Until then, the hosted API returns an explicit 503 setup message instead of storing data in an ephemeral filesystem.
+Supabase is provisioned through the existing Vercel Marketplace installation on its free plan. Resource `forgepad-db` (`store_9md3t9kQYV6vZqQj`, Supabase project `qslpggyytqlgxphmrfeh`) is connected to production, preview, and development. The schema is applied and all 21 bundled question packages have been seeded and read back through the REST API.
 
 ## Database setup
 
@@ -38,9 +38,13 @@ Cloud runs complete in the HTTP request so serverless shutdown cannot lose a bac
 
 `scripts/verify_cloud_runner.py` accepts a deployment URL and runner secret through hidden stdin, runs the original UART reference against all nine fixtures, and verifies that the broken starter fails. This is separate from `pytest` protocol tests.
 
-Cloud verification on October 15, 2026: UART reference 9/9 passed; intentionally broken starter 4/9 passed and received `wrong_answer`. Local protocol/storage/API checks: 29 passed, 15 Docker integration tests skipped because Docker was unavailable. Supabase remains unconnected, so live database persistence has not been verified.
+Cloud verification on October 15, 2026: UART reference 9/9 passed; intentionally broken starter 4/9 passed and received `wrong_answer`. Local protocol/storage/API checks: 29 passed, 15 Docker integration tests skipped because Docker was unavailable. Supabase migration, RLS, and REST seed/readback are verified. The hosted flow also passed transactional import, candidate-data redaction, draft save/readback through both API and Supabase, a 3/3 public C11 run, interview completion, and replay persistence. Only the uniquely scoped verification question and its records were removed afterward; the original 21 packages remain.
 
-Vercel and Supabase plan limits, sleep policies, and service availability still apply. Local Ollama and local speech services do not become cloud services automatically; hosted guided interviews and typed responses do not require either.
+`scripts/verify_hosted.py` repeats that live workflow using the authenticated Vercel CLI and a disposable question ID. It accepts server environment data on stdin and cleans up only records belonging to its own generated question. The browser was also checked against the live question bank with Supabase storage and runner-ready status visible.
+
+`scripts/apply_supabase.py` accepts a Vercel dotenv environment export on stdin, validates the exact project identity, removes provider-only connection URL parameters, and applies checksum-tracked migrations transactionally. It refreshes the REST schema cache before seeding. Its PostgreSQL and dotenv dependencies are included in the development extras.
+
+Vercel and Supabase plan limits and service availability still apply. Supabase's [Free plan pauses projects after one week of inactivity](https://supabase.com/pricing); uninterrupted database availability requires a plan without that pause policy. No paid upgrade was made. Local Ollama and local speech services do not become cloud services automatically; hosted guided interviews and typed responses do not require either.
 
 ## Deploy
 
