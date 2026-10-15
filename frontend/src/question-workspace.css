@@ -1,0 +1,263 @@
+/* Consistent reading and editing rhythm across question modes. */
+.practice-page {
+  padding: 20px 24px;
+}
+.practice-heading {
+  gap: 12px;
+  align-items: flex-start;
+}
+.practice-heading h1 {
+  font-size: 20px;
+  line-height: 1.35;
+  margin: 0 0 8px;
+}
+.practice-heading .muted-text,
+.practice-actions .save-status {
+  font-size: 12px;
+}
+.practice-actions {
+  gap: 12px;
+  align-items: center;
+}
+.practice-layout > .problem-pane,
+.practice-layout > .work-pane {
+  border-radius: 10px;
+}
+.problem-content {
+  padding: 22px;
+}
+.problem-content h2 {
+  font-size: 20px;
+  line-height: 1.45;
+}
+.problem-content .prose,
+.problem-content li {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.editor-toolbar {
+  min-height: 42px;
+}
+.file-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  white-space: nowrap;
+  padding: 10px 14px;
+}
+.editor-container {
+  height: clamp(320px, 52vh, 680px);
+  min-height: 240px;
+  overflow: hidden;
+}
+.editor-bottom {
+  padding: 8px 12px;
+  font-size: 11px;
+  gap: 12px;
+}
+.editor-bottom .button-row {
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.editor-bottom .text-button {
+  font-size: 11px;
+}
+.run-toolbar {
+  padding: 12px 16px;
+  gap: 16px;
+}
+.run-toolbar > .muted-text {
+  font-size: 12px;
+  max-width: 270px;
+}
+.output-panel {
+  min-height: 140px;
+}
+.output-empty {
+  padding: 20px 16px;
+}
+.output-empty p,
+.output-empty small {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.reasoning-workspace {
+  padding: 24px;
+}
+.reasoning-header h2 {
+  font-size: 22px;
+  line-height: 1.4;
+  margin: 7px 0;
+}
+.reasoning-header p,
+.reasoning-prompt,
+.reasoning-footer,
+.question-coach p,
+.question-coach small {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary, var(--muted));
+}
+.reasoning-prompts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.reasoning-prompts button {
+  font-size: 12px;
+  padding: 7px 10px;
+  background: transparent;
+  border-color: transparent;
+}
+.reasoning-prompts button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--border);
+}
+.reasoning-prompt {
+  min-height: 42px;
+  margin: 12px 0;
+}
+.reasoning-answer {
+  display: block;
+}
+.reasoning-answer > span {
+  display: block;
+  font-weight: 550;
+  margin-bottom: 10px;
+}
+.reasoning-answer textarea {
+  display: block;
+  width: 100%;
+  min-height: 300px;
+  padding: 16px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.8;
+  resize: vertical;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.reasoning-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+.reference-source pre {
+  max-height: 260px;
+  overflow: auto;
+}
+.response-meta {
+  padding: 0 24px 24px;
+  gap: 16px;
+}
+.question-coach {
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+  margin-top: 24px;
+}
+.coach-heading {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.coach-heading > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.coach-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.coach-heading p {
+  margin: 4px 0 0;
+}
+.coach-heading .badge {
+  margin-left: auto;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.coach-turn {
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--input);
+}
+.coach-turn.user {
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.coach-turn strong {
+  font-size: 11px;
+  color: var(--accent);
+}
+.coach-turn .prose {
+  font-size: 13px;
+  margin: 7px 0 0;
+}
+.question-coach textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.question-coach small {
+  display: block;
+  margin-top: 12px;
+  font-size: 11px;
+}
+.local-coach-settings > label {
+  display: block;
+  margin: 18px 0;
+}
+.practice-page .button-row {
+  flex-wrap: wrap;
+}
+@media (max-width: 1000px) {
+  .practice-heading {
+    flex-wrap: wrap;
+  }
+  .practice-actions {
+    margin-left: 38px;
+  }
+}
+@media (max-width: 850px) {
+  .practice-page {
+    padding: 18px 16px;
+  }
+  .practice-layout > .problem-pane {
+    max-height: 450px;
+  }
+  .reasoning-workspace,
+  .problem-content {
+    padding: 20px;
+  }
+}
+@media (max-width: 560px) {
+  .practice-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .run-toolbar {
+    flex-wrap: wrap;
+  }
+  .reasoning-workspace {
+    padding: 16px;
+  }
+  .coach-heading {
+    flex-wrap: wrap;
+  }
+  .coach-heading .badge {
+    margin-left: 28px;
+  }
+}

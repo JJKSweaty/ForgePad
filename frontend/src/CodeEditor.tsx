@@ -48,7 +48,7 @@ export default function CodeEditor({ theme, options, ...props }: EditorProps) {
       theme={theme === "light" ? "light" : "forgepad-monokai"}
       options={{
         fontSize: 14,
-        lineHeight: 24,
+        lineHeight: 22,
         fontFamily:
           '"SFMono-Regular", "Cascadia Code", Menlo, Consolas, monospace',
         minimap: { enabled: false },
@@ -66,7 +66,8 @@ export default function CodeEditor({ theme, options, ...props }: EditorProps) {
         roundedSelection: true,
         scrollBeyondLastLine: false,
         automaticLayout: true,
-        padding: { top: 20, bottom: 20 },
+        padding: { top: 14, bottom: 14 },
+        scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9 },
         ...options,
       }}
     />

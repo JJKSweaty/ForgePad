@@ -3,6 +3,9 @@ import { usePracticeActivity } from "./usePracticeActivity";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import { native } from "./native";
+import ReasoningWorkspace from "./ReasoningWorkspace";
+import QuestionCoach from "./QuestionCoach";
+import { questionMode, modeNames } from "./questionMode";
 import {
   Check,
   ChevronLeft,
@@ -55,7 +58,9 @@ export default function Practice({
     [saveStatus, setSaveStatus] = useState("Loading draft"),
     [run, setRun] = useState<Run | null>(null),
     [busy, setBusy] = useState(false),
-    [fontSize, setFontSize] = useState(14),
+    [fontSize, setFontSize] = useState(
+      () => Number(localStorage.getItem("forgepad.editor.fontSize")) || 14,
+    ),
     [focus, setFocus] = useState(false),
     [tab, setTab] = useState<"problem" | "hints" | "rubric">("problem"),
     [confidence, setConfidence] = useState("partial"),
@@ -205,7 +210,8 @@ export default function Practice({
     };
   }, [run?.id, run?.status, onSaved]);
   const running = busy || (!!run && ["queued", "running"].includes(run.status));
-  const coding = !!question?.test_config;
+  const mode = question ? questionMode(question) : "coding";
+  const coding = mode === "coding";
   async function execute(mode: "run" | "submit") {
     setError("");
     setBusy(true);
@@ -291,7 +297,7 @@ export default function Practice({
               {question.difficulty}
             </span>
             <span className="muted-text">
-              {readable(question.type)} · {question.duration_minutes} min · v
+              {modeNames[mode]} · {question.duration_minutes} min · v
               {question.version}
             </span>
           </div>
@@ -425,6 +431,12 @@ export default function Practice({
                 {!question.hints?.length && (
                   <p>No hints provided for this question.</p>
                 )}
+                <QuestionCoach
+                  question={question}
+                  sessionId={sessionId}
+                  answer={answer}
+                  files={files}
+                />
               </>
             ) : (
               <>
@@ -503,7 +515,14 @@ export default function Practice({
                   <select
                     aria-label="Editor font size"
                     value={fontSize}
-                    onChange={(e) => setFontSize(Number(e.target.value))}
+                    onChange={(e) => {
+                      const size = Number(e.target.value);
+                      setFontSize(size);
+                      localStorage.setItem(
+                        "forgepad.editor.fontSize",
+                        String(size),
+                      );
+                    }}
                   >
                     {[12, 14, 16, 18, 20].map((n) => (
                       <option key={n} value={n}>
@@ -530,7 +549,7 @@ export default function Practice({
                   >
                     {" "}
                     <Editor
-                      path={`${questionId}/${activeFile}`}
+                      path={`${questionId}/v${question.version}/${sessionId ?? "practice"}/${activeFile}`}
                       language={question.language === "c" ? "c" : "cpp"}
                       theme={theme === "dark" ? "vs-dark" : "light"}
                       value={files[activeFile] ?? ""}
@@ -548,13 +567,11 @@ export default function Practice({
                         minimap: { enabled: false },
                         scrollBeyondLastLine: false,
                         automaticLayout: true,
-                        padding: { top: 18 },
                         tabSize: 4,
                         insertSpaces: true,
-                        wordWrap: "on",
-                        fontFamily:
-                          '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
-                        accessibilitySupport: "on",
+                        wordWrap: "off",
+                        lineHeight: Math.round(fontSize * 1.6),
+                        accessibilitySupport: "auto",
                       }}
                     />
                   </Suspense>
@@ -606,18 +623,10 @@ export default function Practice({
             </>
           ) : (
             <div className="written-response">
-              <div className="section-header">
-                <div>
-                  <h2>Your response</h2>
-                  <p>Explain assumptions, reasoning, and tradeoffs.</p>
-                </div>
-              </div>
-              <textarea
-                aria-label="Written response"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                placeholder="Start with what you know, then work through the details…"
-                rows={18}
+              <ReasoningWorkspace
+                question={question}
+                answer={answer}
+                onChange={setAnswer}
               />
               <div className="response-meta">
                 <label>

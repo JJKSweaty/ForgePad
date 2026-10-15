@@ -496,7 +496,16 @@ impl Service {
         target: &str,
         options: Value,
     ) -> Result<Value> {
-        if !["validate", "audit", "generate", "extract", "benchmark", "speech_download"].contains(&kind) {
+        if ![
+            "validate",
+            "audit",
+            "generate",
+            "extract",
+            "benchmark",
+            "speech_download",
+        ]
+        .contains(&kind)
+        {
             bail!("Unsupported job type");
         }
         let id = crate::id();
@@ -675,8 +684,18 @@ impl Service {
             ("GET", ["health"]) => {
                 let (runner, mut ai) =
                     tokio::join!(self.worker.availability(), self.models.availability());
-                if self.openrouter_enabled() { ai = json!({"available":self.openrouter_settings()["connected"]==true,"provider":"openrouter","detail":"OpenRouter is configured. Model access is checked when requesting replies."}); }
-                json!({"status":"ok","hosting":"native","storage":"sqlite","runner":runner,"ai":ai,"speech":{"available":self.store.get("settings","speech").is_ok_and(|c|if c["engine"]=="builtin" {crate::speech::helper().is_file() && self.store.get("speech_models",c["model"].as_str().unwrap_or("ultra")).is_ok_and(|m|m["ready"]==true)}else{c["endpoint"].as_str().is_some_and(|s|!s.is_empty())}),"detail":"Speech is processed locally. Capture requires Interview mode."}})
+                if self.openrouter_enabled() {
+                    ai = json!({"available":self.openrouter_settings()["connected"]==true,"provider":"openrouter","detail":"OpenRouter is configured. Model access is checked when requesting replies."});
+                }
+                let config = self.store.get("settings","speech").unwrap_or(json!({"engine":"builtin","model":"ultra"}));
+                let speech = if config["engine"] == "builtin" {
+                    let catalog = self.speech_catalog().await;
+                    let available = catalog["models"].as_array().is_some_and(|models|models.iter().any(|m|m["id"]==config["model"] && m["installed"]==true));
+                    json!({"available":available,"detail":"Speech is processed on this Mac. Download a model in Settings to enable voice answers."})
+                } else {
+                    json!({"available":config["endpoint"].as_str().is_some_and(|s|!s.is_empty()),"detail":"Local speech endpoint is checked at transcription time."})
+                };
+                json!({"status":"ok","hosting":"native","storage":"sqlite","runner":runner,"ai":ai,"speech":speech})
             }
             ("GET", ["settings", "profile"]) => self
                 .store
@@ -759,6 +778,13 @@ impl Service {
                 let q = self.store.question(id, None)?;
                 self.store.flags(id, Some(&body))?;
                 self.summary(&q)?
+            }
+            ("POST", ["questions", id, "coach"]) => {
+                if self.active_session()?["strict"] == true {
+                    bail!("Coaching is available in practice. Finish the strict interview to use hints.");
+                }
+                let q = self.question_revision(id, body["session_id"].as_str(), body["question_version"].as_i64())?;
+                self.coach(&schema::candidate(&q), &body).await?
             }
             ("GET", ["drafts", id]) => self.store.draft(
                 &self.question_revision(
@@ -1029,22 +1055,49 @@ impl Service {
             }
             ("GET", ["speech", "catalog"]) => self.speech_catalog().await,
             ("POST", ["speech", "download"]) => {
-                let model = required(&body,"model")?;
+                let model = required(&body, "model")?;
                 crate::speech::validate_model(model)?;
-                if !crate::speech::helper().is_file() { bail!("Build the local speech helper with npm run speech:prepare first"); }
-                if self.store.records("jobs")?.iter().any(|j|j["kind"]=="speech_download" && [Some("queued"),Some("running")].contains(&j["status"].as_str())) { bail!("A speech download is already in progress"); }
-                self.enqueue_job("speech_download",model,json!({}))?
+                if !crate::speech::helper().is_file() {
+                    bail!("Build the local speech helper with npm run speech:prepare first");
+                }
+                if self.store.records("jobs")?.iter().any(|j| {
+                    j["kind"] == "speech_download"
+                        && [Some("queued"), Some("running")].contains(&j["status"].as_str())
+                }) {
+                    bail!("A speech download is already in progress");
+                }
+                self.enqueue_job("speech_download", model, json!({}))?
             }
             ("GET", ["settings", "openrouter"]) => self.openrouter_settings(),
             ("PUT", ["settings", "openrouter"]) => self.configure_openrouter(&body)?,
             ("DELETE", ["settings", "openrouter"]) => self.disconnect_openrouter()?,
-            ("POST", ["settings", "speech", "models"]) => {
+            ("POST", ["settings", "speech", "models"]) | ("POST", ["settings", "models", "discover"]) => {
                 let endpoint = required(&body, "endpoint")?;
-                crate::ai::validate_models(&[Model { id:"speech".into(),endpoint:endpoint.into(),model:"speech".into(),memory_mb:128,context_tokens:4096,output_tokens:1024 }])?;
-                let response = reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(std::time::Duration::from_secs(5)).build()?
-                    .get(format!("{}/v1/models",endpoint.trim_end_matches('/'))).send().await?.error_for_status()?;
+                crate::ai::validate_models(&[Model {
+                    id: "speech".into(),
+                    endpoint: endpoint.into(),
+                    model: "speech".into(),
+                    memory_mb: 128,
+                    context_tokens: 4096,
+                    output_tokens: 1024,
+                }])?;
+                let response = reqwest::Client::builder()
+                    .no_proxy()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .timeout(std::time::Duration::from_secs(5))
+                    .build()?
+                    .get(format!("{}/v1/models", endpoint.trim_end_matches('/')))
+                    .send()
+                    .await?
+                    .error_for_status()?;
                 let data: Value = response.json().await?;
-                let models = data["data"].as_array().context("The speech engine did not return a model list")?.iter().filter_map(|m|m["id"].as_str()).take(100).collect::<Vec<_>>();
+                let models = data["data"]
+                    .as_array()
+                    .context("The speech engine did not return a model list")?
+                    .iter()
+                    .filter_map(|m| m["id"].as_str())
+                    .take(100)
+                    .collect::<Vec<_>>();
                 json!({"models":models})
             }
             ("GET", ["settings", "audio"]) => self
@@ -1079,8 +1132,12 @@ impl Service {
                     }])?;
                 }
                 let engine = body["engine"].as_str().unwrap_or("endpoint");
-                if !["builtin","endpoint"].contains(&engine) { bail!("Invalid speech engine"); }
-                if engine == "builtin" { crate::speech::validate_model(required(&body,"model")?)?; }
+                if !["builtin", "endpoint"].contains(&engine) {
+                    bail!("Invalid speech engine");
+                }
+                if engine == "builtin" {
+                    crate::speech::validate_model(required(&body, "model")?)?;
+                }
                 let config = json!({"id":"speech","engine":engine,"endpoint":endpoint,"model":body["model"].as_str().unwrap_or("parakeet")});
                 self.store.save("settings", &config)?;
                 config
@@ -1235,9 +1292,13 @@ impl Service {
             recording_id = json!(id);
         }
         if speech["engine"] == "builtin" {
-            let result = self.builtin_transcribe(&bytes,mime,speech["model"].as_str().unwrap_or("ultra")).await?;
-            let text = bounded(&result,"text",30000)?;
-            return Ok(json!({"text":text,"provider":"local","raw_audio_saved":!recording_id.is_null(),"recording_id":recording_id}));
+            let result = self
+                .builtin_transcribe(&bytes, mime, speech["model"].as_str().unwrap_or("ultra"))
+                .await?;
+            let text = bounded(&result, "text", 30000)?;
+            return Ok(
+                json!({"text":text,"provider":"local","raw_audio_saved":!recording_id.is_null(),"recording_id":recording_id}),
+            );
         }
         let endpoint = speech["endpoint"]
             .as_str()

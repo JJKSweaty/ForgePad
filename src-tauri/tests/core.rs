@@ -20,6 +20,19 @@ async fn enable(s: &Arc<Service>) {
         .await
         .unwrap();
 }
+#[tokio::test]
+async fn local_coach_uses_candidate_context_and_rejects_strict_interviews() {
+    let (_dir, s) = workspace();
+    let q = s.store.question("uart-frame-recovery", None).unwrap();
+    let context = forgepad_core::coach::context(&schema::candidate(&q), &json!({"message":"What should I consider?","answer":"My reasoning","files":{}})).unwrap();
+    let text = context.to_string();
+    assert!(!text.contains("reference_solution"));
+    assert!(!text.contains("hidden"));
+    assert_eq!(context["answer"], "My reasoning");
+    s.start_session(&json!({"question_id":"uart-frame-recovery"}), "interview").unwrap();
+    let error = s.route("POST", "/questions/uart-frame-recovery/coach", json!({"message":"Give a hint"})).await.unwrap_err();
+    assert!(error.to_string().contains("strict interview"));
+}
 #[test]
 fn deep_links_reject_commands_paths_credentials_and_ambiguity() {
     for s in [

@@ -64,6 +64,16 @@ class TextRequest(StrictModel):
     text: str = Field(min_length=1, max_length=30000)
 
 
+class CoachRequest(StrictModel):
+    message: str = Field(min_length=1, max_length=4000)
+    answer: str = Field(default="", max_length=24000)
+    files: dict[str, str] = Field(default_factory=dict)
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=6)
+    question_version: int | None = Field(default=None, ge=1)
+    session_id: str | None = Field(default=None, max_length=80)
+    _files = field_validator("files")(validate_files)
+
+
 class IdeaRequest(StrictModel):
     idea: str = Field(min_length=1, max_length=5000)
     difficulty: Literal["beginner", "intermediate", "advanced", "expert"] = "intermediate"
@@ -347,6 +357,28 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                            request.bookmarked if request.bookmarked is not None else existing["bookmarked"],
                            request.archived if request.archived is not None else existing["archived"])
         return summary(question)
+
+    @app.post("/api/questions/{question_id}/coach")
+    def coach(question_id: str, request: CoachRequest):
+        question = question_or_404(question_id, request.question_version)
+        if request.session_id:
+            session = load_session(request.session_id)
+            if not session or session["question_id"] != question_id:
+                raise HTTPException(400, "Question does not belong to this session")
+            # Mock interviews use the interviewer rather than practice hints.
+            raise HTTPException(409, "Use the interviewer during a mock interview. Coaching is available in practice.")
+        transcript = [{"role": "candidate" if t.get("role") == "user" else "interviewer",
+                       "content": t.get("content", "")[:1200]}
+                      for t in request.history if t.get("role") in {"user", "assistant"}]
+        transcript.append({"role": "candidate", "content": f"My answer: {request.answer[:6000]}\nMy code: {str(request.files)[:6000]}\n{request.message}"})
+        try:
+            text = app.state.ai.respond({"state": "COACHING: ask one focused reasoning question; give a small nudge",
+                "personality": "patient", "prompt": question["prompt"], "constraints": question.get("constraints", []),
+                "follow_ups": [], "transcript": transcript})
+            return {"text": text, "provider": "local"}
+        except Exception:
+            logging.getLogger(__name__).exception("Local coaching failed")
+            raise HTTPException(503, "Local coach is unavailable. Start your configured local model, then try again.") from None
 
     @app.get("/api/schema")
     def schema():

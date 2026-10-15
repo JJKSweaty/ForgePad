@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Check,
-  ChevronDown,
-  ChevronUp,
   Copy,
   Download,
   Github,
   Link2,
-  Plus,
   RefreshCw,
   Trash2,
   Unplug,
 } from "lucide-react";
 import { api, download, message, post, readable } from "./api";
-import { native, nativeEvents } from "./native";
+import { native } from "./native";
+import LocalCoachSettings from "./LocalCoachSettings";
 import type { GitHubStatus } from "./dashboardData";
 import { PageHeader } from "./ui";
 import {
@@ -32,14 +30,6 @@ type Integration = {
   privacy: string;
   last_successful_tool_call?: { tool: string; created_at: string };
   permissions: Record<string, boolean>;
-};
-type Model = {
-  id: string;
-  endpoint: string;
-  model: string;
-  memory_mb: number;
-  context_tokens: number;
-  output_tokens: number;
 };
 const sections = [
   ["general", "General"],
@@ -72,8 +62,6 @@ export function SettingsPage({
           : "general";
     }),
     [integration, setIntegration] = useState<Integration | null>(null),
-    [models, setModels] = useState<Model[]>([]),
-    [diagnostics, setDiagnostics] = useState<unknown>(null),
     [mode, setMode] = useState("external_assistant"),
     [retain, setRetain] = useState(false),
     [speech, setSpeech] = useState({
@@ -97,8 +85,7 @@ export function SettingsPage({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [apiKey, setApiKey] = useState(""),
-    [benchmark, setBenchmark] = useState<string | null>(null);
+    [apiKey, setApiKey] = useState("");
   const loadIntegration = useCallback(
     async () =>
       setIntegration(await api<Integration>("/integrations/heyclicky")),
@@ -113,12 +100,6 @@ export function SettingsPage({
     }
     void Promise.all([
       loadIntegration(),
-      api<{ models: Model[]; diagnostics: unknown }>("/settings/models").then(
-        (r) => {
-          setModels(r.models);
-          setDiagnostics(r.diagnostics);
-        },
-      ),
       api<{ mode: string; record_audio: boolean }>("/settings/audio").then(
         (a) => {
           setMode(a.mode);
@@ -141,41 +122,6 @@ export function SettingsPage({
       }),
     ]).catch((e) => setError(message(e)));
   }, [loadIntegration]);
-  useEffect(() => {
-    if (!benchmark) return;
-    let live = true;
-    let stop: (() => void) | undefined;
-    const check = async () => {
-      const job = await api<{
-        status: string;
-        result?: unknown;
-        error?: string;
-      }>(`/jobs/${benchmark}`);
-      if (!live) return;
-      if (!["queued", "running"].includes(job.status)) {
-        setBenchmark(null);
-        setDiagnostics(job.result ?? job);
-        if (job.error) setError(job.error);
-        else
-          setNotice("Benchmark finished. Review the measured results below.");
-      }
-    };
-    void nativeEvents((e) => {
-      if (e.type === "job_complete" && e.data?.id === benchmark)
-        void check().catch((e) => setError(message(e)));
-    }).then((fn) => {
-      if (!live) {
-        fn();
-        return;
-      }
-      stop = fn;
-      void check().catch((e) => setError(message(e)));
-    });
-    return () => {
-      live = false;
-      stop?.();
-    };
-  }, [benchmark]);
   async function action(fn: () => Promise<unknown>, success: string) {
     setBusy(true);
     setError("");
@@ -191,15 +137,6 @@ export function SettingsPage({
   }
   const copy = (value: string, label: string) =>
     action(() => navigator.clipboard.writeText(value), `${label} copied.`);
-  function updateModel(
-    index: number,
-    key: keyof Model,
-    value: string | number,
-  ) {
-    setModels((current) =>
-      current.map((m, i) => (i === index ? { ...m, [key]: value } : m)),
-    );
-  }
   async function saveAudio(nextMode = mode, nextRetain = retain) {
     await api("/settings/audio", {
       method: "PUT",
@@ -334,31 +271,58 @@ export function SettingsPage({
                     Your voice is transcribed on this Mac. Choose how your
                     interviewer responds.
                   </p>
-                  <label>
-                    Audio mode
-                    <select
-                      value={mode}
+                  <label className="setting-row">
+                    <span>
+                      <strong>Voice answers</strong>
+                      <p>
+                        Use the microphone during mock interviews. You can
+                        review each transcript before sending.
+                      </p>
+                    </span>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-label="Voice answers"
+                      checked={mode === "interview"}
                       onChange={(e) =>
                         void action(
-                          () => saveAudio(e.target.value),
-                          "Audio mode saved.",
+                          () =>
+                            saveAudio(
+                              e.target.checked ? "interview" : "text_practice",
+                            ),
+                          "Voice preference saved.",
                         )
                       }
-                    >
-                      <option value="external_assistant">
-                        External Assistant · HeyClicky commands
-                      </option>
-                      <option value="interview">
-                        Interview · ForgePad transcription
-                      </option>
-                      <option value="silent">
-                        Silent · no ForgePad capture
-                      </option>
-                      <option value="text_practice">
-                        Text Practice · voice not required
-                      </option>
-                    </select>
+                    />
                   </label>
+                  <details className="advanced-settings">
+                    <summary>Advanced microphone routing</summary>
+                    <label>
+                      Audio mode
+                      <select
+                        value={mode}
+                        onChange={(e) =>
+                          void action(
+                            () => saveAudio(e.target.value),
+                            "Audio mode saved.",
+                          )
+                        }
+                      >
+                        <option value="external_assistant">
+                          External Assistant · HeyClicky commands
+                        </option>
+                        <option value="interview">
+                          Interview · ForgePad transcription
+                        </option>
+                        <option value="silent">
+                          Silent · no ForgePad capture
+                        </option>
+                        <option value="text_practice">
+                          Text Practice · voice not required
+                        </option>
+                      </select>
+                    </label>
+                  </details>
                   <p className="privacy-note">
                     {mode === "interview"
                       ? "ForgePad captures after you press Microphone in an active interview. Pause HeyClicky capture yourself if needed; the applications do not share a microphone stream."
@@ -473,230 +437,7 @@ export function SettingsPage({
                   </button>
                 </section>
               )}
-              {section === "audio" && (
-                <details className="settings-section advanced-settings">
-                  <summary>Advanced: local language models</summary>
-                  <div className="settings-title-row">
-                    <div>
-                      <h2>Local AI</h2>
-                      <p className="settings-description">
-                        Optional llama.cpp-compatible runtimes, in fallback
-                        order.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setModels((current) => [
-                          ...current,
-                          {
-                            id: `local-${current.length + 1}`,
-                            endpoint: "http://127.0.0.1:8080",
-                            model: "",
-                            memory_mb: 4096,
-                            context_tokens: 16384,
-                            output_tokens: 4096,
-                          },
-                        ])
-                      }
-                    >
-                      <Plus size={14} />
-                      Add endpoint
-                    </button>
-                  </div>
-                  <p>
-                    Practice, tests, and progress work with every model
-                    disabled. ForgePad uses one inference lane and gives active
-                    interviews priority over authoring.
-                  </p>
-                  {!models.length && (
-                    <div className="settings-empty">
-                      <strong>Local AI is disabled</strong>
-                      <p>
-                        Add an endpoint when you have a compatible model runtime
-                        running.
-                      </p>
-                    </div>
-                  )}
-                  {models.map((m, i) => (
-                    <div className="model-configuration" key={i}>
-                      <div className="settings-title-row">
-                        <strong>Endpoint {i + 1}</strong>
-                        <div className="button-row">
-                          <button
-                            className="icon-button"
-                            aria-label={`Move endpoint ${i + 1} earlier`}
-                            disabled={i === 0}
-                            onClick={() =>
-                              setModels((old) => {
-                                const next = [...old];
-                                [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                                return next;
-                              })
-                            }
-                          >
-                            <ChevronUp size={14} />
-                          </button>
-                          <button
-                            className="icon-button"
-                            aria-label={`Move endpoint ${i + 1} later`}
-                            disabled={i === models.length - 1}
-                            onClick={() =>
-                              setModels((old) => {
-                                const next = [...old];
-                                [next[i + 1], next[i]] = [next[i], next[i + 1]];
-                                return next;
-                              })
-                            }
-                          >
-                            <ChevronDown size={14} />
-                          </button>
-                          <button
-                            className="icon-button"
-                            aria-label={`Remove endpoint ${i + 1}`}
-                            onClick={() =>
-                              setModels((old) =>
-                                old.filter((_, index) => index !== i),
-                              )
-                            }
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="two-columns">
-                        <label>
-                          Label
-                          <input
-                            value={m.id}
-                            onChange={(e) =>
-                              updateModel(i, "id", e.target.value)
-                            }
-                          />
-                        </label>
-                        <label>
-                          Model identifier
-                          <input
-                            value={m.model}
-                            onChange={(e) =>
-                              updateModel(i, "model", e.target.value)
-                            }
-                            placeholder="ID listed by your runtime"
-                          />
-                        </label>
-                      </div>
-                      <label>
-                        Loopback endpoint
-                        <input
-                          type="url"
-                          value={m.endpoint}
-                          onChange={(e) =>
-                            updateModel(i, "endpoint", e.target.value)
-                          }
-                        />
-                      </label>
-                      <details>
-                        <summary>Memory & generation limits</summary>
-                        <div className="two-columns">
-                          <label>
-                            Estimated peak memory (MB)
-                            <input
-                              type="number"
-                              value={m.memory_mb}
-                              onChange={(e) =>
-                                updateModel(
-                                  i,
-                                  "memory_mb",
-                                  Number(e.target.value),
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            Context window (tokens)
-                            <input
-                              type="number"
-                              value={m.context_tokens}
-                              onChange={(e) =>
-                                updateModel(
-                                  i,
-                                  "context_tokens",
-                                  Number(e.target.value),
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            Maximum output (tokens)
-                            <input
-                              type="number"
-                              value={m.output_tokens}
-                              onChange={(e) =>
-                                updateModel(
-                                  i,
-                                  "output_tokens",
-                                  Number(e.target.value),
-                                )
-                              }
-                            />
-                          </label>
-                        </div>
-                      </details>
-                    </div>
-                  ))}
-                  <div className="button-row">
-                    <button
-                      className="primary"
-                      disabled={busy}
-                      onClick={() =>
-                        void action(
-                          () =>
-                            api("/settings/models", {
-                              method: "PUT",
-                              body: JSON.stringify({ models }),
-                            }),
-                          "Model configuration saved.",
-                        )
-                      }
-                    >
-                      Save configuration
-                    </button>
-                    <button
-                      disabled={busy || !models.length || !!benchmark}
-                      onClick={() =>
-                        void action(async () => {
-                          const j = await post<{ id: string }>(
-                            "/models/benchmark",
-                            {},
-                          );
-                          setBenchmark(j.id);
-                        }, "Sequential benchmark queued.")
-                      }
-                    >
-                      {benchmark ? "Benchmark running…" : "Benchmark models"}
-                    </button>
-                    <button
-                      onClick={() =>
-                        void action(async () => {
-                          const r = await api<{ diagnostics: unknown }>(
-                            "/settings/models",
-                          );
-                          setDiagnostics(r.diagnostics);
-                        }, "")
-                      }
-                    >
-                      Refresh diagnostics
-                    </button>
-                  </div>
-                  {diagnostics !== null && (
-                    <details>
-                      <summary>Measured diagnostics</summary>
-                      <pre className="report">
-                        {JSON.stringify(diagnostics, null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                </details>
-              )}
+              {section === "audio" && <LocalCoachSettings />}
               {section === "compiler" && native && (
                 <section className="settings-section">
                   <h2>Compiler</h2>
