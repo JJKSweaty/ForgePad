@@ -69,7 +69,7 @@ export function Heatmap({
     unit = datasets.find((d) => d.id === dataset)!.unit;
   useEffect(() => {
     if (!selected || dataset === "github") return;
-    let live = true; 
+    let live = true;
     setDetails(null);
     setError("");
     void api<{ events: ActivityEvent[] }>(
@@ -135,7 +135,7 @@ export function Heatmap({
           <h2 id="activity-title">Activity</h2>
           <p>
             {dataset === "github"
-              ? "Your GitHub calendar, separate from ForgePad practice."
+              ? "GitHub contributions in the last 52 weeks"
               : `${total.toLocaleString()} ${unit} in the last 52 weeks`}
           </p>
         </div>
@@ -260,7 +260,7 @@ export function Heatmap({
                 ? github?.last_sync_at
                   ? `Synced ${new Date(github.last_sync_at).toLocaleString()}`
                   : "No synchronized calendar yet"
-                : `${timezone} · ${dataset === "time" ? "Focused time; idle gaps excluded" : dataset === "solved" ? "First passing submission for each question" : "Meaningful practice, not keystrokes"}`}
+                : timezone}
             </span>
             <div className="calendar-legend" aria-label="Five activity levels">
               <span>Less</span>
@@ -310,10 +310,7 @@ export function Heatmap({
                 </Popover.Close>
               </div>
               {dataset === "github" ? (
-                <p className="popover-note">
-                  GitHub reports this contribution count. Repository activity is
-                  not ForgePad practice.
-                </p>
+                <p className="popover-note">GitHub contributions</p>
               ) : error ? (
                 <div className="inline-error" role="alert">
                   {error}

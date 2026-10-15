@@ -397,7 +397,7 @@ function Metric({
     <div className="dashboard-metric">
       <span>{label}</span>
       <strong>{value}</strong>
-      <small>{note}</small>
+      <span className="sr-only">{note}</span>
     </div>
   );
 }

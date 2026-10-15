@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, FileJson, Plus, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  FileJson,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 import { api, download, message, post, readable } from "./api";
 import type { Question } from "./api";
 import { native } from "./native";
@@ -46,7 +53,9 @@ function differences(
 export function AuthoringPage({
   questions,
   refresh,
+  onBrowse,
 }: {
+  onBrowse?: () => void;
   questions: Question[];
   refresh: () => Promise<void>;
 }) {
@@ -233,6 +242,12 @@ export function AuthoringPage({
       selected && JSON.stringify(selected.package, null, 2) === source;
   return (
     <div className="page">
+      {onBrowse && (
+        <button className="text-button authoring-back" onClick={onBrowse}>
+          <ArrowLeft size={14} />
+          Back to questions
+        </button>
+      )}
       <div className="page-heading">
         <div>
           <h2>Add and manage questions</h2>

@@ -1015,9 +1015,6 @@ export default function Practice({
           <Download size={13} />
           Export draft
         </button>
-        <span>
-          Drafts save after 650 ms · Checkpoints are kept in this browser
-        </span>
       </div>
     </div>
   );

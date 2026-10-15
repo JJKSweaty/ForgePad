@@ -412,8 +412,8 @@ textarea:focus-visible {
   padding: 14px 10px;
 }
 .editor-toolbar {
-  background: #20211c;
-  border-color: #3b3c35;
+  background: var(--input);
+  border-color: var(--border);
   padding: 0 10px 0 0;
   min-height: 45px;
   align-items: center;
@@ -428,32 +428,32 @@ textarea:focus-visible {
   min-width: 100px;
 }
 .file-tabs button.active {
-  background: #272822;
-  color: #f8f8f2;
-  box-shadow: inset 0 2px #a6e22e;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: inset 0 2px var(--accent);
 }
 .editor-toolbar select {
   font-size: 12px;
   min-height: 32px;
-  color: #cccfc2;
+  color: var(--text-secondary);
 }
 .editor-container {
   height: clamp(380px, 53vh, 720px);
-  background: #272822;
+  background: var(--panel);
 }
 .editor-bottom {
   font-size: 12px;
   padding: 10px 16px;
-  background: #20211c;
-  color: #b7baac;
-  border-color: #3b3c35;
+  background: var(--input);
+  color: var(--muted);
+  border-color: var(--border);
 }
 .editor-bottom .text-button {
   font-size: 12px;
-  color: #b7baac;
+  color: var(--muted);
 }
 .editor-toolbar .icon-button {
-  color: #b7baac;
+  color: var(--muted);
 }
 .run-toolbar {
   padding: 14px 18px;
@@ -910,3 +910,28 @@ textarea:focus-visible {
     margin-left: auto;
   }
 }
+.authoring-back {
+  margin-bottom: 18px;
+}
+.settings-content .advanced-settings {
+  margin-top: 18px;
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23979da7' stroke-width='1.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 14px;
+  background-position: right 10px center;
+  padding-right: 32px;
+}
+
+/* Shared control rhythm and readable secondary text. */
+.settings-section > p { max-width: 65ch; color: var(--muted); font-size: 13px; }
+.advanced-settings label { display: block; margin: 16px 0; }
+.success-text { display: flex; align-items: center; gap: 6px; color: var(--accent); }
+.runner-status { min-height: 32px; }
+.practice-footer { justify-content: flex-end; }
+@keyframes forgepad-spin { to { transform: rotate(360deg); } }
+.spinning { animation: forgepad-spin 1.5s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spinning { animation: none; } }

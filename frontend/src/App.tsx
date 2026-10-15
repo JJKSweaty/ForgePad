@@ -1,3 +1,4 @@
+import { version as appVersion } from "../package.json";
 import { flushDrafts } from "./drafts";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
@@ -68,9 +69,9 @@ export default function App() {
     ),
     [version, setVersion] = useState<number | undefined>(),
     [theme, setTheme] = useState(
-      () => localStorage.getItem("forgepad.v1.theme") ?? "dark",
+      () => localStorage.getItem("forgepad.v1.theme") ?? "light",
     ),
-    [resolvedTheme, setResolvedTheme] = useState("dark"),
+    [resolvedTheme, setResolvedTheme] = useState("light"),
     [compact, setCompact] = useState(false),
     [search, setSearch] = useState(false);
   const refresh = useCallback(async () => {
@@ -98,6 +99,17 @@ export default function App() {
   useEffect(() => {
     void refresh();
     environment();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) environment();
+    }, 30000);
+    const focus = () => environment();
+    window.addEventListener("focus", focus);
+    window.addEventListener("forgepad:runner", focus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", focus);
+      window.removeEventListener("forgepad:runner", focus);
+    };
   }, [refresh, environment]);
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -155,8 +167,11 @@ export default function App() {
     void nativeEvents((event) => {
       if (!live) return;
       if (
-        event.type === "workspace_changed" &&
-        event.data?.path?.startsWith("/settings/")
+        (event.type === "runner_changed" ||
+          event.type === "run_complete" ||
+          event.type === "workspace_changed") &&
+        (event.type !== "workspace_changed" ||
+          event.data?.path?.startsWith("/settings/"))
       )
         environment();
       if (event.type === "navigate" && event.data) {
@@ -292,7 +307,7 @@ export default function App() {
                 <Moon size={16} />
               )}
             </button>
-            <span className="version">ForgePad 0.2</span>
+            <span className="version">ForgePad {appVersion}</span>
             <button
               className="icon-button"
               aria-label="Toggle sidebar"
@@ -323,7 +338,7 @@ export default function App() {
               <span
                 className={`status-dot ${health?.runner.available ? "" : "muted"}`}
               />
-              {health?.runner.available ? "Runner ready" : "Runner unavailable"}
+              {health?.runner.available ? "Runner ready" : "Set up runner"}
             </button>
             <button
               className="icon-button"
@@ -452,7 +467,11 @@ export default function App() {
                     theme={theme}
                     onTheme={setTheme}
                     authoring={
-                      <AuthoringPage questions={questions} refresh={refresh} />
+                      <AuthoringPage
+                        questions={questions}
+                        refresh={refresh}
+                        onBrowse={() => navigate("questions")}
+                      />
                     }
                   />
                 )}
