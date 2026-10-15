@@ -1,0 +1,1 @@
+"""ForgePad local application."""
