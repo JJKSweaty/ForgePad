@@ -1,5 +1,6 @@
 """Persistent interview state and clock; no inference is needed to complete a session."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from .storage import now
@@ -24,24 +25,38 @@ def prompt_for(session, question):
     if state == "FOLLOW_UP":
         follow_ups = question.get("follow_ups", [])
         index = session["follow_up_index"]
-        return follow_ups[index] if index < len(follow_ups) else "What failure mode would you investigate first?"
+        return (
+            follow_ups[index] if index < len(follow_ups) else "What failure mode would you investigate first?"
+        )
     if state == "REVIEW":
         return "Review your result. Which edge cases or trade-offs need further work?"
     return "Session complete. Your transcript and review are saved locally."
 
 
 def create_session(question, duration, kind, personality):
-    session = {"id": str(uuid4()), "question_id": question["id"], "question_version": question["version"],
-               "state": "INTRODUCTION", "duration_minutes": duration, "kind": kind,
-               "personality": personality, "started_at": now(), "clock_at": now(),
-               "remaining_seconds": duration * 60.0, "paused": False, "transcript": [],
-               "follow_up_index": 0, "follow_ups_attempted": [], "events": []}
+    session = {
+        "id": str(uuid4()),
+        "question_id": question["id"],
+        "question_version": question["version"],
+        "state": "INTRODUCTION",
+        "duration_minutes": duration,
+        "kind": kind,
+        "personality": personality,
+        "started_at": now(),
+        "clock_at": now(),
+        "remaining_seconds": duration * 60.0,
+        "paused": False,
+        "transcript": [],
+        "follow_up_index": 0,
+        "follow_ups_attempted": [],
+        "events": [],
+    }
     add_message(session, "interviewer", prompt_for(session, question))
     return session
 
 
 def update_clock(session):
-    current = datetime.now(timezone.utc)
+    current = datetime.now(UTC)
     if not session["paused"] and session["state"] != "COMPLETE":
         elapsed = max(0, (current - datetime.fromisoformat(session["clock_at"])).total_seconds())
         session["remaining_seconds"] = max(0.0, session["remaining_seconds"] - elapsed)
@@ -62,7 +77,8 @@ def complete(session, question, reason="finished"):
         "interview_communication": f"{len(answers)} responses recorded; explanation quality is unassessed.",
         "what_to_review": question["topics"][:3],
         "next_challenge": question.get("follow_ups", ["Review the rubric and retry."])[0]
-        if question.get("follow_ups") else "Review the rubric and retry.",
+        if question.get("follow_ups")
+        else "Review the rubric and retry.",
         "rubric": question["rubric"],
         "functional_correctness": "See separately recorded submissions; transcript is not a correctness verdict.",
         "evaluation": "deterministic transcript summary; no inferred technical score",

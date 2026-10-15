@@ -1,15 +1,16 @@
 """Transactional local storage. Questions are immutable, versioned snapshots."""
-from contextlib import contextmanager
-from datetime import datetime, timezone
+
 import json
-from pathlib import Path
 import sqlite3
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
 
 from .schema import Question
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def encode(value) -> str:
@@ -72,24 +73,30 @@ class Store:
             for package in packages:
                 question = Question.model_validate(package).model_dump()
                 with self.connect() as db:
-                    db.execute("INSERT OR IGNORE INTO questions VALUES (?,?,?,?)", (
-                        question["id"], question["version"], encode(question), now()))
+                    db.execute(
+                        "INSERT OR IGNORE INTO questions VALUES (?,?,?,?)",
+                        (question["id"], question["version"], encode(question), now()),
+                    )
 
     def question(self, question_id: str, version: int | None = None) -> dict | None:
         with self.connect() as db:
             if version is None:
-                row = db.execute("SELECT package FROM questions WHERE id=? ORDER BY version DESC LIMIT 1",
-                                 (question_id,)).fetchone()
+                row = db.execute(
+                    "SELECT package FROM questions WHERE id=? ORDER BY version DESC LIMIT 1", (question_id,)
+                ).fetchone()
             else:
-                row = db.execute("SELECT package FROM questions WHERE id=? AND version=?",
-                                 (question_id, version)).fetchone()
+                row = db.execute(
+                    "SELECT package FROM questions WHERE id=? AND version=?", (question_id, version)
+                ).fetchone()
         return json.loads(row[0]) if row else None
 
     def questions(self) -> list[dict]:
         with self.connect() as db:
-            rows = db.execute("SELECT q.package FROM questions q JOIN "
-                              "(SELECT id,MAX(version) version FROM questions GROUP BY id) latest "
-                              "ON q.id=latest.id AND q.version=latest.version ORDER BY q.id").fetchall()
+            rows = db.execute(
+                "SELECT q.package FROM questions q JOIN "
+                "(SELECT id,MAX(version) version FROM questions GROUP BY id) latest "
+                "ON q.id=latest.id AND q.version=latest.version ORDER BY q.id"
+            ).fetchall()
         return [json.loads(row[0]) for row in rows]
 
     def records(self, table: str) -> list[dict]:
@@ -108,23 +115,36 @@ class Store:
         assert table in {"runs", "interviews", "goals"}
         with self.connect() as db:
             if table == "interviews":
-                db.execute("INSERT INTO interviews VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
-                           (record["id"], record["question_id"], record["question_version"], encode(record)))
+                db.execute(
+                    "INSERT INTO interviews VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
+                    (record["id"], record["question_id"], record["question_version"], encode(record)),
+                )
             else:
-                db.execute(f"INSERT INTO {table} VALUES (?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
-                           (record["id"], encode(record)))
+                db.execute(
+                    f"INSERT INTO {table} VALUES (?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
+                    (record["id"], encode(record)),
+                )
 
     def add_attempt(self, record: dict):
         with self.connect() as db:
-            db.execute("INSERT INTO attempts VALUES (?,?,?,?,?)", (
-                record["id"], record["question_id"], record["question_version"], record["created_at"], encode(record)))
+            db.execute(
+                "INSERT INTO attempts VALUES (?,?,?,?,?)",
+                (
+                    record["id"],
+                    record["question_id"],
+                    record["question_version"],
+                    record["created_at"],
+                    encode(record),
+                ),
+            )
 
     def export(self) -> dict:
         result = {"schema_version": "1.0", "exported_at": now(), "questions": []}
         with self.connect() as db:
             result["questions"] = [json.loads(row[0]) for row in db.execute("SELECT package FROM questions")]
-            result["drafts"] = [{**dict(row), "files": json.loads(row["files"])}
-                                for row in db.execute("SELECT * FROM drafts")]
+            result["drafts"] = [
+                {**dict(row), "files": json.loads(row["files"])} for row in db.execute("SELECT * FROM drafts")
+            ]
             result["question_flags"] = [dict(row) for row in db.execute("SELECT * FROM question_flags")]
         for table in ("attempts", "runs", "interviews", "goals"):
             result[table] = self.records(table)

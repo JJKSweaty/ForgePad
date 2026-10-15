@@ -1,4 +1,5 @@
 """Versioned authoring contract and practice-safe projection."""
+
 import re
 from typing import Literal
 
@@ -110,6 +111,8 @@ def practice_question(question: dict) -> dict:
     if result.get("test_config"):
         result["test_config"] = {
             **result["test_config"],
-            "tests": [dict(test) for test in result["test_config"]["tests"] if test["visibility"] == "public"],
+            "tests": [
+                dict(test) for test in result["test_config"]["tests"] if test["visibility"] == "public"
+            ],
         }
     return result
