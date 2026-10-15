@@ -358,7 +358,9 @@ class DockerRunner:
                 link_inputs = list(object_names)
                 compiled = ProcessResult(0)
                 if config["mode"] == "fixture":
-                    fixture_file = fixture / ("fixture.cpp" if cpp else "fixture.c")
+                    test_fixture = fixture / str(index)
+                    test_fixture.mkdir(mode=0o755)
+                    fixture_file = test_fixture / ("fixture.cpp" if cpp else "fixture.c")
                     fixture_file.write_text(test["fixture"])
                     fixture_file.chmod(0o644)
                     compiled = self._container(
@@ -372,7 +374,7 @@ class DockerRunner:
                             "-o",
                             "/build/fixture.o",
                         ],
-                        [(fixture, "/fixture", True), (src, "/src", True), (test_build, "/build", False)],
+                        [(test_fixture, "/fixture", True), (src, "/src", True), (test_build, "/build", False)],
                         25,
                         cancel,
                         compile_job=True,
@@ -408,13 +410,15 @@ class DockerRunner:
                         return finish(
                             "compilation_error", "Compiler did not produce a valid bounded executable."
                         )
-                    destination = program / "submission"
+                    test_program = program / str(index)
+                    test_program.mkdir(mode=0o755)
+                    destination = test_program / "submission"
                     shutil.copyfile(binary, destination)
                     destination.chmod(0o555)
                     executed = self._container(
                         image,
                         ["/program/submission"],
-                        [(program, "/program", True)],
+                        [(test_program, "/program", True)],
                         timeout,
                         cancel,
                         test.get("stdin", ""),
