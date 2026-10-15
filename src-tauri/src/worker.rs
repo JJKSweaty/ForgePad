@@ -107,7 +107,17 @@ impl Worker {
                 .as_ref()
                 .is_some_and(|(k, t)| k == &key && t.elapsed() < Duration::from_secs(30))
         {
-            return Ok(json!({"available":true,"detail":"Compiler verified"}));
+            // A stopped daemon invalidates a warm preflight immediately, including
+            // a Run clicked just after Docker or the managed VM was stopped.
+            let live = self
+                .raw_request(
+                    json!({"operation":"availability"}),
+                    CancellationToken::new(),
+                )
+                .await?;
+            if live["available"] == true {
+                return Ok(json!({"available":true,"detail":"Compiler verified"}));
+            }
         }
         *ready = None;
         let result = self
