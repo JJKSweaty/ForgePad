@@ -26,9 +26,9 @@ export function CommandPalette({
   }, [open]);
   const pages: { id: Page; title: string }[] = [
     { id: "dashboard", title: "Dashboard" },
-    { id: "roadmaps", title: "Roadmaps" },
-    { id: "questions", title: "Question Library" },
-    { id: "interview", title: "Mock Interview" },
+    { id: "roadmaps", title: "Practice / Roadmaps" },
+    { id: "questions", title: "Practice / Questions" },
+    { id: "interview", title: "Practice / Mock interview" },
     { id: "progress", title: "Progress" },
     { id: "settings", title: "Settings" },
   ];

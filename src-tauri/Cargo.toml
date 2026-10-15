@@ -25,6 +25,7 @@ default = ["desktop"]
 desktop = ["dep:tauri", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-single-instance", "dep:tauri-build"]
 
 [dependencies]
+tempfile = "3"
 anyhow = "1"
 axum = "0.8"
 chrono-tz = "0.10"
@@ -52,4 +53,3 @@ tauri-build = { version = "2", optional = true , features = [] }
 
 [dev-dependencies]
 tower = {version="0.5",features= ["util"] }
-tempfile = "3"

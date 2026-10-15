@@ -104,8 +104,7 @@ export function RoadmapsPage({
     <div className="page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">A PATH THROUGH FIRMWARE</div>
-          <h1>Preparation roadmaps</h1>
+          <h2>Preparation roadmaps</h2>
           <p>
             Build breadth, revisit recorded gaps, and earn mastery through
             repeated evidence.
@@ -125,28 +124,34 @@ export function RoadmapsPage({
           {error}
         </div>
       )}
-      <div className="roadmap-cards">
-        {roadmaps.map((r) => (
-          <button
-            key={r.id}
-            aria-pressed={r.id === roadmap?.id}
-            className={`panel roadmap-card ${r.id === roadmap?.id ? "selected" : ""}`}
-            onClick={() => {
-              setSelected(r.id);
-              sessionStorage.setItem("forgepad.roadmap", r.id);
-            }}
-          >
-            <Route size={21} />
-            <h2>{r.title}</h2>
+      <div className="roadmap-picker">
+        <label htmlFor="roadmap-path">Learning path</label>
+        <select
+          id="roadmap-path"
+          value={roadmap?.id ?? ""}
+          onChange={(e) => {
+            setSelected(e.target.value);
+            sessionStorage.setItem("forgepad.roadmap", e.target.value);
+          }}
+        >
+          {roadmaps.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.title}
+            </option>
+          ))}
+        </select>
+        {roadmap && (
+          <div className="roadmap-picker-progress">
             <span>
-              {r.solved} / {r.total} solved · {r.mastered} mastered
+              {roadmap.solved} / {roadmap.total} solved · {roadmap.mastered}{" "}
+              mastered
             </span>
             <ProgressMeter
-              value={r.completion_percent}
-              label={`${r.title} completion`}
+              value={roadmap.completion_percent}
+              label="Learning path completion"
             />
-          </button>
-        ))}
+          </div>
+        )}
       </div>
       {roadmap && (
         <section className="panel">

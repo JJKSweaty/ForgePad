@@ -38,3 +38,7 @@ src-tauri/binaries/*
 
 # Tauri recreates these ACL schemas during builds.
 src-tauri/gen/
+
+# Local CoreML speech helper
+native-speech/.build/
+native-speech/.swiftpm/

@@ -72,6 +72,7 @@ def main():
     for name in ("forgepad-mcp", "forgepad-worker"):
         path = dest / f"{name}-{target}"
         path.chmod(0o755)
+    subprocess.run([python, str(ROOT / "scripts/prepare_speech.py")], check=True, cwd=ROOT)
     print(f"Native sidecars ready for {target}. Run npm run desktop:dev or npm run desktop:build.")
 
 

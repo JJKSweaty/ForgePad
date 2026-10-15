@@ -1,17 +1,13 @@
 import { flushDrafts } from "./drafts";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
-  BookOpen,
   ChevronRight,
   CircuitBoard,
   Code2,
-  FilePenLine,
   LayoutDashboard,
-  Mic,
   Moon,
   PanelLeftClose,
   RefreshCw,
-  Route,
   Search,
   Settings,
   Sun,
@@ -46,14 +42,10 @@ export type Page =
   | "interview"
   | "progress"
   | "roadmaps"
-  | "authoring"
   | "settings";
 const navigation = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "roadmaps", label: "Roadmaps", icon: Route },
   { id: "practice", label: "Practice", icon: Code2 },
-  { id: "questions", label: "Question Library", icon: BookOpen },
-  { id: "interview", label: "Mock Interview", icon: Mic },
   { id: "progress", label: "Progress", icon: TrendingUp },
 ] as const;
 const emptyProgress: Progress = {
@@ -123,7 +115,7 @@ export default function App() {
     void flushDrafts()
       .then(() => {
         prepare?.();
-        setPage(target);
+        setPage(target === "practice" && !prepare ? "questions" : target);
         window.scrollTo({ top: 0 });
       })
       .catch((e) => setError(`Draft could not be saved: ${message(e)}`));
@@ -201,12 +193,23 @@ export default function App() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, []);
+  const inPractice = [
+    "questions",
+    "roadmaps",
+    "practice",
+    "interview",
+  ].includes(page);
+  const activePage = inPractice ? "practice" : page;
+  const practiceTabs: { id: Page; label: string }[] = [
+    { id: "questions", label: "Questions" },
+    { id: "roadmaps", label: "Roadmaps" },
+    { id: "interview", label: "Mock interview" },
+    ...(selected ? [{ id: "practice" as Page, label: "Code workspace" }] : []),
+  ];
   const title =
-    page === "authoring"
-      ? "Question Studio"
-      : page === "settings"
-        ? "Settings"
-        : navigation.find((n) => n.id === page)?.label;
+    page === "settings"
+      ? "Settings"
+      : navigation.find((n) => n.id === activePage)?.label;
   return (
     <div className={`app ${compact ? "compact" : ""}`}>
       <a className="skip-link" href="#main">
@@ -230,8 +233,8 @@ export default function App() {
           {navigation.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              className={`nav-item ${page === id ? "active" : ""}`}
-              aria-current={page === id ? "page" : undefined}
+              className={`nav-item ${activePage === id ? "active" : ""}`}
+              aria-current={activePage === id ? "page" : undefined}
               onClick={() => navigate(id)}
               title={compact ? label : undefined}
             >
@@ -240,19 +243,10 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="workspace-label authoring-label">AUTHORING</div>
-        <button
-          className={`nav-item ${page === "authoring" ? "active" : ""}`}
-          aria-current={page === "authoring" ? "page" : undefined}
-          onClick={() => navigate("authoring")}
-        >
-          <FilePenLine size={17} />
-          <span>Question Studio</span>
-        </button>
         <div className="sidebar-bottom">
           <button
-            className={`nav-item ${page === "settings" ? "active" : ""}`}
-            aria-current={page === "settings" ? "page" : undefined}
+            className={`nav-item ${activePage === "settings" ? "active" : ""}`}
+            aria-current={activePage === "settings" ? "page" : undefined}
             onClick={() => settings()}
           >
             <Settings size={17} />
@@ -349,72 +343,107 @@ export default function App() {
                 </div>
               }
             >
-              {page === "dashboard" && (
-                <Dashboard
-                  onPractice={practice}
-                  onSession={openSession}
-                  onRoadmap={openRoadmap}
-                  onSettings={() => settings("github")}
-                />
-              )}
-              {page === "roadmaps" && (
-                <RoadmapsPage onPractice={practice} onInterview={openSession} />
-              )}
-              {page === "authoring" && (
-                <AuthoringPage questions={questions} refresh={refresh} />
-              )}
-              {page === "questions" && (
-                <QuestionBank
-                  questions={questions}
-                  onPractice={practice}
-                  refresh={refresh}
-                />
-              )}
-              {page === "practice" &&
-                (selected ? (
-                  <Practice
-                    key={`${selected}:${version ?? "latest"}`}
-                    questionId={selected}
-                    questionVersion={version}
-                    theme={resolvedTheme}
-                    onSaved={refresh}
-                    onBrowse={() => navigate("questions")}
-                  />
-                ) : (
-                  <div className="page">
+              {inPractice && (
+                <div className="practice-hub-header">
+                  <div className="hub-heading">
                     <h1>Practice</h1>
-                    <div className="empty-state">
-                      <strong>Choose a question to begin</strong>
-                      <p>
-                        Browse the library or continue your preparation roadmap.
-                      </p>
-                      <button
-                        className="primary"
-                        onClick={() => navigate("roadmaps")}
-                      >
-                        Open roadmaps <ChevronRight size={14} />
-                      </button>
-                    </div>
+                    <p>Build your skills, one session at a time.</p>
                   </div>
-                ))}
-              {page === "interview" && (
-                <Interview
-                  questions={questions}
-                  health={health}
-                  theme={resolvedTheme}
-                />
+                  <nav className="hub-tabs" aria-label="Practice modes">
+                    {practiceTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        aria-current={page === tab.id ? "page" : undefined}
+                        className={page === tab.id ? "active" : ""}
+                        onClick={() =>
+                          tab.id === "practice"
+                            ? practice(selected, version)
+                            : navigate(tab.id)
+                        }
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
               )}
-              {page === "progress" && (
-                <ProgressPage
-                  progress={progress}
-                  questions={questions}
-                  refresh={refresh}
-                  onPractice={practice}
-                />
-              )}
-              {page === "settings" && (
-                <SettingsPage theme={theme} onTheme={setTheme} />
-              )}
+              <div className={inPractice ? "practice-hub-content" : undefined}>
+                {page === "dashboard" && (
+                  <Dashboard
+                    onPractice={practice}
+                    onSession={openSession}
+                    onRoadmap={openRoadmap}
+                    onSettings={() => settings("github")}
+                  />
+                )}
+                {page === "roadmaps" && (
+                  <RoadmapsPage
+                    onPractice={practice}
+                    onInterview={openSession}
+                  />
+                )}
+                {page === "questions" && (
+                  <QuestionBank
+                    questions={questions}
+                    onPractice={practice}
+                    refresh={refresh}
+                    onAuthor={() => settings("authoring")}
+                  />
+                )}
+                {page === "practice" &&
+                  (selected ? (
+                    <Practice
+                      key={`${selected}:${version ?? "latest"}`}
+                      questionId={selected}
+                      questionVersion={version}
+                      theme={resolvedTheme}
+                      onSaved={refresh}
+                      onBrowse={() => navigate("questions")}
+                    />
+                  ) : (
+                    <div className="page">
+                      <h1>Practice</h1>
+                      <div className="empty-state">
+                        <strong>Choose a question to begin</strong>
+                        <p>
+                          Browse the library or continue your preparation
+                          roadmap.
+                        </p>
+                        <button
+                          className="primary"
+                          onClick={() => navigate("roadmaps")}
+                        >
+                          Open roadmaps <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                {page === "interview" && (
+                  <Interview
+                    questions={questions}
+                    health={health}
+                    theme={resolvedTheme}
+                    onSettings={() => settings("audio")}
+                  />
+                )}
+                {page === "progress" && (
+                  <ProgressPage
+                    progress={progress}
+                    questions={questions}
+                    refresh={refresh}
+                    onPractice={practice}
+                  />
+                )}
+                {page === "settings" && (
+                  <SettingsPage
+                    theme={theme}
+                    onTheme={setTheme}
+                    authoring={
+                      <AuthoringPage questions={questions} refresh={refresh} />
+                    }
+                  />
+                )}
+              </div>
             </Suspense>
           )}
         </main>

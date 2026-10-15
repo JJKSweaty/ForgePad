@@ -31,7 +31,8 @@
     ],
     "externalBin": [
       "binaries/forgepad-mcp",
-      "binaries/forgepad-worker"
+      "binaries/forgepad-worker",
+      "binaries/forgepad-speech"
     ],
     "resources": [
       "../questions/"

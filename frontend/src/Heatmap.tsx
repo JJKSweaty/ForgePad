@@ -69,7 +69,7 @@ export function Heatmap({
     unit = datasets.find((d) => d.id === dataset)!.unit;
   useEffect(() => {
     if (!selected || dataset === "github") return;
-    let live = true;
+    let live = true; 
     setDetails(null);
     setError("");
     void api<{ events: ActivityEvent[] }>(

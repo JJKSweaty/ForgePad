@@ -259,8 +259,8 @@ export function Dashboard({
       <section className="dashboard-roadmaps" aria-labelledby="roadmaps-title">
         <div className="section-header">
           <div>
-            <h2 id="roadmaps-title">Your roadmaps</h2>
-            <p>One question bank. Progress carries across every path.</p>
+            <h2 id="roadmaps-title">Your learning path</h2>
+            <p>Continue your path or explore others in Practice.</p>
           </div>
           <button
             className="text-button"
@@ -271,7 +271,12 @@ export function Dashboard({
         </div>
         <div className="dashboard-roadmap-grid">
           {data.roadmaps
-            .filter((r) => r.id !== "crushing-firmware-interview")
+            .filter(
+              (r) =>
+                r.id ===
+                (data.roadmaps.find((path) => path.id === c.roadmap_id)?.id ??
+                  data.roadmaps[0]?.id),
+            )
             .map((r) => (
               <article key={r.id} className="roadmap-summary">
                 <div className="roadmap-summary-heading">

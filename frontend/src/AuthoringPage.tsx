@@ -50,7 +50,16 @@ export function AuthoringPage({
   questions: Question[];
   refresh: () => Promise<void>;
 }) {
-  const [workflow, setWorkflow] = useState("json"),
+  const [form, setForm] = useState({
+    title: "",
+    prompt: "",
+    topics: "",
+    rubric: "",
+    type: "theory",
+    difficulty: "intermediate",
+    duration: 15,
+  });
+  const [workflow, setWorkflow] = useState("form"),
     [input, setInput] = useState(""),
     [drafts, setDrafts] = useState<Draft[]>([]),
     [selected, setSelected] = useState<Draft | null>(null),
@@ -121,9 +130,50 @@ export function AuthoringPage({
     try {
       const d = await post<Draft>(
         "/question-drafts",
-        workflow === "json"
-          ? { workflow, package: JSON.parse(input) }
-          : { workflow, idea: input },
+        workflow === "form"
+          ? {
+              workflow: "json",
+              package: {
+                schema_version: "1.0",
+                id: `${
+                  form.title
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .slice(0, 55)
+                    .replace(/^-|-$/g, "") || "question"
+                }-${crypto.randomUUID().slice(0, 8)}`,
+                version: 1,
+                title: form.title.trim(),
+                description: form.prompt.trim().slice(0, 1800),
+                type: form.type,
+                difficulty: form.difficulty,
+                duration_minutes: form.duration,
+                language: "independent",
+                prompt: form.prompt.trim(),
+                topics: form.topics
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+                constraints: [],
+                starter_files: {},
+                test_config: null,
+                reference_solution: {},
+                rubric: form.rubric
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+                follow_ups: [],
+                hints: [],
+                source: {
+                  name: "Personal question",
+                  url: "",
+                  license: "All rights reserved",
+                },
+              },
+            }
+          : workflow === "json"
+            ? { workflow, package: JSON.parse(input) }
+            : { workflow, idea: input },
       );
       await choose(d);
       if (d.generation_job) setJob(d.generation_job);
@@ -185,9 +235,11 @@ export function AuthoringPage({
     <div className="page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">AUTHOR · VERIFY · APPROVE</div>
-          <h1>Question studio</h1>
-          <p>Keep drafts, test evidence, and published revisions distinct.</p>
+          <h2>Add and manage questions</h2>
+          <p>
+            Create a question, review your draft, then publish it to your
+            library.
+          </p>
         </div>
         <button
           className="secondary"
@@ -235,39 +287,139 @@ export function AuthoringPage({
             </div>
             <div className="setup-form">
               <label>
-                Import workflow
+                Create from
                 <select
                   value={workflow}
                   onChange={(e) => setWorkflow(e.target.value)}
                 >
-                  <option value="json">Structured JSON · no inference</option>
+                  <option value="form">Write a question</option>
+                  <option value="json">
+                    Import a coding or question package
+                  </option>
                   <option value="idea">Generate from an idea</option>
                   <option value="extract">
                     Extract existing question text
                   </option>
                 </select>
               </label>
-              <textarea
-                aria-label="Question JSON or idea"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                rows={8}
-                placeholder={
-                  workflow === "json"
-                    ? "Paste a complete question package"
-                    : "Paste an idea or the original question text"
-                }
-              />
+              {workflow === "form" ? (
+                <div className="question-create-form">
+                  <label>
+                    Title
+                    <input
+                      value={form.title}
+                      maxLength={200}
+                      onChange={(e) =>
+                        setForm({ ...form, title: e.target.value })
+                      }
+                      placeholder="e.g. Explain interrupt priorities"
+                    />
+                  </label>
+                  <div className="two-columns">
+                    <label>
+                      Type
+                      <select
+                        value={form.type}
+                        onChange={(e) =>
+                          setForm({ ...form, type: e.target.value })
+                        }
+                      >
+                        <option value="theory">Theory</option>
+                        <option value="design">System design</option>
+                      </select>
+                    </label>
+                    <label>
+                      Difficulty
+                      <select
+                        value={form.difficulty}
+                        onChange={(e) =>
+                          setForm({ ...form, difficulty: e.target.value })
+                        }
+                      >
+                        {["beginner", "intermediate", "advanced", "expert"].map(
+                          (d) => (
+                            <option key={d}>{d}</option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                  </div>
+                  <label>
+                    Question
+                    <textarea
+                      rows={6}
+                      value={form.prompt}
+                      onChange={(e) =>
+                        setForm({ ...form, prompt: e.target.value })
+                      }
+                      placeholder="Describe the problem and what a good answer should cover."
+                    />
+                  </label>
+                  <label>
+                    Topics
+                    <input
+                      value={form.topics}
+                      onChange={(e) =>
+                        setForm({ ...form, topics: e.target.value })
+                      }
+                      placeholder="Interrupts, RTOS (comma separated)"
+                    />
+                  </label>
+                  <label>
+                    What makes a good answer?
+                    <textarea
+                      rows={4}
+                      value={form.rubric}
+                      onChange={(e) =>
+                        setForm({ ...form, rubric: e.target.value })
+                      }
+                      placeholder="One evaluation criterion per line"
+                    />
+                  </label>
+                  <label>
+                    Time in minutes
+                    <input
+                      type="number"
+                      min={1}
+                      max={240}
+                      value={form.duration}
+                      onChange={(e) =>
+                        setForm({ ...form, duration: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                </div>
+              ) : (
+                <textarea
+                  aria-label="Question JSON or idea"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  rows={8}
+                  placeholder={
+                    workflow === "json"
+                      ? "Paste a complete question package"
+                      : "Paste an idea or the original question text"
+                  }
+                />
+              )}
               <p className="small muted-text">
                 Ideas are saved even with AI disabled. Extracted fields require
                 your review before tests are authored.
               </p>
               <button
                 className="primary"
-                disabled={!input.trim() || busy}
+                disabled={
+                  busy ||
+                  (workflow === "form"
+                    ? !form.title.trim() ||
+                      !form.prompt.trim() ||
+                      !form.topics.trim() ||
+                      !form.rubric.trim()
+                    : !input.trim())
+                }
                 onClick={() => void stage()}
               >
-                Stage unpublished draft
+                Create draft
               </button>
             </div>
           </section>
@@ -310,7 +462,7 @@ export function AuthoringPage({
               <p>
                 {selected
                   ? `${selected.id} · ${readable(selected.status)}`
-                  : "Select a draft or stage a new package."}
+                  : "Select a draft to review and publish it."}
               </p>
             </div>
             <ShieldCheck size={20} />
@@ -441,12 +593,14 @@ export function AuthoringPage({
             </div>
           ) : (
             <div className="empty">
-              Structured JSON import works with every AI model disabled.
+              Start with a question on the left. Your draft stays private until
+              you publish it.
             </div>
           )}
         </section>
       </div>
-      <section className="panel audit-panel">
+      <details className="panel audit-panel">
+        <summary>Advanced: audit an existing question</summary>
         <div className="section-header">
           <div>
             <h2>Audit a published question</h2>
@@ -530,7 +684,7 @@ export function AuthoringPage({
             <pre className="report">{JSON.stringify(audit, null, 2)}</pre>
           )}
         </div>
-      </section>
+      </details>
     </div>
   );
 }

@@ -7,7 +7,8 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "python3 scripts/prepare_native.py && tauri build --bundles app && python3 scripts/sign_local_bundle.py",
     "native:check": "cargo test --manifest-path src-tauri/Cargo.toml --no-default-features",
-    "native:prepare": "python3 scripts/prepare_native.py"
+    "native:prepare": "python3 scripts/prepare_native.py",
+    "speech:prepare": "python3 scripts/prepare_speech.py"
   },
   "dependencies": {
     "@vercel/sandbox": "3.8.0"

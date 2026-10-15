@@ -32,10 +32,12 @@ export default function Interview({
   questions,
   health,
   theme,
+  onSettings,
 }: {
   questions: Question[];
   health: Health | null;
   theme: string;
+  onSettings?: () => void;
 }) {
   const [voiceActive, setVoiceActive] = useState(false);
   const startingMic = useRef(false);
@@ -80,6 +82,11 @@ export default function Interview({
     let disposed = false;
     let stop: (() => void) | undefined;
     void nativeEvents((event) => {
+      if (event.type === "inference_unavailable")
+        setError(
+          event.data?.detail ??
+            "The interviewer could not reply. Check your AI connection in Settings.",
+        );
       if (event.type === "audio_mode")
         void api<{ mode: string }>("/settings/audio").then((c) =>
           setAudioMode(c.mode),
@@ -279,8 +286,7 @@ export default function Interview({
     <div className="page interview-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">STRUCTURED REHEARSAL</div>
-          <h1>Interview</h1>
+          <h2>Mock interview</h2>
           <p>
             Explain your decisions, handle follow-ups, and review the session.
           </p>
@@ -395,14 +401,23 @@ export default function Interview({
               <div className="notice">
                 <strong>
                   {health?.ai.available
-                    ? "Local model available"
+                    ? "AI interviewer configured"
                     : "Guided interview mode"}
                 </strong>
                 <p>
                   {health?.ai.available
-                    ? "Your configured local model is available."
+                    ? "Replies use the provider you configured in Settings → Interview & AI."
                     : "Sessions use the question’s prepared prompts and follow-ups. Free-form AI responses are unavailable."}
                 </p>
+                {onSettings && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={onSettings}
+                  >
+                    Configure AI & voice <ChevronRight size={14} />
+                  </button>
+                )}
               </div>
               <button
                 className="primary"

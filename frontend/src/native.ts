@@ -8,7 +8,7 @@ export type NavigationTarget = {
 };
 export type NativeEvent = {
   type: string;
-  data?: NavigationTarget & { path?: string };
+  data?: NavigationTarget & { path?: string; detail?: string };
   detail?: string;
   job_id?: string;
   text?: string;

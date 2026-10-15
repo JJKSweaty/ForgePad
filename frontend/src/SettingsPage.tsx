@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronDown,
@@ -16,6 +16,11 @@ import { api, download, message, post, readable } from "./api";
 import { native, nativeEvents } from "./native";
 import type { GitHubStatus } from "./dashboardData";
 import { PageHeader } from "./ui";
+import {
+  InterviewAISettings,
+  SpeechModels,
+  BuiltinSpeechModels,
+} from "./InterviewAISettings";
 type Integration = {
   enabled: boolean;
   connector_status: string;
@@ -38,31 +43,44 @@ type Model = {
 };
 const sections = [
   ["general", "General"],
-  ["integrations", "HeyClicky"],
-  ["models", "Local AI"],
-  ["audio", "Audio & speech"],
-  ["compiler", "Compiler"],
-  ["github", "GitHub"],
-  ["storage", "Storage"],
+  ["audio", "Interview & AI"],
+  ["github", "Connections"],
+  ["compiler", "Workspace & data"],
+  ["authoring", "Question authoring"],
 ] as const;
 type Section = (typeof sections)[number][0];
+const sectionAliases: Record<string, Section> = {
+  models: "audio",
+  integrations: "github",
+  storage: "compiler",
+};
 export function SettingsPage({
+  authoring,
   theme = "dark",
   onTheme = () => {},
 }: {
+  authoring?: ReactNode;
   theme?: string;
   onTheme?: (theme: string) => void;
 }) {
   const [section, setSection] = useState<Section>(() => {
       const s = sessionStorage.getItem("forgepad.settings.section");
-      return sections.some(([id]) => id === s) ? (s as Section) : "general";
+      return s && sectionAliases[s]
+        ? sectionAliases[s]
+        : sections.some(([id]) => id === s)
+          ? (s as Section)
+          : "general";
     }),
     [integration, setIntegration] = useState<Integration | null>(null),
     [models, setModels] = useState<Model[]>([]),
     [diagnostics, setDiagnostics] = useState<unknown>(null),
     [mode, setMode] = useState("external_assistant"),
     [retain, setRetain] = useState(false),
-    [speech, setSpeech] = useState({ endpoint: "", model: "parakeet" }),
+    [speech, setSpeech] = useState({
+      engine: "builtin",
+      endpoint: "",
+      model: "ultra",
+    }),
     [runner, setRunner] = useState({
       image: "forgepad-runner:local",
       docker_context: "",
@@ -108,7 +126,11 @@ export function SettingsPage({
         },
       ),
       api<typeof speech>("/settings/speech").then((s) =>
-        setSpeech({ endpoint: s.endpoint, model: s.model }),
+        setSpeech({
+          engine: s.engine ?? "endpoint",
+          endpoint: s.endpoint,
+          model: s.model,
+        }),
       ),
       api<{ config: typeof runner }>("/settings/runner").then((r) =>
         setRunner(r.config),
@@ -186,14 +208,12 @@ export function SettingsPage({
     setMode(nextMode);
     setRetain(nextRetain);
   }
-  const nativeOnly =
-    !native &&
-    ["integrations", "models", "audio", "compiler", "github"].includes(section);
+  const nativeOnly = !native && ["audio", "github"].includes(section);
   return (
     <div className="page settings-page">
       <PageHeader
         title="Settings"
-        description="Configure your workspace and optional integrations."
+        description="Make ForgePad work the way you do."
       />
       <div className="settings-layout">
         <nav className="settings-navigation" aria-label="Settings sections">
@@ -236,6 +256,7 @@ export function SettingsPage({
             </div>
           ) : (
             <>
+              {section === "authoring" && authoring}
               {section === "general" && (
                 <section className="settings-section">
                   <h2>General</h2>
@@ -305,195 +326,156 @@ export function SettingsPage({
                   </div>
                 </section>
               )}
-              {section === "integrations" && integration && (
+              {section === "audio" && <InterviewAISettings />}
+              {section === "audio" && (
                 <section className="settings-section">
-                  <div className="settings-title-row">
-                    <div>
-                      <h2>HeyClicky</h2>
-                      <p className="settings-description">
-                        MCP over a local command is the preferred connection.
+                  <h3>Voice & transcription</h3>
+                  <p className="settings-description">
+                    Your voice is transcribed on this Mac. Choose how your
+                    interviewer responds.
+                  </p>
+                  <label>
+                    Audio mode
+                    <select
+                      value={mode}
+                      onChange={(e) =>
+                        void action(
+                          () => saveAudio(e.target.value),
+                          "Audio mode saved.",
+                        )
+                      }
+                    >
+                      <option value="external_assistant">
+                        External Assistant · HeyClicky commands
+                      </option>
+                      <option value="interview">
+                        Interview · ForgePad transcription
+                      </option>
+                      <option value="silent">
+                        Silent · no ForgePad capture
+                      </option>
+                      <option value="text_practice">
+                        Text Practice · voice not required
+                      </option>
+                    </select>
+                  </label>
+                  <p className="privacy-note">
+                    {mode === "interview"
+                      ? "ForgePad captures after you press Microphone in an active interview. Pause HeyClicky capture yourself if needed; the applications do not share a microphone stream."
+                      : "ForgePad does not capture in this mode. HeyClicky controls its own microphone independently."}
+                  </p>
+                  <label className="approval-check">
+                    <input
+                      type="checkbox"
+                      checked={retain}
+                      onChange={(e) =>
+                        void action(
+                          () => saveAudio(mode, e.target.checked),
+                          "Recording preference saved.",
+                        )
+                      }
+                    />
+                    Keep compressed recordings on this Mac for replay
+                  </label>
+                  <p className="small muted-text">
+                    Retention is off by default. Recordings are unavailable to
+                    MCP and excluded from JSON exports.
+                  </p>
+                  <div className="settings-divider" />
+                  <h3>Speech recognition</h3>
+                  <p className="settings-description">
+                    Choose a model for private, on-device transcription.
+                  </p>
+                  <div
+                    className="segmented-control"
+                    role="group"
+                    aria-label="Speech engine"
+                  >
+                    <button
+                      aria-pressed={speech.engine === "builtin"}
+                      onClick={() =>
+                        setSpeech({
+                          ...speech,
+                          engine: "builtin",
+                          model: "ultra",
+                        })
+                      }
+                    >
+                      Built-in Parakeet
+                    </button>
+                    <button
+                      aria-pressed={speech.engine === "endpoint"}
+                      onClick={() =>
+                        setSpeech({
+                          ...speech,
+                          engine: "endpoint",
+                          model: "parakeet",
+                        })
+                      }
+                    >
+                      Custom engine
+                    </button>
+                  </div>
+                  {speech.engine === "builtin" ? (
+                    <BuiltinSpeechModels
+                      selected={speech.model}
+                      onSelect={(model) => setSpeech({ ...speech, model })}
+                    />
+                  ) : (
+                    <div className="custom-speech-engine">
+                      <label>
+                        Loopback endpoint
+                        <input
+                          value={speech.endpoint}
+                          onChange={(e) =>
+                            setSpeech({ ...speech, endpoint: e.target.value })
+                          }
+                          placeholder="http://127.0.0.1:8080"
+                        />
+                      </label>
+                      <SpeechModels
+                        endpoint={speech.endpoint}
+                        selected={speech.model}
+                        onSelect={(model) => setSpeech({ ...speech, model })}
+                      />
+                      <label>
+                        Model ID
+                        <input
+                          value={speech.model}
+                          onChange={(e) =>
+                            setSpeech({ ...speech, model: e.target.value })
+                          }
+                        />
+                      </label>
+                      <p>
+                        Use a Parakeet-compatible runtime with a transcription
+                        endpoint. Push-to-talk and activity detection run
+                        separately from the editor; no global wake-word listener
+                        is started.
                       </p>
                     </div>
-                    <span
-                      className={`badge ${integration.enabled ? "success" : ""}`}
-                    >
-                      {readable(integration.connector_status)}
-                    </span>
-                  </div>
-                  <div className="privacy-note">{integration.privacy}</div>
-                  <dl className="integration-details">
-                    <dt>Executable</dt>
-                    <dd>
-                      <code>
-                        {integration.executable_path ??
-                          "Build the native connector to generate its installed path."}
-                      </code>
-                    </dd>
-                    <dt>Command</dt>
-                    <dd>
-                      <code>
-                        {integration.command ??
-                          "Not available until the connector has been built."}
-                      </code>
-                    </dd>
-                    <dt>Local MCP URL</dt>
-                    <dd>{integration.local_mcp_url ?? "Disabled"}</dd>
-                    <dt>Last confirmed call</dt>
-                    <dd>
-                      {integration.last_successful_tool_call
-                        ? `${integration.last_successful_tool_call.tool} · ${new Date(integration.last_successful_tool_call.created_at).toLocaleString()}`
-                        : "No external tool call recorded"}
-                    </dd>
-                  </dl>
-                  <div className="button-row">
-                    {integration.enabled ? (
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void action(async () => {
-                            await post(
-                              "/integrations/heyclicky/disconnect",
-                              {},
-                            );
-                            setApiKey("");
-                            await loadIntegration();
-                          }, "Connector access revoked.")
-                        }
-                      >
-                        <Unplug size={14} />
-                        Disconnect
-                      </button>
-                    ) : (
-                      <button
-                        className="primary"
-                        disabled={busy || !integration.executable_path}
-                        onClick={() =>
-                          void action(async () => {
-                            await post("/integrations/heyclicky/connect", {});
-                            await loadIntegration();
-                          }, "Local connector enabled. Add its command in HeyClicky.")
-                        }
-                      >
-                        <Link2 size={14} />
-                        Enable connector
-                      </button>
-                    )}
-                    <button
-                      disabled={!integration.command}
-                      onClick={() =>
-                        void copy(
-                          `${integration.setup_instructions}\n\nCommand:\n${integration.command}`,
-                          "Setup configuration",
-                        )
-                      }
-                    >
-                      <Copy size={14} />
-                      Copy configuration
-                    </button>
-                    <button
-                      disabled={busy || !integration.enabled}
-                      onClick={() =>
-                        void action(async () => {
-                          const r = await post<{ detail: string }>(
-                            "/integrations/heyclicky/test",
-                            {},
-                          );
-                          setNotice(r.detail);
-                        }, "")
-                      }
-                    >
-                      Test connection
-                    </button>
-                    <button
-                      onClick={() =>
-                        void action(async () => {
-                          setLogs(await api("/integrations/heyclicky/logs"));
-                          await loadIntegration();
-                        }, "")
-                      }
-                    >
-                      View logs
-                    </button>
-                  </div>
-                  <details>
-                    <summary>Setup instructions & Firmware Coach</summary>
-                    <p>{integration.setup_instructions}</p>
-                    <pre>{integration.coach_instructions}</pre>
-                    <button
-                      onClick={() =>
-                        void copy(
-                          integration.coach_instructions,
-                          "Firmware Coach instructions",
-                        )
-                      }
-                    >
-                      Copy agent instructions
-                    </button>
-                  </details>
-                  <details>
-                    <summary>Permissions</summary>
-                    <div className="permission-grid">
-                      {Object.entries(integration.permissions).map(
-                        ([key, allowed]) => (
-                          <div key={key}>
-                            <span>{readable(key)}</span>
-                            <span>{allowed ? "Allowed" : "Denied"}</span>
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  </details>
-                  <details>
-                    <summary>Optional loopback HTTP transport</summary>
-                    <p>
-                      API-key authentication, stored in macOS Keychain. This is
-                      separate from OAuth. Check that your installed HeyClicky
-                      accepts a loopback URL.
-                    </p>
-                    <div className="button-row">
-                      <button
-                        disabled={busy || !integration.enabled}
-                        onClick={() =>
-                          void action(async () => {
-                            const r = await post<{ api_key: string }>(
-                              "/integrations/heyclicky/http",
-                              {},
-                            );
-                            setApiKey(r.api_key);
-                            await loadIntegration();
-                          }, "Loopback MCP endpoint started.")
-                        }
-                      >
-                        Enable local URL
-                      </button>
-                      {integration.local_mcp_url && (
-                        <button
-                          onClick={() =>
-                            void copy(integration.local_mcp_url!, "MCP URL")
-                          }
-                        >
-                          Copy URL
-                        </button>
-                      )}
-                      {apiKey && (
-                        <button onClick={() => void copy(apiKey, "API key")}>
-                          Copy API key
-                        </button>
-                      )}
-                    </div>
-                  </details>
-                  {logs !== null && (
-                    <details open>
-                      <summary>Integration log</summary>
-                      <pre className="report">
-                        {JSON.stringify(logs, null, 2)}
-                      </pre>
-                    </details>
                   )}
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() =>
+                      void action(
+                        () =>
+                          api("/settings/speech", {
+                            method: "PUT",
+                            body: JSON.stringify(speech),
+                          }),
+                        "Speech configuration saved.",
+                      )
+                    }
+                  >
+                    Save speech configuration
+                  </button>
                 </section>
               )}
-              {section === "models" && (
-                <section className="settings-section">
+              {section === "audio" && (
+                <details className="settings-section advanced-settings">
+                  <summary>Advanced: local language models</summary>
                   <div className="settings-title-row">
                     <div>
                       <h2>Local AI</h2>
@@ -713,106 +695,9 @@ export function SettingsPage({
                       </pre>
                     </details>
                   )}
-                </section>
+                </details>
               )}
-              {section === "audio" && (
-                <section className="settings-section">
-                  <h2>Audio & speech</h2>
-                  <p className="settings-description">
-                    Choose which application is responsible for capture.
-                  </p>
-                  <label>
-                    Audio mode
-                    <select
-                      value={mode}
-                      onChange={(e) =>
-                        void action(
-                          () => saveAudio(e.target.value),
-                          "Audio mode saved.",
-                        )
-                      }
-                    >
-                      <option value="external_assistant">
-                        External Assistant · HeyClicky commands
-                      </option>
-                      <option value="interview">
-                        Interview · ForgePad transcription
-                      </option>
-                      <option value="silent">
-                        Silent · no ForgePad capture
-                      </option>
-                      <option value="text_practice">
-                        Text Practice · voice not required
-                      </option>
-                    </select>
-                  </label>
-                  <p className="privacy-note">
-                    {mode === "interview"
-                      ? "ForgePad captures after you press Microphone in an active interview. Pause HeyClicky capture yourself if needed; the applications do not share a microphone stream."
-                      : "ForgePad does not capture in this mode. HeyClicky controls its own microphone independently."}
-                  </p>
-                  <label className="approval-check">
-                    <input
-                      type="checkbox"
-                      checked={retain}
-                      onChange={(e) =>
-                        void action(
-                          () => saveAudio(mode, e.target.checked),
-                          "Recording preference saved.",
-                        )
-                      }
-                    />
-                    Keep compressed recordings on this Mac for replay
-                  </label>
-                  <p className="small muted-text">
-                    Retention is off by default. Recordings are unavailable to
-                    MCP and excluded from JSON exports.
-                  </p>
-                  <div className="settings-divider" />
-                  <h3>Local transcription runtime</h3>
-                  <label>
-                    Loopback endpoint
-                    <input
-                      value={speech.endpoint}
-                      onChange={(e) =>
-                        setSpeech({ ...speech, endpoint: e.target.value })
-                      }
-                      placeholder="Local ASR runtime URL"
-                    />
-                  </label>
-                  <label>
-                    Model
-                    <input
-                      value={speech.model}
-                      onChange={(e) =>
-                        setSpeech({ ...speech, model: e.target.value })
-                      }
-                    />
-                  </label>
-                  <p>
-                    Use a Parakeet-compatible runtime with a transcription
-                    endpoint. Push-to-talk and activity detection run separately
-                    from the editor; no global wake-word listener is started.
-                  </p>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() =>
-                      void action(
-                        () =>
-                          api("/settings/speech", {
-                            method: "PUT",
-                            body: JSON.stringify(speech),
-                          }),
-                        "Speech configuration saved.",
-                      )
-                    }
-                  >
-                    Save speech configuration
-                  </button>
-                </section>
-              )}
-              {section === "compiler" && (
+              {section === "compiler" && native && (
                 <section className="settings-section">
                   <h2>Compiler</h2>
                   <p className="settings-description">
@@ -1010,7 +895,195 @@ export function SettingsPage({
                   </p>
                 </section>
               )}
-              {section === "storage" && (
+              {section === "github" && integration && (
+                <details className="settings-section advanced-settings">
+                  <summary>HeyClicky voice commands & MCP</summary>
+                  <div className="settings-title-row">
+                    <div>
+                      <h2>HeyClicky</h2>
+                      <p className="settings-description">
+                        MCP over a local command is the preferred connection.
+                      </p>
+                    </div>
+                    <span
+                      className={`badge ${integration.enabled ? "success" : ""}`}
+                    >
+                      {readable(integration.connector_status)}
+                    </span>
+                  </div>
+                  <div className="privacy-note">{integration.privacy}</div>
+                  <dl className="integration-details">
+                    <dt>Executable</dt>
+                    <dd>
+                      <code>
+                        {integration.executable_path ??
+                          "Build the native connector to generate its installed path."}
+                      </code>
+                    </dd>
+                    <dt>Command</dt>
+                    <dd>
+                      <code>
+                        {integration.command ??
+                          "Not available until the connector has been built."}
+                      </code>
+                    </dd>
+                    <dt>Local MCP URL</dt>
+                    <dd>{integration.local_mcp_url ?? "Disabled"}</dd>
+                    <dt>Last confirmed call</dt>
+                    <dd>
+                      {integration.last_successful_tool_call
+                        ? `${integration.last_successful_tool_call.tool} · ${new Date(integration.last_successful_tool_call.created_at).toLocaleString()}`
+                        : "No external tool call recorded"}
+                    </dd>
+                  </dl>
+                  <div className="button-row">
+                    {integration.enabled ? (
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void action(async () => {
+                            await post(
+                              "/integrations/heyclicky/disconnect",
+                              {},
+                            );
+                            setApiKey("");
+                            await loadIntegration();
+                          }, "Connector access revoked.")
+                        }
+                      >
+                        <Unplug size={14} />
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        className="primary"
+                        disabled={busy || !integration.executable_path}
+                        onClick={() =>
+                          void action(async () => {
+                            await post("/integrations/heyclicky/connect", {});
+                            await loadIntegration();
+                          }, "Local connector enabled. Add its command in HeyClicky.")
+                        }
+                      >
+                        <Link2 size={14} />
+                        Enable connector
+                      </button>
+                    )}
+                    <button
+                      disabled={!integration.command}
+                      onClick={() =>
+                        void copy(
+                          `${integration.setup_instructions}\n\nCommand:\n${integration.command}`,
+                          "Setup configuration",
+                        )
+                      }
+                    >
+                      <Copy size={14} />
+                      Copy configuration
+                    </button>
+                    <button
+                      disabled={busy || !integration.enabled}
+                      onClick={() =>
+                        void action(async () => {
+                          const r = await post<{ detail: string }>(
+                            "/integrations/heyclicky/test",
+                            {},
+                          );
+                          setNotice(r.detail);
+                        }, "")
+                      }
+                    >
+                      Test connection
+                    </button>
+                    <button
+                      onClick={() =>
+                        void action(async () => {
+                          setLogs(await api("/integrations/heyclicky/logs"));
+                          await loadIntegration();
+                        }, "")
+                      }
+                    >
+                      View logs
+                    </button>
+                  </div>
+                  <details>
+                    <summary>Setup instructions & Firmware Coach</summary>
+                    <p>{integration.setup_instructions}</p>
+                    <pre>{integration.coach_instructions}</pre>
+                    <button
+                      onClick={() =>
+                        void copy(
+                          integration.coach_instructions,
+                          "Firmware Coach instructions",
+                        )
+                      }
+                    >
+                      Copy agent instructions
+                    </button>
+                  </details>
+                  <details>
+                    <summary>Permissions</summary>
+                    <div className="permission-grid">
+                      {Object.entries(integration.permissions).map(
+                        ([key, allowed]) => (
+                          <div key={key}>
+                            <span>{readable(key)}</span>
+                            <span>{allowed ? "Allowed" : "Denied"}</span>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </details>
+                  <details>
+                    <summary>Optional loopback HTTP transport</summary>
+                    <p>
+                      API-key authentication, stored in macOS Keychain. This is
+                      separate from OAuth. Check that your installed HeyClicky
+                      accepts a loopback URL.
+                    </p>
+                    <div className="button-row">
+                      <button
+                        disabled={busy || !integration.enabled}
+                        onClick={() =>
+                          void action(async () => {
+                            const r = await post<{ api_key: string }>(
+                              "/integrations/heyclicky/http",
+                              {},
+                            );
+                            setApiKey(r.api_key);
+                            await loadIntegration();
+                          }, "Loopback MCP endpoint started.")
+                        }
+                      >
+                        Enable local URL
+                      </button>
+                      {integration.local_mcp_url && (
+                        <button
+                          onClick={() =>
+                            void copy(integration.local_mcp_url!, "MCP URL")
+                          }
+                        >
+                          Copy URL
+                        </button>
+                      )}
+                      {apiKey && (
+                        <button onClick={() => void copy(apiKey, "API key")}>
+                          Copy API key
+                        </button>
+                      )}
+                    </div>
+                  </details>
+                  {logs !== null && (
+                    <details open>
+                      <summary>Integration log</summary>
+                      <pre className="report">
+                        {JSON.stringify(logs, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </details>
+              )}
+              {section === "compiler" && (
                 <section className="settings-section">
                   <h2>Storage</h2>
                   <p className="settings-description">

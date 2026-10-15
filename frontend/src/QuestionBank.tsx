@@ -16,7 +16,9 @@ export function QuestionBank({
   questions,
   onPractice,
   refresh,
+  onAuthor,
 }: {
+  onAuthor?: () => void;
   questions: Question[];
   onPractice: (id: string) => void;
   refresh: () => Promise<void>;
@@ -56,8 +58,7 @@ export function QuestionBank({
     <div className="page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">PRACTICE LIBRARY</div>
-          <h1>Question bank</h1>
+          <h2>Question library</h2>
           <p>
             Choose a topic, explore an unfamiliar edge case, or bring your own
             problem.
@@ -75,10 +76,16 @@ export function QuestionBank({
             <Download size={15} />
             Export
           </button>
-          <button className="primary" onClick={() => setImporting(true)}>
-            <Plus size={16} />
-            Import question
+          <button onClick={() => setImporting(true)}>
+            <Upload size={15} />
+            Import
           </button>
+          {onAuthor && (
+            <button className="primary" onClick={onAuthor}>
+              <Plus size={16} />
+              Add question
+            </button>
+          )}
         </div>
       </div>
       {error && (
@@ -176,7 +183,7 @@ export function QuestionBank({
                 {["complete", "completed", "passed"].includes(
                   q.completion_status ?? "",
                 ) && (
-                  <span className="success">
+                  <span className="success completion-label">
                     <Check size={15} />
                     Completed
                   </span>
