@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "id": "frame-checksum",
+  "version": 1,
+  "title": "Validate a length-prefixed frame",
+  "description": "Implement int valid_frame(const uint8_t *buf, size_t len).",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "packet parsing",
+    "bounds checking",
+    "protocols"
+  ],
+  "duration_minutes": 20,
+  "language": "c",
+  "prompt": "Implement int valid_frame(const uint8_t *buf, size_t len).\nA frame has one payload-length byte N, then N payload bytes, then one checksum byte. The checksum equals the sum of payload bytes modulo 256. Accept exactly N + 2 bytes and reject truncated or trailing data. A zero-length payload is valid with checksum zero.",
+  "constraints": [
+    "buf may be NULL when len is zero.",
+    "Never read a byte before checking it is present.",
+    "Return exactly 0 or 1."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nint valid_frame(const uint8_t *buf, size_t len) { return 0; }\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Valid payload",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint valid_frame(const uint8_t *,size_t);\nint main(void) {\nuint8_t x[]={3,10,20,30,60}; printf(\"%d\\n\",valid_frame(x,5));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Empty payload",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint valid_frame(const uint8_t *,size_t);\nint main(void) {\nuint8_t x[]={0,0}; printf(\"%d\\n\",valid_frame(x,2));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Truncated input",
+        "visibility": "hidden",
+        "category": "negative",
+        "stdin": "",
+        "expected_stdout": "0 0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint valid_frame(const uint8_t *,size_t);\nint main(void) {\nuint8_t x[]={3,10}; printf(\"%d %d\\n\",valid_frame(x,2),valid_frame(NULL,0));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Bad checksum",
+        "visibility": "hidden",
+        "category": "negative",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint valid_frame(const uint8_t *,size_t);\nint main(void) {\nuint8_t x[]={1,10,11}; printf(\"%d\\n\",valid_frame(x,3));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t5",
+        "name": "Modulo checksum",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint valid_frame(const uint8_t *,size_t);\nint main(void) {\nuint8_t x[]={2,255,2,1}; printf(\"%d\\n\",valid_frame(x,4));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nint valid_frame(const uint8_t *b,size_t len){if(len<2)return 0;size_t n=b[0];if(len!=n+2)return 0;uint8_t s=0;for(size_t i=0;i<n;i++)s=(uint8_t)(s+b[i+1]);return s==b[n+1];}\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which boundary conditions would you test on the target?",
+    "What changes if the function is called from an ISR?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

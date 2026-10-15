@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "priority-inversion",
+  "version": 1,
+  "title": "Diagnose a blocked high-priority task",
+  "description": "A high-priority control task waits for a mutex held by a low-priority logging task. An unrelated medium-priority task runs continuously. Explain the failure and discuss priority inheritance, lock duration, and whether a semaphore is an equivalent replacement.",
+  "type": "theory",
+  "difficulty": "intermediate",
+  "topics": [
+    "RTOS",
+    "priority inversion",
+    "mutexes"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "A high-priority control task waits for a mutex held by a low-priority logging task. An unrelated medium-priority task runs continuously. Explain the failure and discuss priority inheritance, lock duration, and whether a semaphore is an equivalent replacement.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Identify the medium task delaying the mutex owner.",
+    "Describe priority inheritance and its limits.",
+    "Discuss bounded critical sections and avoiding blocking I/O under the mutex."
+  ],
+  "follow_ups": [
+    "What happens with nested mutexes?",
+    "How would you measure worst-case blocking on the target?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

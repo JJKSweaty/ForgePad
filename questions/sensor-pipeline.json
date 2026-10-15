@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "sensor-pipeline",
+  "version": 1,
+  "title": "Design a bounded sensor pipeline",
+  "description": "Design a system sampling eight 16-bit channels at 2 kHz and sending batches over a link that can stall for 100 ms. Specify buffering, timestamps, ownership, overload behavior, and observability. Account for metadata and explain which deadlines need measurement.",
+  "type": "design",
+  "difficulty": "intermediate",
+  "topics": [
+    "embedded design",
+    "real-time constraints",
+    "bounded memory"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "Design a system sampling eight 16-bit channels at 2 kHz and sending batches over a link that can stall for 100 ms. Specify buffering, timestamps, ownership, overload behavior, and observability. Account for metadata and explain which deadlines need measurement.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Calculate raw throughput and minimum payload buffering for a stated stall window.",
+    "Define backpressure or an explicit drop policy and record losses.",
+    "Discuss DMA ownership, timestamp rollover, and bounded processing budgets."
+  ],
+  "follow_ups": [
+    "What changes when the link stalls indefinitely?",
+    "How would you partition work between ISR and task context?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

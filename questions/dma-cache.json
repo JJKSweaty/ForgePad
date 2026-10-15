@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "dma-cache",
+  "version": 1,
+  "title": "DMA completes but the buffer looks stale",
+  "description": "A Cortex-M system with data cache receives a DMA completion interrupt, but the CPU reads old bytes from the destination buffer. Diagnose possible causes and propose a buffer ownership and cache-maintenance policy. Assume the DMA engine is not cache coherent.",
+  "type": "theory",
+  "difficulty": "intermediate",
+  "topics": [
+    "DMA",
+    "caches",
+    "memory ordering"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "A Cortex-M system with data cache receives a DMA completion interrupt, but the CPU reads old bytes from the destination buffer. Diagnose possible causes and propose a buffer ownership and cache-maintenance policy. Assume the DMA engine is not cache coherent.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Describe separate CPU cache and memory views.",
+    "Discuss cache-line alignment and avoiding unrelated dirty data in maintained lines.",
+    "Describe direction-specific clean/invalidate operations and barriers using target documentation."
+  ],
+  "follow_ups": [
+    "What changes for a transmit DMA transfer?",
+    "Can volatile fix cache coherency?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

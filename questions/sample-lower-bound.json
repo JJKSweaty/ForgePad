@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "id": "sample-lower-bound",
+  "version": 1,
+  "title": "Search a sorted sample table",
+  "description": "Implement int lower_bound_sample(const int* values, std::size_t n, int target).",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "C++",
+    "binary search",
+    "DSA"
+  ],
+  "duration_minutes": 20,
+  "language": "cpp",
+  "prompt": "Implement int lower_bound_sample(const int* values, std::size_t n, int target).\nReturn the first index whose value is at least target, or n when no such index exists. The array is sorted in nondecreasing order.",
+  "constraints": [
+    "n is at most 100000.",
+    "values may be nullptr when n is zero.",
+    "Use O(log n) comparisons and O(1) additional memory.",
+    "Do not call std::lower_bound."
+  ],
+  "starter_files": {
+    "window.hpp": "#ifndef WINDOW_HPP\n#define WINDOW_HPP\n#include <cstddef>\nint lower_bound_sample(const int* values, std::size_t n, int target);\n#endif\n",
+    "solution.cpp": "#include \"window.hpp\"\nint lower_bound_sample(const int* values, std::size_t n, int target) { return 0; }\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Between samples",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "2\n",
+        "fixture": "#include <cstddef>\n#include <cstdio>\nint lower_bound_sample(const int*,std::size_t,int);\nint main(){const int v[]={1,4,8,12}; std::printf(\"%d\\n\",lower_bound_sample(v,4,6));}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Empty sample set",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <cstddef>\n#include <cstdio>\nint lower_bound_sample(const int*,std::size_t,int);\nint main(){const int* v=nullptr; std::printf(\"%d\\n\",lower_bound_sample(v,0,0));}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Duplicate values",
+        "visibility": "hidden",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <cstddef>\n#include <cstdio>\nint lower_bound_sample(const int*,std::size_t,int);\nint main(){const int v[]={2,2,2,3}; std::printf(\"%d\\n\",lower_bound_sample(v,4,2));}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Past last sample",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "3\n",
+        "fixture": "#include <cstddef>\n#include <cstdio>\nint lower_bound_sample(const int*,std::size_t,int);\nint main(){const int v[]={1,3,5}; std::printf(\"%d\\n\",lower_bound_sample(v,3,8));}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "window.hpp": "#ifndef WINDOW_HPP\n#define WINDOW_HPP\n#include <cstddef>\nint lower_bound_sample(const int* values, std::size_t n, int target);\n#endif\n",
+    "solution.cpp": "#include \"window.hpp\"\nint lower_bound_sample(const int* v,std::size_t n,int target){std::size_t lo=0,hi=n;while(lo<hi){auto m=lo+(hi-lo)/2;if(v[m]<target)lo=m+1;else hi=m;}return static_cast<int>(lo);}\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Do passing functional tests establish logarithmic complexity?",
+    "What if DMA can modify the table while it is being searched?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

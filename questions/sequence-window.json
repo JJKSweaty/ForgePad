@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0",
+  "id": "sequence-window",
+  "version": 1,
+  "title": "Compare wrapping packet sequences",
+  "description": "Implement int sequence_is_newer(uint16_t candidate, uint16_t previous).",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "protocols",
+    "wraparound",
+    "integer arithmetic"
+  ],
+  "duration_minutes": 20,
+  "language": "c",
+  "prompt": "Implement int sequence_is_newer(uint16_t candidate, uint16_t previous).\nReturn 1 exactly when the forward modular distance from previous to candidate is in [1, 32767]. Equal values and the ambiguous half-range distance 32768 return 0.",
+  "constraints": [
+    "Sequence numbers wrap modulo 65536.",
+    "Use unsigned arithmetic; do not rely on narrowing to a signed type."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\nint sequence_is_newer(uint16_t candidate, uint16_t previous) {\n    return 0;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Next packet",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint sequence_is_newer(uint16_t, uint16_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(sequence_is_newer(11, 10)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Equal packet",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint sequence_is_newer(uint16_t, uint16_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(sequence_is_newer(10, 10)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Wrap forward",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint sequence_is_newer(uint16_t, uint16_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(sequence_is_newer(0, 65535)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Old packet",
+        "visibility": "hidden",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint sequence_is_newer(uint16_t, uint16_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(sequence_is_newer(65535, 0)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t5",
+        "name": "Ambiguous half range",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint sequence_is_newer(uint16_t, uint16_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(sequence_is_newer(32768, 0)));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\nint sequence_is_newer(uint16_t candidate, uint16_t previous) { uint16_t d=(uint16_t)((uint32_t)candidate + 65536u - previous); return d != 0 && d < 32768u; }\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which boundary conditions would you test on the target?",
+    "What changes if the function is called from an ISR?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

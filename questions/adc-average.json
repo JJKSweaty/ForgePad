@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "id": "adc-average",
+  "version": 1,
+  "title": "Repair an overflowing ADC average",
+  "description": "Repair uint16_t adc_average(const uint16_t *samples, size_t n).",
+  "type": "debugging",
+  "difficulty": "intermediate",
+  "topics": [
+    "ADC",
+    "debugging",
+    "integer arithmetic"
+  ],
+  "duration_minutes": 20,
+  "language": "c",
+  "prompt": "Repair uint16_t adc_average(const uint16_t *samples, size_t n).\nA board reports unexpectedly small averages at high input voltage. The current accumulator is only 16 bits. Return the integer mean rounded down, or zero when n is zero. All samples are unsigned 16-bit values and n is at most 65535.",
+  "constraints": [
+    "samples may be NULL when n is zero.",
+    "No floating point or heap allocation.",
+    "Explain why your accumulator is sufficiently wide."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nuint16_t adc_average(const uint16_t *samples, size_t n) {\n    uint16_t sum = 0;\n    for (size_t i = 0; i < n; ++i) sum += samples[i];\n    return (uint16_t)(sum / n);\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Normal readings",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "200\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint16_t adc_average(const uint16_t *, size_t);\nint main(void) {\nuint16_t x[]={100,200,301}; printf(\"%u\\n\",(unsigned)adc_average(x,3));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Empty batch",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint16_t adc_average(const uint16_t *, size_t);\nint main(void) {\nprintf(\"%u\\n\",(unsigned)adc_average(NULL,0));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Full scale",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "65535\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint16_t adc_average(const uint16_t *, size_t);\nint main(void) {\nuint16_t x[]={65535,65535,65535}; printf(\"%u\\n\",(unsigned)adc_average(x,3));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Maximum batch",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "65535\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint16_t adc_average(const uint16_t *, size_t);\nint main(void) {\nstatic uint16_t x[65535]; for(size_t i=0;i<65535;i++) x[i]=65535; printf(\"%u\\n\",(unsigned)adc_average(x,65535));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nuint16_t adc_average(const uint16_t *samples, size_t n) { if(!n) return 0; uint32_t sum=0; for(size_t i=0;i<n;i++) sum+=samples[i]; return (uint16_t)(sum/n); }\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which boundary conditions would you test on the target?",
+    "What changes if the function is called from an ISR?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

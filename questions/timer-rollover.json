@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "id": "timer-rollover",
+  "version": 1,
+  "title": "Measure elapsed time across rollover",
+  "description": "Implement int deadline_reached(uint32_t now, uint32_t start, uint32_t interval).",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "timers",
+    "integer arithmetic",
+    "wraparound"
+  ],
+  "duration_minutes": 20,
+  "language": "c",
+  "prompt": "Implement int deadline_reached(uint32_t now, uint32_t start, uint32_t interval).\nReturn 1 when at least interval ticks have elapsed since start, otherwise 0. now and start are readings of one wrapping 32-bit counter. The actual elapsed duration is less than 2^32 ticks.",
+  "constraints": [
+    "The timer wraps from UINT32_MAX to zero.",
+    "interval is a 32-bit unsigned value.",
+    "Do not compare now against start + interval."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\nint deadline_reached(uint32_t now, uint32_t start, uint32_t interval) {\n    return 0;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Before deadline",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint deadline_reached(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(deadline_reached(109, 100, 10)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "At deadline",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint deadline_reached(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(deadline_reached(110, 100, 10)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Rollover",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint deadline_reached(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(deadline_reached(3, UINT32_MAX - 4, 8)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Zero interval",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint deadline_reached(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(deadline_reached(7, 7, 0)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t5",
+        "name": "Before wrapped deadline",
+        "visibility": "hidden",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint deadline_reached(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(deadline_reached(2, UINT32_MAX - 4, 8)));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\nint deadline_reached(uint32_t now, uint32_t start, uint32_t interval) { return (uint32_t)(now - start) >= interval; }\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "What if this function is not called for an entire timer period?",
+    "How would you convert milliseconds to ticks without overflowing?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

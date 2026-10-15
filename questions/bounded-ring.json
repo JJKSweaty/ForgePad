@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0",
+  "id": "bounded-ring",
+  "version": 1,
+  "title": "Build a bounded byte ring",
+  "description": "Implement the Ring functions declared in ring.h.",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "UART",
+    "ring buffers",
+    "bounded memory"
+  ],
+  "duration_minutes": 30,
+  "language": "c",
+  "prompt": "Implement the Ring functions declared in ring.h.\nThe ring stores exactly four bytes in FIFO order. push returns 0 when full without modifying the queue. pop returns 0 when empty and leaves out unchanged. init resets the queue. This exercise is single-threaded; the tests do not establish ISR safety.",
+  "constraints": [
+    "Use the provided struct without dynamic allocation.",
+    "Use all four storage slots.",
+    "All pointers are valid.",
+    "Return 1 on a successful push or pop."
+  ],
+  "starter_files": {
+    "ring.h": "#ifndef RING_H\n#define RING_H\n#include <stdint.h>\n#include <stddef.h>\ntypedef struct { uint8_t data[4]; size_t head, tail, count; } Ring;\nvoid ring_init(Ring *r);\nint ring_push(Ring *r, uint8_t value);\nint ring_pop(Ring *r, uint8_t *out);\n#endif\n",
+    "solution.c": "#include \"ring.h\"\nvoid ring_init(Ring *r) { r->head = r->tail = r->count = 0; }\nint ring_push(Ring *r, uint8_t value) { return 0; }\nint ring_pop(Ring *r, uint8_t *out) { return 0; }\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "FIFO order",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "10 20\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\n#include <stdint.h>\n#include <stddef.h>\ntypedef struct { uint8_t data[4]; size_t head, tail, count; } Ring;\nvoid ring_init(Ring *r);\nint ring_push(Ring *r, uint8_t value);\nint ring_pop(Ring *r, uint8_t *out);\n\nint main(void) {\nRing r; ring_init(&r); uint8_t v=0; ring_push(&r,10); ring_push(&r,20); ring_pop(&r,&v); printf(\"%u \",(unsigned)v); ring_pop(&r,&v); printf(\"%u\\n\",(unsigned)v);\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Empty leaves output intact",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0 99\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\n#include <stdint.h>\n#include <stddef.h>\ntypedef struct { uint8_t data[4]; size_t head, tail, count; } Ring;\nvoid ring_init(Ring *r);\nint ring_push(Ring *r, uint8_t value);\nint ring_pop(Ring *r, uint8_t *out);\n\nint main(void) {\nRing r; ring_init(&r); uint8_t v=99; int ok=ring_pop(&r,&v); printf(\"%d %u\\n\",ok,(unsigned)v);\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Full rejects new byte",
+        "visibility": "hidden",
+        "category": "negative",
+        "stdin": "",
+        "expected_stdout": "11110\n1 2 3 4 \n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\n#include <stdint.h>\n#include <stddef.h>\ntypedef struct { uint8_t data[4]; size_t head, tail, count; } Ring;\nvoid ring_init(Ring *r);\nint ring_push(Ring *r, uint8_t value);\nint ring_pop(Ring *r, uint8_t *out);\n\nint main(void) {\nRing r; ring_init(&r); for(int i=1;i<=4;i++)printf(\"%d\",ring_push(&r,(uint8_t)i)); printf(\"%d\\n\",ring_push(&r,5)); uint8_t v; while(ring_pop(&r,&v))printf(\"%u \",(unsigned)v); printf(\"\\n\");\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Repeated wrap",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1 0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\n#include <stdint.h>\n#include <stddef.h>\ntypedef struct { uint8_t data[4]; size_t head, tail, count; } Ring;\nvoid ring_init(Ring *r);\nint ring_push(Ring *r, uint8_t value);\nint ring_pop(Ring *r, uint8_t *out);\n\nint main(void) {\nRing r; ring_init(&r); uint8_t v=0; int ok=1; for(int i=0;i<100;i++){if(!ring_push(&r,(uint8_t)i)||!ring_pop(&r,&v)||v!=(uint8_t)i)ok=0;} printf(\"%d %zu\\n\",ok,r.count);\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "ring.h": "#ifndef RING_H\n#define RING_H\n#include <stdint.h>\n#include <stddef.h>\ntypedef struct { uint8_t data[4]; size_t head, tail, count; } Ring;\nvoid ring_init(Ring *r);\nint ring_push(Ring *r, uint8_t value);\nint ring_pop(Ring *r, uint8_t *out);\n#endif\n",
+    "solution.c": "#include \"ring.h\"\nvoid ring_init(Ring *r){r->head=r->tail=r->count=0;}\nint ring_push(Ring *r,uint8_t v){if(r->count==4)return 0;r->data[r->head]=v;r->head=(r->head+1)%4;r->count++;return 1;}\nint ring_pop(Ring *r,uint8_t *out){if(!r->count)return 0;*out=r->data[r->tail];r->tail=(r->tail+1)%4;r->count--;return 1;}\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which state is shared by an ISR producer and a task consumer?",
+    "Does volatile make count++ atomic?",
+    "How could separate producer and consumer indices avoid a shared count?",
+    "How would you measure and report overflow under burst traffic?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

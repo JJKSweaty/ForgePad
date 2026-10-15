@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "volatile-atomicity",
+  "version": 1,
+  "title": "A volatile counter shared with an ISR",
+  "description": "A 1 kHz interrupt increments a volatile uint32_t counter while a foreground task reads and resets it. Is this safe? Explain the distinct roles of compiler visibility, indivisible accesses, and synchronization. Propose a design and state what target-specific facts you need.",
+  "type": "theory",
+  "difficulty": "intermediate",
+  "topics": [
+    "volatile",
+    "atomics",
+    "interrupts"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "A 1 kHz interrupt increments a volatile uint32_t counter while a foreground task reads and resets it. Is this safe? Explain the distinct roles of compiler visibility, indivisible accesses, and synchronization. Propose a design and state what target-specific facts you need.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Do not assume volatile creates an atomic read-modify-write.",
+    "Explain the lost-update interleaving.",
+    "Discuss a bounded critical section or suitable lock-free atomic operation and ISR constraints."
+  ],
+  "follow_ups": [
+    "What changes for a 64-bit counter on a 32-bit MCU?",
+    "Can disabling interrupts on one core protect against a second core?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

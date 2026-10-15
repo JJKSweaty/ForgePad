@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "id": "crc8-atm",
+  "version": 1,
+  "title": "CRC-8 for a sensor frame",
+  "description": "Implement uint8_t crc8(const uint8_t *data, size_t len).",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "CRC",
+    "protocols",
+    "byte buffers"
+  ],
+  "duration_minutes": 25,
+  "language": "c",
+  "prompt": "Implement uint8_t crc8(const uint8_t *data, size_t len).\nUse CRC-8/SMBUS parameters: polynomial 0x07, initial value zero, no reflection, and final XOR zero. Process each byte most-significant bit first.",
+  "constraints": [
+    "data may be NULL only when len is zero.",
+    "No lookup table or heap allocation.",
+    "Return zero for an empty message."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nuint8_t crc8(const uint8_t *data, size_t len) {\n    return 0;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Check vector",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "244\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint8_t crc8(const uint8_t *, size_t);\nint main(void) {\nconst uint8_t x[]=\"123456789\"; printf(\"%u\\n\", (unsigned)crc8(x,9));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Empty frame",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint8_t crc8(const uint8_t *, size_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)crc8(NULL,0));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Single high byte",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "243\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint8_t crc8(const uint8_t *, size_t);\nint main(void) {\nconst uint8_t x[]={255}; printf(\"%u\\n\", (unsigned)crc8(x,1));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Short binary frame",
+        "visibility": "hidden",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "72\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint8_t crc8(const uint8_t *, size_t);\nint main(void) {\nconst uint8_t x[]={1,2,3}; printf(\"%u\\n\", (unsigned)crc8(x,3));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nuint8_t crc8(const uint8_t *data, size_t len) { uint8_t crc = 0; for(size_t i=0;i<len;i++){ crc ^= data[i]; for(int b=0;b<8;b++) crc = (uint8_t)((crc & 0x80) ? (crc << 1) ^ 0x07 : crc << 1); } return crc; }\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "What classes of corruption does a CRC detect, and what does it not authenticate?",
+    "How would you make the CRC incremental across DMA chunks?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

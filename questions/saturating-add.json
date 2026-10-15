@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0",
+  "id": "saturating-add",
+  "version": 1,
+  "title": "Saturating sensor arithmetic",
+  "description": "Implement int16_t saturating_add(int16_t a, int16_t b).",
+  "type": "coding",
+  "difficulty": "beginner",
+  "topics": [
+    "integer arithmetic",
+    "undefined behavior",
+    "signal processing"
+  ],
+  "duration_minutes": 15,
+  "language": "c",
+  "prompt": "Implement int16_t saturating_add(int16_t a, int16_t b).\nReturn the mathematical sum clamped to the signed 16-bit range.",
+  "constraints": [
+    "Do not depend on signed overflow or implementation-defined narrowing.",
+    "INT16_MIN and INT16_MAX are valid inputs."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\nint16_t saturating_add(int16_t a, int16_t b) {\n    return 0;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Normal sum",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "700\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint16_t saturating_add(int16_t, int16_t);\nint main(void) {\nprintf(\"%d\\n\", (int)(saturating_add(1000, -300)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Positive saturation",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "32767\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint16_t saturating_add(int16_t, int16_t);\nint main(void) {\nprintf(\"%d\\n\", (int)(saturating_add(INT16_MAX, 1)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Negative saturation",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "-32768\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint16_t saturating_add(int16_t, int16_t);\nint main(void) {\nprintf(\"%d\\n\", (int)(saturating_add(INT16_MIN, -1)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Opposite extremes",
+        "visibility": "hidden",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "-1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint16_t saturating_add(int16_t, int16_t);\nint main(void) {\nprintf(\"%d\\n\", (int)(saturating_add(INT16_MIN, INT16_MAX)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t5",
+        "name": "Two minima",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "-32768\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint16_t saturating_add(int16_t, int16_t);\nint main(void) {\nprintf(\"%d\\n\", (int)(saturating_add(INT16_MIN, INT16_MIN)));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\n#include <limits.h>\nint16_t saturating_add(int16_t a, int16_t b) { int32_t s=(int32_t)a+b; if(s>INT16_MAX) return INT16_MAX; if(s<INT16_MIN) return INT16_MIN; return (int16_t)s; }\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which boundary conditions would you test on the target?",
+    "What changes if the function is called from an ISR?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

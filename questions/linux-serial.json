@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "linux-serial",
+  "version": 1,
+  "title": "Handle partial reads from a Linux serial port",
+  "description": "A Linux service assumes each read() returns one complete UART packet. Explain why this fails and design a bounded incremental parser with timeout handling and reconnection. Address short reads, EINTR, nonblocking I/O, and malformed input.",
+  "type": "theory",
+  "difficulty": "intermediate",
+  "topics": [
+    "embedded Linux",
+    "serial communication",
+    "processes"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "A Linux service assumes each read() returns one complete UART packet. Explain why this fails and design a bounded incremental parser with timeout handling and reconnection. Address short reads, EINTR, nonblocking I/O, and malformed input.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Treat the serial port as a byte stream.",
+    "Retain incomplete state with bounded memory and framing rules.",
+    "Differentiate transient errors, EOF/device removal, and protocol errors."
+  ],
+  "follow_ups": [
+    "How would you test without physical hardware?",
+    "How do termios settings affect this design?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

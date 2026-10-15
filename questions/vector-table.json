@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "vector-table",
+  "version": 1,
+  "title": "An interrupt lands in the default handler",
+  "description": "After relocating an application behind a bootloader, a UART interrupt enters the default handler. Provide an ordered investigation using the linker map, vector table address, handler symbol, interrupt number, and debugger register inspection.",
+  "type": "theory",
+  "difficulty": "intermediate",
+  "topics": [
+    "MCU architecture",
+    "vector tables",
+    "debugging"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "After relocating an application behind a bootloader, a UART interrupt enters the default handler. Provide an ordered investigation using the linker map, vector table address, handler symbol, interrupt number, and debugger register inspection.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Verify the active vector table base where supported.",
+    "Check exact handler symbol and weak alias resolution.",
+    "Check interrupt index, enable state, and pending status without assuming one MCU's register layout."
+  ],
+  "follow_ups": [
+    "What should be checked before jumping from bootloader to application?",
+    "How could a C++ linkage mismatch produce this symptom?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

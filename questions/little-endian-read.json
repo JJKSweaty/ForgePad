@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "id": "little-endian-read",
+  "version": 1,
+  "title": "Decode a bounded little-endian field",
+  "description": "Implement int read_le16(const uint8_t *buf, size_t len, size_t offset, uint16_t *out).",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "endianness",
+    "bounds checking",
+    "binary formats"
+  ],
+  "duration_minutes": 20,
+  "language": "c",
+  "prompt": "Implement int read_le16(const uint8_t *buf, size_t len, size_t offset, uint16_t *out).\nDecode two bytes at offset into out and return 1. If fewer than two bytes remain, return 0 and leave out unchanged. buf may be NULL when len is zero; out is always valid.",
+  "constraints": [
+    "Avoid unaligned pointer casts.",
+    "offset may be SIZE_MAX.",
+    "Check bounds without overflowing offset + 2."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nint read_le16(const uint8_t *buf, size_t len, size_t offset, uint16_t *out) {\n    return 0;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Decode at offset",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "1 4660\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint read_le16(const uint8_t *, size_t, size_t, uint16_t *);\nint main(void) {\nuint8_t b[]={0,0x34,0x12}; uint16_t v=99; int ok=read_le16(b,3,1,&v); printf(\"%d %u\\n\",ok,(unsigned)v);\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Truncated field",
+        "visibility": "public",
+        "category": "negative",
+        "stdin": "",
+        "expected_stdout": "0 99\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint read_le16(const uint8_t *, size_t, size_t, uint16_t *);\nint main(void) {\nuint8_t b[]={1}; uint16_t v=99; int ok=read_le16(b,1,0,&v); printf(\"%d %u\\n\",ok,(unsigned)v);\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Overflowing offset",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0 99\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint read_le16(const uint8_t *, size_t, size_t, uint16_t *);\nint main(void) {\nuint16_t v=99; int ok=read_le16(NULL,0,SIZE_MAX,&v); printf(\"%d %u\\n\",ok,(unsigned)v);\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Maximum field",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1 65535\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nint read_le16(const uint8_t *, size_t, size_t, uint16_t *);\nint main(void) {\nuint8_t b[]={255,255}; uint16_t v=0; int ok=read_le16(b,2,0,&v); printf(\"%d %u\\n\",ok,(unsigned)v);\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\n#include <stddef.h>\nint read_le16(const uint8_t *buf, size_t len, size_t offset, uint16_t *out) { if(offset > len || len-offset < 2) return 0; *out=(uint16_t)((uint16_t)buf[offset] | ((uint16_t)buf[offset+1]<<8)); return 1; }\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which boundary conditions would you test on the target?",
+    "What changes if the function is called from an ISR?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

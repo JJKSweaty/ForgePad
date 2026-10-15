@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "boot-power-loss",
+  "version": 1,
+  "title": "Design a power-loss-safe firmware update",
+  "description": "Design a firmware update flow for an MCU with two image slots and power loss possible at any instruction. Describe image validation, boot metadata, the first boot of a new image, confirmation, and rollback. State your flash programming assumptions.",
+  "type": "design",
+  "difficulty": "intermediate",
+  "topics": [
+    "bootloaders",
+    "flash",
+    "fault handling"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "Design a firmware update flow for an MCU with two image slots and power loss possible at any instruction. Describe image validation, boot metadata, the first boot of a new image, confirmation, and rollback. State your flash programming assumptions.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Preserve a known bootable image until replacement is verified.",
+    "Distinguish corruption detection from image authenticity.",
+    "Make metadata updates recoverable and discuss failed trial boots."
+  ],
+  "follow_ups": [
+    "How would you inject power failure during testing?",
+    "How does a monotonic anti-rollback counter complicate recovery?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

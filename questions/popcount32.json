@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "id": "popcount32",
+  "version": 1,
+  "title": "Count active fault flags",
+  "description": "Implement unsigned count_faults(uint32_t flags).",
+  "type": "coding",
+  "difficulty": "beginner",
+  "topics": [
+    "bit operations",
+    "DSA",
+    "fault handling"
+  ],
+  "duration_minutes": 10,
+  "language": "c",
+  "prompt": "Implement unsigned count_faults(uint32_t flags).\nEach set bit represents an active fault. Return the number of set bits in the complete 32-bit value.",
+  "constraints": [
+    "No compiler popcount intrinsic.",
+    "Do not shift a signed integer into its sign bit."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\nunsigned count_faults(uint32_t flags) { return 0; }\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Sparse faults",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "3\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nunsigned count_faults(uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(count_faults(0x10101)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "No faults",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nunsigned count_faults(uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(count_faults(0)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Every fault",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "32\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nunsigned count_faults(uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(count_faults(UINT32_MAX)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Highest bit",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "1\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nunsigned count_faults(uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(count_faults(UINT32_C(0x80000000))));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\nunsigned count_faults(uint32_t flags){unsigned n=0;while(flags){flags&=flags-1;n++;}return n;}\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which boundary conditions would you test on the target?",
+    "What changes if the function is called from an ISR?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

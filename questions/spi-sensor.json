@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "id": "spi-sensor",
+  "version": 1,
+  "title": "Read a sensor through a simulated SPI bus",
+  "description": "Implement uint16_t read_sensor(void) using the functions in sensor.h.",
+  "type": "coding",
+  "difficulty": "intermediate",
+  "topics": [
+    "SPI",
+    "drivers",
+    "test doubles"
+  ],
+  "duration_minutes": 20,
+  "language": "c",
+  "prompt": "Implement uint16_t read_sensor(void) using the functions in sensor.h.\nAssert chip select with chip_select(1), send command 0x80, clock the high and low result bytes by sending two zero bytes, then deassert chip select with chip_select(0). Discard the response to the command. Return the big-endian 16-bit sample.",
+  "constraints": [
+    "Exactly three transfers while chip select is asserted.",
+    "The bus is synchronous and infallible for this exercise.",
+    "This simulated transaction log does not test electrical timing or SPI mode."
+  ],
+  "starter_files": {
+    "sensor.h": "#ifndef SENSOR_H\n#define SENSOR_H\n#include <stdint.h>\nuint8_t spi_transfer(uint8_t value);\nvoid chip_select(int active);\nuint16_t read_sensor(void);\n#endif\n",
+    "solution.c": "#include \"sensor.h\"\nuint16_t read_sensor(void) { return 0; }\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Typical sample",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "4660 3 128 0 0 0 0\n",
+        "fixture": "#include <stdio.h>\n#include <stdint.h>\nuint16_t read_sensor(void);\nstatic unsigned i; static int active; static int bad; static unsigned tx[3];\nvoid chip_select(int x){ if(x==active)bad=1; active=x; }\nuint8_t spi_transfer(uint8_t v){if(!active||i>=3){bad=1;return 0;}tx[i]=v;const uint8_t response[]={0,0x12,0x34};return response[i++];}\nint main(void){uint16_t v=read_sensor();printf(\"%u %u %u %u %u %d %d\\n\",(unsigned)v,i,tx[0],tx[1],tx[2],active,bad);}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Zero sample",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "0 3 128 0 0 0 0\n",
+        "fixture": "#include <stdio.h>\n#include <stdint.h>\nuint16_t read_sensor(void);\nstatic unsigned i; static int active; static int bad; static unsigned tx[3];\nvoid chip_select(int x){ if(x==active)bad=1; active=x; }\nuint8_t spi_transfer(uint8_t v){if(!active||i>=3){bad=1;return 0;}tx[i]=v;const uint8_t response[]={0,0,0};return response[i++];}\nint main(void){uint16_t v=read_sensor();printf(\"%u %u %u %u %u %d %d\\n\",(unsigned)v,i,tx[0],tx[1],tx[2],active,bad);}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Full-scale sample",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "65535 3 128 0 0 0 0\n",
+        "fixture": "#include <stdio.h>\n#include <stdint.h>\nuint16_t read_sensor(void);\nstatic unsigned i; static int active; static int bad; static unsigned tx[3];\nvoid chip_select(int x){ if(x==active)bad=1; active=x; }\nuint8_t spi_transfer(uint8_t v){if(!active||i>=3){bad=1;return 0;}tx[i]=v;const uint8_t response[]={0,255,255};return response[i++];}\nint main(void){uint16_t v=read_sensor();printf(\"%u %u %u %u %u %d %d\\n\",(unsigned)v,i,tx[0],tx[1],tx[2],active,bad);}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "sensor.h": "#ifndef SENSOR_H\n#define SENSOR_H\n#include <stdint.h>\nuint8_t spi_transfer(uint8_t value);\nvoid chip_select(int active);\nuint16_t read_sensor(void);\n#endif\n",
+    "solution.c": "#include \"sensor.h\"\nuint16_t read_sensor(void){chip_select(1);(void)spi_transfer(0x80);uint8_t hi=spi_transfer(0);uint8_t lo=spi_transfer(0);chip_select(0);return (uint16_t)(((uint16_t)hi<<8)|lo);}\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Which boundary conditions would you test on the target?",
+    "What changes if the function is called from an ISR?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

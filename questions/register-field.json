@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "id": "register-field",
+  "version": 1,
+  "title": "Update a register field",
+  "description": "Implement uint32_t update_field(uint32_t reg, uint32_t mask, uint32_t value).",
+  "type": "coding",
+  "difficulty": "beginner",
+  "topics": [
+    "bit operations",
+    "registers",
+    "embedded C"
+  ],
+  "duration_minutes": 10,
+  "language": "c",
+  "prompt": "Implement uint32_t update_field(uint32_t reg, uint32_t mask, uint32_t value).\nReplace only the bits selected by mask with the corresponding bits from value. value is already shifted to its register position. This operates on a value, not a volatile peripheral address.",
+  "constraints": [
+    "Preserve every bit outside mask.",
+    "No shifts, heap allocation, or peripheral access are necessary."
+  ],
+  "starter_files": {
+    "solution.c": "#include <stdint.h>\nuint32_t update_field(uint32_t reg, uint32_t mask, uint32_t value) {\n    return reg;\n}\n"
+  },
+  "test_config": {
+    "mode": "fixture",
+    "compiler": "gcc",
+    "sanitizers": false,
+    "timeout_seconds": 2,
+    "tests": [
+      {
+        "id": "t1",
+        "name": "Replace low nibble",
+        "visibility": "public",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "172\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint32_t update_field(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(update_field(0xA5, 0x0F, 0x0C)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t2",
+        "name": "Empty mask",
+        "visibility": "public",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "305419896\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint32_t update_field(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(update_field(0x12345678, 0, UINT32_MAX)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t3",
+        "name": "Full mask",
+        "visibility": "hidden",
+        "category": "boundary",
+        "stdin": "",
+        "expected_stdout": "4294967295\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint32_t update_field(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(update_field(0, UINT32_MAX, UINT32_MAX)));\nreturn 0;\n}\n"
+      },
+      {
+        "id": "t4",
+        "name": "Ignore value outside mask",
+        "visibility": "hidden",
+        "category": "normal",
+        "stdin": "",
+        "expected_stdout": "131\n",
+        "fixture": "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <limits.h>\nuint32_t update_field(uint32_t, uint32_t, uint32_t);\nint main(void) {\nprintf(\"%u\\n\", (unsigned)(update_field(0x80, 0x0F, 0xF3)));\nreturn 0;\n}\n"
+      }
+    ]
+  },
+  "reference_solution": {
+    "solution.c": "#include <stdint.h>\nuint32_t update_field(uint32_t reg, uint32_t mask, uint32_t value) { return (reg & ~mask) | (value & mask); }\n"
+  },
+  "rubric": [
+    "Respect the stated contract and bounds.",
+    "Explain integer widths, ownership, and relevant edge cases.",
+    "Separate host-test evidence from hardware guarantees."
+  ],
+  "follow_ups": [
+    "Why can a read-modify-write be unsafe on a hardware status register?",
+    "How would write-one-to-clear bits change this API?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "i2c-stuck-low",
+  "version": 1,
+  "title": "Recover an I2C bus with SDA held low",
+  "description": "An I2C transaction sometimes stalls after a sensor reset. A logic analyzer shows SDA low while SCL is high. Plan a diagnosis and a bounded recovery policy. Include pull-ups, bus ownership, target documentation, and escalation when recovery fails.",
+  "type": "theory",
+  "difficulty": "intermediate",
+  "topics": [
+    "I2C",
+    "hardware debugging",
+    "fault handling"
+  ],
+  "duration_minutes": 10,
+  "language": "independent",
+  "prompt": "An I2C transaction sometimes stalls after a sensor reset. A logic analyzer shows SDA low while SCL is high. Plan a diagnosis and a bounded recovery policy. Include pull-ups, bus ownership, target documentation, and escalation when recovery fails.",
+  "constraints": [
+    "State assumptions and separate measurements from guarantees."
+  ],
+  "starter_files": {},
+  "test_config": null,
+  "reference_solution": {},
+  "rubric": [
+    "Distinguish a controller state issue from an external device holding the line.",
+    "Inspect electrical levels, pull-ups, and reset/power sequencing.",
+    "Use documented recovery with timeouts; do not drive against a device holding a line."
+  ],
+  "follow_ups": [
+    "How would multiple bus controllers affect recovery?",
+    "What information should the driver report after a timeout?"
+  ],
+  "hints": [
+    "Write down the boundary cases before choosing an implementation.",
+    "Use explicit integer widths and keep intermediate values in range."
+  ],
+  "source": {
+    "name": "ForgePad original curriculum",
+    "url": "",
+    "license": "CC0-1.0"
+  }
+}
