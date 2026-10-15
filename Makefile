@@ -9,7 +9,7 @@ runner:
 	docker build -t forgepad-runner:local sandbox
 
 backend:
-	.venv/bin/python -m uvicorn forgepad.api:app --host 127.0.0.1 --port 8000
+	.venv/bin/python -m uvicorn forgepad.main:app --host 127.0.0.1 --port 8000
 
 frontend:
 	cd frontend && npm run dev -- --host 127.0.0.1

@@ -21,6 +21,7 @@ where = ["backend"]
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["backend"]
+markers = ["docker: requires a running Docker daemon and the ForgePad runner image"]
 
 [tool.ruff]
 target-version = "py311"
