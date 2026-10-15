@@ -24,14 +24,121 @@ async fn enable(s: &Arc<Service>) {
 async fn local_coach_uses_candidate_context_and_rejects_strict_interviews() {
     let (_dir, s) = workspace();
     let q = s.store.question("uart-frame-recovery", None).unwrap();
-    let context = forgepad_core::coach::context(&schema::candidate(&q), &json!({"message":"What should I consider?","answer":"My reasoning","files":{}})).unwrap();
+    let context = forgepad_core::coach::context(
+        &schema::candidate(&q),
+        &json!({"message":"What should I consider?","answer":"My reasoning","files":{}}),
+    )
+    .unwrap();
     let text = context.to_string();
     assert!(!text.contains("reference_solution"));
     assert!(!text.contains("hidden"));
     assert_eq!(context["answer"], "My reasoning");
-    s.start_session(&json!({"question_id":"uart-frame-recovery"}), "interview").unwrap();
-    let error = s.route("POST", "/questions/uart-frame-recovery/coach", json!({"message":"Give a hint"})).await.unwrap_err();
+    s.start_session(&json!({"question_id":"uart-frame-recovery"}), "interview")
+        .unwrap();
+    let error = s
+        .route(
+            "POST",
+            "/questions/uart-frame-recovery/coach",
+            json!({"message":"Give a hint"}),
+        )
+        .await
+        .unwrap_err();
     assert!(error.to_string().contains("strict interview"));
+}
+#[tokio::test]
+async fn written_interview_response_is_recorded_in_replay_as_self_review() {
+    let (_dir, s) = workspace();
+    let session = s
+        .start_session(&json!({"question_id":"sensor-pipeline"}), "interview")
+        .unwrap();
+    let result = s.route("POST", "/attempts", json!({"question_id":"sensor-pipeline","session_id":session["id"],"answer":"Use bounded queues and measure deadlines.","confidence":"partial"})).await.unwrap();
+    assert!(result["result"].is_null());
+    assert_eq!(result["assessment_basis"], "self_report");
+    let replay = s.store.replay(session["id"].as_str().unwrap()).unwrap();
+    let response = replay
+        .iter()
+        .find(|e| e["kind"] == "written_response")
+        .unwrap();
+    assert_eq!(
+        response["content"],
+        "Use bounded queues and measure deadlines."
+    );
+    assert_eq!(response["confidence"], "partial");
+}
+#[tokio::test]
+async fn mcp_can_read_working_material_and_control_sessions_without_protected_answers() {
+    let (_dir, s) = workspace();
+    enable(&s).await;
+    let result = tool(
+        s.clone(),
+        "forgepad_get_question",
+        json!({"question_id":"uart-frame-recovery"}),
+    )
+    .await;
+    assert_eq!(result["result"]["isError"], false);
+    let q = &result["result"]["structuredContent"]["data"]["question"];
+    assert!(q["prompt"].is_string());
+    assert!(q.get("reference_solution").is_none());
+    assert!(q["test_config"]["tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|t| t["visibility"] == "public"));
+    let draft = tool(
+        s.clone(),
+        "forgepad_get_working_draft",
+        json!({"question_id":"uart-frame-recovery"}),
+    )
+    .await;
+    let mut body = draft["result"]["structuredContent"]["data"]["draft"].clone();
+    body["question_id"] = json!("uart-frame-recovery");
+    body["updated_at"] = Value::Null;
+    body["answer"] = json!("Check bounds");
+    let saved = tool(s.clone(), "forgepad_save_working_draft", body.clone()).await;
+    assert_eq!(saved["result"]["isError"], false);
+    assert_eq!(
+        tool(s.clone(), "forgepad_save_working_draft", body).await["result"]["isError"],
+        true
+    );
+    assert_eq!(
+        s.store
+            .draft(&s.store.question("uart-frame-recovery", None).unwrap())
+            .unwrap()["answer"],
+        "Check bounds"
+    );
+    let session = s
+        .start_session(&json!({"question_id":"uart-frame-recovery"}), "interview")
+        .unwrap();
+    let paused = tool(
+        s.clone(),
+        "forgepad_control_session",
+        json!({"session_id":session["id"],"action":"pause"}),
+    )
+    .await;
+    assert_eq!(
+        paused["result"]["structuredContent"]["data"]["session"]["paused"],
+        true
+    );
+    assert!(paused["result"]["structuredContent"]["data"]["session"]
+        .get("transcript")
+        .is_none());
+    let hint = tool(
+        s.clone(),
+        "forgepad_get_hint",
+        json!({"question_id":"uart-frame-recovery","index":0}),
+    )
+    .await;
+    assert_eq!(hint["result"]["isError"], true);
+    let q = tool(
+        s,
+        "forgepad_get_question",
+        json!({"question_id":"uart-frame-recovery"}),
+    )
+    .await;
+    assert_eq!(
+        q["result"]["structuredContent"]["data"]["question"]["hints"],
+        json!([])
+    );
 }
 #[test]
 fn deep_links_reject_commands_paths_credentials_and_ambiguity() {
@@ -139,7 +246,7 @@ async fn mcp_handshake_discovery_validation_and_revocation() {
     )
     .await
     .unwrap();
-    assert_eq!(discovered["result"]["tools"].as_array().unwrap().len(), 18);
+    assert_eq!(discovered["result"]["tools"].as_array().unwrap().len(), 25);
     let bad = tool(
         s.clone(),
         "forgepad_search_questions",

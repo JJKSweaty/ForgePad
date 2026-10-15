@@ -49,6 +49,15 @@ fn output_schema(name: &str) -> Value {
             json!({"session_id":string,"state":string,"report":nullable,"test_outcomes":array,"deep_link":string}),
         ),
         "forgepad_search_questions" => strict_data(json!({"questions":array})),
+        "forgepad_get_question" => strict_data(json!({"question":obj})),
+        "forgepad_get_working_draft" | "forgepad_save_working_draft" => {
+            strict_data(json!({"draft":obj}))
+        }
+        "forgepad_run_tests" | "forgepad_get_run" => strict_data(json!({"run":obj})),
+        "forgepad_control_session" => strict_data(json!({"session":obj})),
+        "forgepad_get_hint" => strict_data(
+            json!({"hint":string,"index":{"type":"integer"},"total":{"type":"integer"}}),
+        ),
         "forgepad_create_question_draft" => strict_data(
             json!({"draft_id":string,"status":string,"generation_job":nullable,"published":{"const":false}}),
         ),
@@ -83,6 +92,10 @@ pub fn tools() -> Vec<Value> {
     let none = object(json!({}), &[]);
     let roadmap = object(json!({"roadmap_id":identifier()}), &["roadmap_id"]);
     let question = object(json!({"question_id":identifier()}), &["question_id"]);
+    let working = object(
+        json!({"question_id":identifier(),"session_id":identifier(),"question_version":{"type":"integer","minimum":1}}),
+        &["question_id"],
+    );
     let practice = object(
         json!({"question_id":identifier(),"roadmap_id":identifier(),"topic":text(),"type":{"enum":["coding","theory","debugging","design","code_review"]},"difficulty":{"enum":["beginner","intermediate","advanced","expert"]},"duration_minutes":{"type":"integer","minimum":1,"maximum":240}}),
         &[],
@@ -97,6 +110,13 @@ pub fn tools() -> Vec<Value> {
         tool("forgepad_get_active_session","Retrieve fresh active-session metadata and remaining time, excluding transcript and code.",none.clone(),true),
         tool("forgepad_get_session_summary","Retrieve a compact recorded report and actual deterministic outcomes. Unassessed dimensions remain ungraded.",object(json!({"session_id":identifier()}),&["session_id"]),true),
         tool("forgepad_search_questions","Search the local question library; metadata only.",object(json!({"q":text(),"topic":text(),"type":{"enum":["coding","theory","debugging","design","code_review"]},"difficulty":{"enum":["beginner","intermediate","advanced","expert"]},"limit":{"type":"integer","minimum":1,"maximum":50}}),&[]),true),
+        tool("forgepad_get_question","Read the public prompt, constraints, starter files, rubric and public tests for a question. Strict interview hints stay hidden.",working.clone(),true),
+        tool("forgepad_get_working_draft","Read the candidate's saved source and written response for a question revision. Does not return a reference answer.",working.clone(),true),
+        tool("forgepad_save_working_draft","Save candidate source and written response for an explicit question. Send the full draft and the updated_at from get_working_draft; a stale write is rejected. Does not submit or mark solved.",object(json!({"question_id":identifier(),"session_id":identifier(),"question_version":{"type":"integer","minimum":1},"updated_at":{"type":["string","null"]},"files":{"type":"object","maxProperties":20,"additionalProperties":{"type":"string","maxLength":262144}},"answer":{"type":"string","maxLength":50000}}),&["question_id","updated_at","files","answer"]),false),
+        tool("forgepad_run_tests","Run public tests on the saved working draft, using the restricted compiler sandbox. This does not submit or include hidden tests. Poll get_run for the actual result.",working.clone(),false),
+        tool("forgepad_get_run","Read a queued run or actual public test results by run ID.",object(json!({"run_id":identifier()}),&["run_id"]),true),
+        tool("forgepad_control_session","Pause, resume or advance a specific active session. Returns confirmed session metadata.",object(json!({"session_id":identifier(),"action":{"enum":["pause","resume","advance"]}}),&["session_id","action"]),false),
+        tool("forgepad_get_hint","Read one prepared practice hint by zero-based index. Unavailable during strict interviews.",object(json!({"question_id":identifier(),"session_id":identifier(),"question_version":{"type":"integer","minimum":1},"index":{"type":"integer","minimum":0,"maximum":100}}),&["question_id","index"]),true),
         tool("forgepad_create_question_draft","Save an unpublished idea; queue local generation if configured. Never publishes or claims that a generated package is valid.",object(json!({"idea":{"type":"string","minLength":1,"maxLength":5000}}),&["idea"]),false),
         tool("forgepad_import_question","Stage a structured JSON package for asynchronous validation and human review. Returns no publication capability.",object(json!({"question":{"type":"object"}}),&["question"]),false),
         tool("forgepad_audit_question","Queue structural and sandbox checks for an existing question. Does not alter published tests.",question,false),
@@ -196,6 +216,73 @@ pub async fn rpc(service: Arc<Service>, request: Value) -> Option<Value> {
 }
 async fn call(s: &Arc<Service>, name: &str, a: Value) -> anyhow::Result<Value> {
     Ok(match name {
+        "forgepad_get_question"
+        | "forgepad_get_working_draft"
+        | "forgepad_save_working_draft"
+        | "forgepad_run_tests"
+        | "forgepad_get_hint" => {
+            let id = required(&a, "question_id")?;
+            let q = if a["session_id"].is_string() {
+                s.question_for_request(id, a["session_id"].as_str())?
+            } else {
+                s.store.question(id, a["question_version"].as_i64())?
+            };
+            match name {
+                "forgepad_get_question" => {
+                    let mut question = schema::candidate(&q);
+                    if s.active_session()?["strict"] == true {
+                        question["hints"] = json!([]);
+                    }
+                    json!({"question":question})
+                }
+                "forgepad_get_working_draft" => json!({"draft":s.store.draft(&q)?}),
+                "forgepad_save_working_draft" => {
+                    let draft = s.store.save_draft_if_current(&q, &a)?;
+                    s.notify(
+                        "draft_updated",
+                        json!({"question_id":id,"version":q["version"]}),
+                    );
+                    json!({"draft":draft})
+                }
+                "forgepad_run_tests" => {
+                    let draft = s.store.draft(&q)?;
+                    json!({"run":s.enqueue_run(&json!({"question_id":id,"question_version":q["version"],"session_id":a["session_id"],"files":draft["files"],"mode":"run"}))?})
+                }
+                _ => {
+                    anyhow::ensure!(
+                        s.active_session()?["strict"] != true,
+                        "Hints are unavailable during strict interviews"
+                    );
+                    let index = a["index"].as_u64().unwrap() as usize;
+                    let hint = q["hints"][index]
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("No hint at this index"))?;
+                    s.store.event(
+                        a["session_id"].as_str(),
+                        "hint_request",
+                        json!({"question_id":id,"hint_index":index}),
+                    )?;
+                    json!({"hint":hint,"index":index,"total":q["hints"].as_array().map_or(0,Vec::len)})
+                }
+            }
+        }
+        "forgepad_get_run" => {
+            let mut run = s.store.get("runs", required(&a, "run_id")?)?;
+            if let Some(result) = run.get_mut("result") {
+                // Hidden results retain verdicts only, matching the UI's grading boundary.
+                if let Some(tests) = result["tests"].as_array_mut() {
+                    for test in tests.iter_mut().filter(|t| t["visibility"] == "hidden") {
+                        *test = json!({"id":test["id"],"name":"Hidden test","visibility":"hidden","status":test["status"]});
+                    }
+                }
+            }
+            json!({"run":run})
+        }
+        "forgepad_control_session" => {
+            let id = required(&a, "session_id")?;
+            let result = s.session_event(id, &json!({"type":a["action"]}))?;
+            json!({"session":Service::session_metadata(&result)})
+        }
         "forgepad_list_roadmaps" => {
             json!({"roadmaps":s.roadmaps()?.iter().map(|r|json!({"id":r["id"],"title":r["title"],"total":r["total"]})).collect::<Vec<_>>()})
         }

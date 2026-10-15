@@ -539,7 +539,9 @@ export default function Interview({
                     <VoiceInput
                       questionId={session.question_id}
                       sessionId={session.id}
-                      disabled={busy || session.paused}
+                      disabled={
+                        busy || session.paused || view !== "conversation"
+                      }
                       onBusyChange={setDictating}
                       onText={(part) =>
                         setText(

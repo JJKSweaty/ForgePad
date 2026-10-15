@@ -295,34 +295,6 @@ export function SettingsPage({
                       }
                     />
                   </label>
-                  <details className="advanced-settings">
-                    <summary>Advanced microphone routing</summary>
-                    <label>
-                      Audio mode
-                      <select
-                        value={mode}
-                        onChange={(e) =>
-                          void action(
-                            () => saveAudio(e.target.value),
-                            "Audio mode saved.",
-                          )
-                        }
-                      >
-                        <option value="external_assistant">
-                          External Assistant · HeyClicky commands
-                        </option>
-                        <option value="interview">
-                          Interview · ForgePad transcription
-                        </option>
-                        <option value="silent">
-                          Silent · no ForgePad capture
-                        </option>
-                        <option value="text_practice">
-                          Text Practice · voice not required
-                        </option>
-                      </select>
-                    </label>
-                  </details>
                   <p className="privacy-note">
                     {mode === "interview"
                       ? "Press Speak your answer in practice, hints, or an interview to start local dictation. Stop releases the microphone. HeyClicky controls its microphone independently."
@@ -339,7 +311,7 @@ export function SettingsPage({
                         )
                       }
                     />
-                    Keep compressed recordings on this Mac for replay
+                    Keep interview recordings on this Mac for replay
                   </label>
                   <p className="small muted-text">
                     Retention is off by default. Recordings are unavailable to

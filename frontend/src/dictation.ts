@@ -1,4 +1,5 @@
 import { api } from "./api";
+import captureWorkletUrl from "./dictation.worklet.js?url&no-inline";
 
 export function normalizeTranscript(text: string) {
   return text
@@ -71,7 +72,13 @@ export async function startDictation(callbacks: Callbacks) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
   });
-  const context = new AudioContext();
+  let context: AudioContext;
+  try {
+    context = new AudioContext();
+  } catch (error) {
+    stream.getTracks().forEach((track) => track.stop());
+    throw error;
+  }
   let source: MediaStreamAudioSourceNode | undefined;
   let node: AudioWorkletNode | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -203,9 +210,7 @@ export async function startDictation(callbacks: Callbacks) {
     settle();
   }
   try {
-    await context.audioWorklet.addModule(
-      new URL("./dictation.worklet.js", import.meta.url).href,
-    );
+    await context.audioWorklet.addModule(captureWorkletUrl);
     source = context.createMediaStreamSource(stream);
     node = new AudioWorkletNode(context, "forgepad-dictation");
     node.port.onmessage = (event: MessageEvent<Float32Array>) => {

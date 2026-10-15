@@ -115,6 +115,51 @@ def client_for(tmp_path, package, runner=None):
     return TestClient(app, base_url="http://localhost")
 
 
+def test_local_coach_uses_public_context_and_blocks_interview_hints(tmp_path, package):
+    with client_for(tmp_path, package) as client:
+        contexts = []
+
+        class Coach:
+            def respond(self, context):
+                contexts.append(context)
+                return "Which boundary would you check first?"
+
+            def availability(self):
+                return {"available": True}
+
+        client.app.state.ai = Coach()
+        response = client.post("/api/questions/test-counter/coach", json={
+            "message": "Help me reason", "answer": "Check overflow", "files": {"main.c": "candidate code"}})
+        assert response.status_code == 200
+        assert response.json()["provider"] == "local"
+        context = json.dumps(contexts)
+        for secret in ("REFERENCE_SECRET", "INPUT_SECRET", "OUTPUT_SECRET"):
+            assert secret not in context
+        assert "Check overflow" in context
+        started = client.post("/api/interviews", json={"question_id": "test-counter"})
+        assert started.status_code == 201
+        question = client.get("/api/questions/test-counter").json()
+        assert question["coaching_available"] is False
+        assert question["hints"] == []
+        response = client.post("/api/questions/test-counter/coach", json={"message": "Hint please"})
+        assert response.status_code == 409
+        assert len(contexts) == 1
+
+
+def test_transcript_cleanup_preserves_original_on_provider_failure(tmp_path, package):
+    with client_for(tmp_path, package) as client:
+        class Cleanup:
+            def correct_transcript(self, text, vocabulary):
+                assert text == "do not use 64 bytes"
+                assert vocabulary["title"] == "Counter"
+                raise RuntimeError("Model unavailable")
+
+        client.app.state.ai = Cleanup()
+        response = client.post("/api/speech/correct", json={"text": "do not use 64 bytes", "question_id": "test-counter"})
+        assert response.status_code == 503
+        assert "original answer is preserved" in response.json()["detail"]
+
+
 def wait_run(client, run_id):
     for _ in range(200):
         run = client.get(f"/api/runs/{run_id}").json()

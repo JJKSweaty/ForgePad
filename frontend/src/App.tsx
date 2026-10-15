@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api, message } from "./api";
 import { nativeEvents } from "./native";
+import { modeNames, questionMode } from "./questionMode";
 import type { Health, Progress, Question } from "./api";
 import { Dashboard } from "./Dashboard";
 import { CommandPalette } from "./CommandPalette";
@@ -200,11 +201,23 @@ export default function App() {
     "interview",
   ].includes(page);
   const activePage = inPractice ? "practice" : page;
+  const selectedQuestion = questions.find(
+    (question) => question.id === selected,
+  );
   const practiceTabs: { id: Page; label: string }[] = [
     { id: "questions", label: "Questions" },
     { id: "roadmaps", label: "Roadmaps" },
     { id: "interview", label: "Mock interview" },
-    ...(selected ? [{ id: "practice" as Page, label: "Code workspace" }] : []),
+    ...(selected
+      ? [
+          {
+            id: "practice" as Page,
+            label: selectedQuestion
+              ? modeNames[questionMode(selectedQuestion)]
+              : "Question workspace",
+          },
+        ]
+      : []),
   ];
   const title =
     page === "settings"

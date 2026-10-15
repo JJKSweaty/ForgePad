@@ -127,6 +127,7 @@ impl Service {
             .store
             .latest_attempt(q["id"].as_str().unwrap_or(""))?
             .map_or(json!("not_started"), |a| a["completion_status"].clone());
+        out["has_tests"] = json!(q["test_config"].is_object());
         Ok(out)
     }
     pub fn questions(&self, filters: &Value) -> Result<Vec<Value>> {
@@ -404,7 +405,7 @@ impl Service {
         let passed = result["status"] == "passed";
         let self_review = result.is_null() && confidence == "confident";
         let days = if passed || self_review { 7 } else { 1 };
-        let a = json!({"id":crate::id(),"question_id":q["id"],"question_version":q["version"],"title":q["title"],"topics":q["topics"],"language":q["language"],"created_at":crate::now(),"files":files,"result":result,"answer":answer,"confidence":confidence,"reflection":reflection,"completion_status":if passed || self_review {"complete"} else {"needs_review"},"review_due_at":(chrono::Utc::now()+chrono::Duration::days(days)).to_rfc3339(),"review_interval_days":days,"assessment_basis":if self_review {"self_report"} else {"deterministic_tests"}});
+        let a = json!({"id":crate::id(),"question_id":q["id"],"question_version":q["version"],"title":q["title"],"topics":q["topics"],"language":q["language"],"created_at":crate::now(),"files":files,"result":result,"answer":answer,"confidence":confidence,"reflection":reflection,"completion_status":if passed || self_review {"complete"} else {"needs_review"},"review_due_at":(chrono::Utc::now()+chrono::Duration::days(days)).to_rfc3339(),"review_interval_days":days,"assessment_basis":if result.is_null() {"self_report"} else {"deterministic_tests"}});
         self.store.save("attempts", &a)?;
         Ok(a)
     }
@@ -889,14 +890,18 @@ impl Service {
                 if !["confident", "partial", "uncertain"].contains(&confidence) {
                     bail!("Invalid confidence");
                 }
-                self.attempt(
+                let attempt = self.attempt(
                     &q,
                     json!({}),
                     Value::Null,
                     bounded(&body, "answer", 50000)?,
                     confidence,
                     body["reflection"].as_str().unwrap_or(""),
-                )?
+                )?;
+                if let Some(session) = body["session_id"].as_str() {
+                    self.store.event(Some(session), "written_response", json!({"question_id":q["id"],"content":body["answer"],"confidence":confidence,"attempt_id":attempt["id"]}))?;
+                }
+                attempt
             }
             ("GET", ["progress"]) => self.progress()?,
             ("GET", ["roadmaps"]) => json!(self.roadmaps()?),

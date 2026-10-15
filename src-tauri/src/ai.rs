@@ -105,7 +105,7 @@ impl Models {
             .filter(|m| selected.as_ref().is_none_or(|id| id == &m.id))
             .collect::<Vec<_>>();
         if models.is_empty() {
-            bail!("Local inference is disabled. Configure a llama.cpp endpoint in Settings; structured JSON import works without AI.");
+            bail!("Local AI is off. Choose a model in Settings → Interview & AI → Local reasoning coach. Prepared hints and practice work without AI.");
         }
         let _priority = if interactive {
             self.foreground.fetch_add(1, Ordering::SeqCst);
@@ -141,7 +141,7 @@ impl Models {
             let content = context.to_string();
             if content.len() + system.len() > (model.context_tokens - model.output_tokens) as usize
             {
-                last = "Context exceeds the selected model's conservative token budget. Reduce context or select a larger window.".into();
+                last = "This request is too long for the local model. Shorten your answer or ask about one part at a time.".into();
                 continue;
             }
             let started = Instant::now();

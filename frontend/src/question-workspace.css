@@ -1,4 +1,8 @@
 /* Consistent reading and editing rhythm across question modes. */
+.main-shell:has(.practice-page) .practice-hub-header {
+  max-width: none;
+  padding: 20px 24px 0;
+}
 .voice-input {
   margin: 14px 0;
 }

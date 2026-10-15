@@ -111,7 +111,11 @@ export default function Practice({
         setQuestion(q);
         setFiles(next.files);
         setAnswer(next.answer);
-        setActiveFile(Object.keys(next.files)[0] ?? "");
+        setActiveFile(
+          Object.keys(next.files).find((name) => /\.(c|cpp|cc)$/.test(name)) ??
+            Object.keys(next.files)[0] ??
+            "",
+        );
         draft.current = next;
         savedAt.current = d.updated_at ?? null;
         savedContent.current = JSON.stringify(next);
@@ -221,6 +225,15 @@ export default function Practice({
             draft.current = next;
             setFiles(next.files);
             setAnswer(next.answer);
+            setActiveFile((previous) =>
+              previous in next.files
+                ? previous
+                : (Object.keys(next.files).find((name) =>
+                    /\.(c|cpp|cc)$/.test(name),
+                  ) ??
+                  Object.keys(next.files)[0] ??
+                  ""),
+            );
           } else setExternalDraft(latest);
         })
         .catch((e) => {
@@ -402,8 +415,21 @@ export default function Practice({
             <button
               onClick={() => {
                 savedAt.current = externalDraft.updated_at ?? null;
+                localStorage.setItem(
+                  `forgepad.v1.conflict.${questionId}`,
+                  JSON.stringify(draft.current),
+                );
                 setFiles(externalDraft.files);
                 setAnswer(externalDraft.answer);
+                setActiveFile((previous) =>
+                  previous in externalDraft.files
+                    ? previous
+                    : (Object.keys(externalDraft.files).find((name) =>
+                        /\.(c|cpp|cc)$/.test(name),
+                      ) ??
+                      Object.keys(externalDraft.files)[0] ??
+                      ""),
+                );
                 setExternalDraft(null);
                 setError("");
               }}
@@ -822,10 +848,10 @@ export default function Practice({
                       await save();
                       await post("/attempts", {
                         question_id: questionId,
+                        session_id: sessionId,
                         ...(native
                           ? {
                               question_version: question.version,
-                              session_id: sessionId,
                             }
                           : {}),
                         answer,

@@ -89,6 +89,7 @@ class IdeaRequest(StrictModel):
 
 class AttemptRequest(StrictModel):
     question_id: str
+    session_id: str | None = Field(default=None, max_length=80)
     answer: str = Field(min_length=1, max_length=50000)
     confidence: Literal["confident", "partial", "uncertain"]
     reflection: str = Field(default="", max_length=10000)
@@ -251,6 +252,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             )
         }
         result.update(
+            has_tests=bool(question.get("test_config")),
             bookmarked=bool(flags["bookmarked"]),
             archived=bool(flags["archived"]),
             completion_status=latest["completion_status"] if latest else "not_started",
@@ -532,7 +534,10 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
 
     @app.post("/api/attempts", status_code=201)
     def create_attempt(request: AttemptRequest):
-        question = question_or_404(request.question_id)
+        session = load_session(request.session_id) if request.session_id else None
+        if session and (session["question_id"] != request.question_id or session["state"] == "COMPLETE"):
+            raise HTTPException(409, "Response does not belong to this active interview")
+        question = question_or_404(request.question_id, session["question_version"] if session else None)
         if question.get("test_config"):
             raise HTTPException(
                 422, "Use Submit for executable questions; confidence cannot mark code tests correct"
@@ -541,6 +546,8 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             question, answer=request.answer, confidence=request.confidence, reflection=request.reflection
         )
         store().add_attempt(result)
+        if session:
+            store().add_replay(session["id"], "written_response", {"content": request.answer, "confidence": request.confidence, "attempt_id": result["id"]})
         return result
 
     @app.get("/api/progress")

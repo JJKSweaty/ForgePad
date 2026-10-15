@@ -82,17 +82,29 @@ async def verify(output, binaries=None):
                     init = await session.initialize()
                     assert init.serverInfo.name == "ForgePad"
                     tools = await session.list_tools()
-                    assert len(tools.tools) == 18
+                    assert len(tools.tools) == 25
                     report["timings_ms"]["mcp_handshake_and_discovery"] = round(
                         (time.perf_counter() - at) * 1000, 3
                     )
-                    report["checks"].append("Official SDK initializes and discovers all 18 tools")
+                    report["checks"].append("Official SDK initializes and discovers all 25 tools")
 
                     async def call(name, args=None):
                         r = await session.call_tool(name, args or {})
                         assert not r.isError, r
                         assert r.structuredContent["ok"] is True
                         return r.structuredContent["data"]
+
+                    public = (await call("forgepad_get_question", {"question_id": "timer-rollover"}))["question"]
+                    assert public["prompt"] and "reference_solution" not in public
+                    assert all(t["visibility"] == "public" for t in public["test_config"]["tests"])
+                    working = (await call("forgepad_get_working_draft", {"question_id": "timer-rollover"}))["draft"]
+                    working.update(question_id="timer-rollover", updated_at=working.get("updated_at"), answer="Reason about unsigned subtraction.")
+                    saved = (await call("forgepad_save_working_draft", working))["draft"]
+                    assert saved["answer"] == "Reason about unsigned subtraction."
+                    assert (await command("GET", "/drafts/timer-rollover"))["updated_at"] == saved["updated_at"]
+                    stale = await session.call_tool("forgepad_save_working_draft", working)
+                    assert stale.isError
+                    report["checks"].append("Public question access and working draft writes round-trip through MCP; stale writes are rejected")
 
                     samples = []
                     for _ in range(15):
@@ -121,6 +133,12 @@ async def verify(output, binaries=None):
                     assert active["session"]["id"] == sid
                     assert active["session"]["remaining_seconds"] > 1790
                     assert (await command("GET", f"/interviews/{sid}"))["question_id"] == "timer-rollover"
+                    paused = await call("forgepad_control_session", {"session_id": sid, "action": "pause"})
+                    assert paused["session"]["paused"] is True
+                    await call("forgepad_control_session", {"session_id": sid, "action": "resume"})
+                    hint = await session.call_tool("forgepad_get_hint", {"question_id": "timer-rollover", "index": 0})
+                    assert hint.isError
+                    report["checks"].append("MCP pauses and resumes the real session; strict interviews reject hints")
                     await call(
                         "forgepad_record_reflection",
                         {"session_id": sid, "reflection": "Check the half-range assumption."},

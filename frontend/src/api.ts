@@ -19,6 +19,7 @@ export type Question = {
   archived?: boolean;
   completion_status?: string;
   coaching_available?: boolean;
+  has_tests?: boolean;
   test_config?: {
     mode?: string;
     tests: {
