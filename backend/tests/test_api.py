@@ -433,3 +433,41 @@ def test_commands_and_disabled_speech(tmp_path, package):
             ).status_code
             == 503
         )
+
+
+def test_shared_learning_states_history_details_and_goal_edits(tmp_path, package):
+    runner = FakeRunner()
+    with client_for(tmp_path, package, runner) as client:
+        qid = package['id']
+        assert client.get('/api/questions').json()[0]['progress_status'] == 'not_started'
+        files = {'main.c': '// changed candidate work'}
+        client.put(f'/api/drafts/{qid}', json={'files': files, 'answer': ''}).raise_for_status()
+        assert client.get('/api/questions').json()[0]['progress_status'] == 'in_progress'
+        run = client.post('/api/runs', json={'question_id': qid, 'files': files, 'mode': 'submit'}).json()
+        wait_run(client, run['id'])
+        client.put(f'/api/drafts/{qid}', json={'files': files, 'answer': ''}).raise_for_status()
+        assert client.get('/api/questions').json()[0]['progress_status'] == 'completed'
+        runner.status = 'failed'
+        run = client.post('/api/runs', json={'question_id': qid, 'files': files, 'mode': 'submit'}).json()
+        wait_run(client, run['id'])
+        state = client.get('/api/questions').json()[0]
+        assert state['progress_status'] == 'needs_review'
+        assert state['has_completed'] is True
+        p = client.get('/api/progress?compact=true').json()
+        assert p['summary']['attempts'] == 2
+        assert p['summary']['passed_attempts'] == p['summary']['completed_questions'] == 1
+        assert all('files' not in a and 'tests' not in (a.get('result') or {}) for a in p['attempts'])
+        detail = client.get('/api/attempts/' + p['attempts'][-1]['id']).json()
+        assert detail['files'] == files
+        assert detail['question_version'] == 1
+        assert detail['result']['status'] == 'passed'
+        assert client.get('/api/dashboard').json()['metrics']['completed_questions'] == 1
+        goal = client.post('/api/goals', json={'title': 'Learn counters'}).json()
+        edited = client.patch('/api/goals/' + goal['id'], json={'title': 'Review bounds', 'question_id': qid}).json()
+        assert edited['status'] == 'pending' and edited['title'] == 'Review bounds'
+        client.delete('/api/goals/' + goal['id']).raise_for_status()
+        assert client.get('/api/progress').json()['goals'] == []
+    # Reopen the workspace, preserving both assessments and the draft.
+    with client_for(tmp_path, package, runner) as client:
+        assert len(client.get('/api/progress').json()['attempts']) == 2
+        assert client.get('/api/questions').json()[0]['progress_status'] == 'needs_review'

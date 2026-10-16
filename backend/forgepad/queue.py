@@ -29,6 +29,8 @@ def attempt(question, *, files=None, result=None, answer="", confidence=None, re
         "title": question["title"],
         "topics": question["topics"],
         "language": question["language"],
+        "type": question["type"],
+        "assessment_basis": "deterministic_tests" if result else "self_report",
         "created_at": now(),
         "files": files or {},
         "answer": answer,

@@ -334,3 +334,141 @@ async fn final_autosave_survives_session_completion_without_reopening_execution(
         "COMPLETE"
     );
 }
+
+#[tokio::test]
+async fn learning_flow_preserves_submissions_and_compares_draft_content() {
+    let (dir, s) = workspace();
+    let q = s.store.question("align-up", None).unwrap();
+    assert_eq!(s.summary(&q).unwrap()["progress_status"], "not_started");
+    let files = json!({"main.c":"// changed source"});
+    s.store
+        .save_draft(&q, &json!({"files":files,"answer":""}))
+        .unwrap();
+    assert_eq!(s.summary(&q).unwrap()["progress_status"], "in_progress");
+    let passed = s
+        .attempt(
+            &q,
+            files.clone(),
+            json!({"status":"passed","passed":8,"total":8,"tests":[{"name":"test evidence"}]}),
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+    // The workspace flushes identical content after Submit; this is no new work.
+    s.store
+        .save_draft(&q, &json!({"files":files,"answer":""}))
+        .unwrap();
+    assert_eq!(s.summary(&q).unwrap()["progress_status"], "completed");
+    assert!(s.store.unfinished_draft().unwrap().is_none());
+    let failed = s
+        .attempt(
+            &q,
+            files.clone(),
+            json!({"status":"failed","passed":0,"total":8}),
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+    assert_eq!(s.summary(&q).unwrap()["progress_status"], "needs_review");
+    assert_eq!(s.summary(&q).unwrap()["has_completed"], true);
+    let p = s
+        .route("GET", "/progress?compact=true", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(p["summary"]["attempts"], 2);
+    assert_eq!(p["summary"]["passed_attempts"], 1);
+    assert_eq!(p["summary"]["completed_questions"], 1);
+    assert!(p["attempts"][0].get("files").is_none());
+    let detail = s
+        .route(
+            "GET",
+            &format!("/attempts/{}", passed["id"].as_str().unwrap()),
+            json!({}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(detail["files"], files);
+    assert_eq!(detail["question_version"], 1);
+    assert_eq!(detail["result"]["tests"][0]["name"], "test evidence");
+    let mut due = failed;
+    // immutable attempt fixture with an actual due review
+    due["id"] = json!(forgepad_core::id());
+    due["created_at"] = json!(forgepad_core::now());
+    due["review_due_at"] = json!("2000-01-01T00:00:00Z");
+    s.store.save("attempts", &due).unwrap();
+    assert_eq!(
+        s.compact_progress().unwrap()["due_reviews"][0]["previous_result"],
+        "failed"
+    );
+    s.store
+        .save_draft(
+            &q,
+            &json!({"files":{"main.c":"// retry in progress"},"answer":""}),
+        )
+        .unwrap();
+    assert_eq!(s.summary(&q).unwrap()["progress_status"], "in_progress");
+    assert_eq!(s.store.records("attempts").unwrap().len(), 3);
+    let d = s.dashboard_at("UTC", Utc::now()).unwrap();
+    assert_eq!(d["metrics"]["completed_questions"], 1);
+    assert_eq!(
+        d["days"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["attempts"].as_u64().unwrap())
+            .sum::<u64>(),
+        3
+    );
+    let path = dir.path().to_path_buf();
+    drop(s);
+    let reopened = Service::open(
+        &path,
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../questions"),
+    )
+    .unwrap();
+    assert_eq!(
+        reopened.summary(&q).unwrap()["progress_status"],
+        "in_progress"
+    );
+    assert_eq!(
+        reopened
+            .store
+            .get("attempts", passed["id"].as_str().unwrap())
+            .unwrap(),
+        detail
+    );
+}
+
+#[tokio::test]
+async fn goal_edits_links_and_deletion_use_the_same_record() {
+    let (_dir, s) = workspace();
+    let g = s
+        .route("POST", "/goals", json!({"title":"Study DMA"}))
+        .await
+        .unwrap();
+    let path = format!("/goals/{}", g["id"].as_str().unwrap());
+    let edited = s
+        .route(
+            "PATCH",
+            &path,
+            json!({"title":"Review alignment","topic":"DMA","question_id":"align-up"}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(edited["status"], "pending");
+    assert_eq!(edited["question_id"], "align-up");
+    s.route("PATCH", &path, json!({"status":"complete"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        s.compact_progress().unwrap()["goals"][0]["title"],
+        "Review alignment"
+    );
+    s.route("DELETE", &path, json!({})).await.unwrap();
+    assert!(s.compact_progress().unwrap()["goals"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}

@@ -52,6 +52,7 @@ def snapshot(store, timezone="UTC"):
         str(first + timedelta(days=i)): {
             "date": str(first + timedelta(days=i)),
             "activity": 0,
+            "attempts": 0,
             "solved": 0,
             "active_seconds": 0,
             "future": first + timedelta(days=i) > today,
@@ -67,6 +68,7 @@ def snapshot(store, timezone="UTC"):
         date = datetime.fromisoformat(a["created_at"]).astimezone(zone).date().isoformat()
         if date in days:
             days[date]["activity"] += 1
+            days[date]["attempts"] += bool(a.get("result"))
         event = {
             "id": a["id"],
             "kind": "solution_submitted",
@@ -148,21 +150,12 @@ def snapshot(store, timezone="UTC"):
     active = next(
         (s for s in sessions if s["state"] != "COMPLETE" and s.get("remaining_seconds", 0) > 0), None
     )
-    draft_q = None
-    for question in questions.values():
-        if store.flags(question["id"]).get("archived"):
-            continue
-        draft = store.draft(question["id"])
-        if not draft or (draft["files"] == question.get("starter_files", {}) and not draft["answer"].strip()):
-            continue
-        last = latest.get(question["id"], {})
-        if last.get("completion_status") == "complete" and (
-            last.get("created_at", "") >= draft["updated_at"]
-            or (last.get("files", {}) == draft["files"] and last.get("answer", "") == draft["answer"])
-        ):
-            continue
-        if not draft_q or draft["updated_at"] > draft_q[0]:
-            draft_q = (draft["updated_at"], question["id"])
+    from .learning import states, progress
+    learning = states(store, list(questions.values()), attempts)
+    unfinished = [(v["last_activity_at"], qid) for qid, v in learning.items() if v["progress_status"] == "in_progress" and not v.get("session_id")]
+    draft_q = max(unfinished, default=None)
+    if active and draft_q and draft_q[0] > active.get("last_activity_at", active["started_at"]):
+        active = None
     due_ids = {
         a["question_id"]
         for a in latest.values()
@@ -187,6 +180,8 @@ def snapshot(store, timezone="UTC"):
             None,
         )
     q = questions.get(active["question_id"] if active else draft_q[1] if draft_q else next_id)
+    if draft_q and not active:
+        q = store.question(draft_q[1], learning[draft_q[1]]["draft_version"]) or q
     public = (
         {k: q[k] for k in ["id", "version", "title", "topics", "difficulty", "duration_minutes", "type"]}
         if q
@@ -201,13 +196,17 @@ def snapshot(store, timezone="UTC"):
         for a in latest.values()
         if datetime.fromisoformat(a["review_due_at"]) <= datetime.now(UTC)
     ]
+    projected = progress(store, True)
     return {
+        "recommendations": {"weak_topics": projected["weak_topics"], "goals": projected["goals"]},
         "timezone": timezone,
         "today": str(today),
         "range_start": str(first),
         "days": list(days.values()),
         "metrics": {
             "questions_solved": len(solved),
+            "completed_questions": projected["summary"]["completed_questions"],
+            "attempts": len(attempts),
             "practice_seconds": 0,
             "mock_interviews_completed": sum(s["state"] == "COMPLETE" for s in sessions),
             "current_streak": streak,
@@ -221,7 +220,8 @@ def snapshot(store, timezone="UTC"):
         },
         "continuation": {
             "kind": "session" if active else "draft" if draft_q else "question" if q else "empty",
-            "label": "Resume session" if active else "Continue practice",
+            "label": "Resume" if active or draft_q else "Start Practice",
+            "last_activity_at": active.get("last_activity_at", active["started_at"]) if active else draft_q[0] if draft_q else None,
             "reason": "Continue from your recorded preparation state.",
             "question": public,
             "session": {k: active[k] for k in ["id", "question_id", "state", "remaining_seconds", "paused"]}

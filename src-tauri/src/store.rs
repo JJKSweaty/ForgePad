@@ -169,7 +169,8 @@ impl Store {
     }
     pub fn get(&self, kind: &str, id: &str) -> Result<Value> {
         let db = self.db.lock().unwrap();
-        let payload: Option<String> = if ["runs", "interviews", "goals"].contains(&kind) {
+        let payload: Option<String> = if ["attempts", "runs", "interviews", "goals"].contains(&kind)
+        {
             db.query_row(
                 &format!("SELECT payload FROM {kind} WHERE id=?"),
                 [id],
@@ -187,6 +188,13 @@ impl Store {
         Ok(serde_json::from_str(
             &payload.context(format!("{kind} record not found"))?,
         )?)
+    }
+    pub fn delete_goal(&self, id: &str) -> Result<()> {
+        self.db
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM goals WHERE id=?", [id])?;
+        Ok(())
     }
     pub fn attempt_metadata(&self) -> Result<Vec<Value>> {
         let db = self.db.lock().unwrap();
@@ -455,6 +463,11 @@ impl Store {
                     replay.to_string()
                 ],
             )?;
+        }
+        if let Some(session) = session {
+            if kind != "interviewer" {
+                self.db.lock().unwrap().execute("UPDATE interviews SET payload=json_set(payload,'$.last_activity_at',?) WHERE id=?", params![record["created_at"].as_str(),session])?;
+            }
         }
         Ok(record)
     }

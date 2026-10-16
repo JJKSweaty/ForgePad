@@ -33,3 +33,5 @@ pub fn now() -> String {
 pub fn id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
+
+pub mod learning;

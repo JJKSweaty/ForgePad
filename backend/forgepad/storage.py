@@ -223,10 +223,14 @@ class Store:
         return [json.loads(row[0]) for row in rows]
 
     def record(self, table: str, record_id: str) -> dict | None:
-        assert table in {"runs", "interviews", "goals"}
+        assert table in {"attempts", "runs", "interviews", "goals"}
         with self.connect() as db:
             row = db.execute(f"SELECT payload FROM {table} WHERE id=?", (record_id,)).fetchone()
         return json.loads(row[0]) if row else None
+
+    def delete_goal(self, goal_id):
+        with self.connect() as db:
+            db.execute("DELETE FROM goals WHERE id=?", (goal_id,))
 
     def save_record(self, table: str, record: dict):
         assert table in {"runs", "interviews", "goals"}

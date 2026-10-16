@@ -89,6 +89,9 @@ class SupabaseStore:
             record["_revision"] = rows[0]["revision"]
         return record
 
+    def delete_goal(self, goal_id):
+        self._request("DELETE", "forgepad_records", params={"namespace": "eq.goals", "key": f"eq.{goal_id}"})
+
     def save_record(self, table, record):
         if table == "interviews" and "_revision" in record:
             expected = record["_revision"]

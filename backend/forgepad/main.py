@@ -97,10 +97,15 @@ class AttemptRequest(StrictModel):
 
 class GoalRequest(StrictModel):
     title: str = Field(min_length=1, max_length=500)
+    question_id: str | None = Field(default=None, max_length=80)
+    topic: str | None = Field(default=None, max_length=100)
 
 
 class GoalUpdate(StrictModel):
-    status: Literal["pending", "active", "blocked", "complete"]
+    status: Literal["pending", "active", "blocked", "complete"] | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    question_id: str | None = Field(default=None, max_length=80)
+    topic: str | None = Field(default=None, max_length=100)
 
 
 class InterviewRequest(StrictModel):
@@ -257,6 +262,9 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             archived=bool(flags["archived"]),
             completion_status=latest["completion_status"] if latest else "not_started",
         )
+        from .learning import states
+        learning = state[2] if state and len(state) > 2 else states(store(), [question])
+        result.update(learning.get(question["id"], {"progress_status": "not_started"}))
         return result
 
     @app.get("/api/health")
@@ -316,7 +324,8 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         max_duration: int | None = None,
     ):
         items = []
-        state = store().summary_state()
+        from .learning import states
+        state = (*store().summary_state(), states(store(), store().questions()))
         for question in store().questions():
             if (
                 q
@@ -551,46 +560,23 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         return result
 
     @app.get("/api/progress")
-    def progress():
-        attempts = store().records("attempts")
-        latest = {}
-        for item in attempts:
-            latest.setdefault(item["question_id"], item)
-        due = [
-            item
-            for item in latest.values()
-            if datetime.fromisoformat(item["review_due_at"]) <= datetime.now(UTC)
-        ]
-        topic_counts = {}
-        for item in attempts:
-            for topic in item["topics"]:
-                counts = topic_counts.setdefault(topic, {"topic": topic, "attempts": 0, "needs_review": 0})
-                counts["attempts"] += 1
-                counts["needs_review"] += item["completion_status"] != "complete"
-        weak = sorted(
-            (item for item in topic_counts.values() if item["needs_review"]),
-            key=lambda item: (-item["needs_review"] / item["attempts"], -item["needs_review"]),
-        )
-        return {
-            "attempts": attempts,
-            "due_reviews": due,
-            "weak_topics": weak[:10],
-            "goals": store().records("goals"),
-            "summary": {
-                "attempts": len(attempts),
-                "completed_questions": sum(
-                    item["completion_status"] == "complete" for item in latest.values()
-                ),
-                "due_reviews": len(due),
-                "interviews": len(store().records("interviews")),
-            },
-        }
+    def progress(compact: bool = False):
+        from .learning import progress as project
+        return project(store(), compact)
+
+    @app.get("/api/attempts/{attempt_id}")
+    def attempt_detail(attempt_id: str):
+        record = store().record("attempts", attempt_id)
+        if record is None:
+            raise HTTPException(404, "Attempt not found")
+        return record
 
     @app.post("/api/goals", status_code=201)
     def create_goal(request: GoalRequest):
         record = {
             "id": str(uuid4()),
             "title": request.title.strip(),
+            "question_id": request.question_id, "topic": request.topic,
             "status": "pending",
             "created_at": now(),
         }
@@ -602,9 +588,14 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         record = store().record("goals", goal_id)
         if record is None:
             raise HTTPException(404, "Goal not found")
-        record.update(status=request.status, updated_at=now())
+        record.update(**request.model_dump(exclude_unset=True), updated_at=now())
         store().save_record("goals", record)
         return record
+
+    @app.delete("/api/goals/{goal_id}")
+    def delete_goal(goal_id: str):
+        store().delete_goal(goal_id)
+        return {"deleted": True}
 
     def load_session(session_id):
         record = store().record("interviews", session_id)

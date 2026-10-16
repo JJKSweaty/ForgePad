@@ -232,36 +232,44 @@ impl Store {
         Ok(json!({"questions_solved":solved,"practice_seconds":seconds,"mock_interviews_completed":interviews}))
     })
     }
+    /// Content comparison prevents an autosave after Submit from inventing unfinished work.
+    pub fn unfinished_drafts(&self) -> Result<Vec<Value>> {
+        self.with_db(|db| {
+            let mut st = db.prepare("SELECT d.question_id,d.version,d.files,d.answer,d.updated_at,q.package,(SELECT payload FROM attempts a WHERE a.question_id=d.question_id AND a.version=d.version ORDER BY created_at DESC LIMIT 1) FROM draft_versions d JOIN questions q ON q.id=d.question_id AND q.version=d.version LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC")?;
+            let rows = st.query_map([], |r| Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,Option<String>>(6)?)))?.collect::<std::result::Result<Vec<_>,_>>()?;
+            let mut drafts = vec![];
+            for (id,version,files,answer,updated,package,last) in rows {
+                let files:Value=serde_json::from_str(&files)?;
+                let q:Value=serde_json::from_str(&package)?;
+                if files == q["starter_files"] && answer.trim().is_empty() { continue; }
+                if let Some(last)=last {
+                    let a:Value=serde_json::from_str(&last)?;
+                    if a["files"] == files && a["answer"].as_str().unwrap_or("") == answer { continue; }
+                    if a["created_at"].as_str().is_some_and(|at|at >= updated.as_str()) { continue; }
+                }
+                drafts.push(json!({"question_id":id,"question_version":version,"updated_at":updated}));
+            }
+            Ok(drafts)
+        })
+    }
     pub fn unfinished_draft(&self) -> Result<Option<Value>> {
-        let drafts=self.with_db(|db|{
-            let mut st=db.prepare("SELECT d.question_id,d.version,d.files,d.answer,d.updated_at FROM draft_versions d LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC")?;
-            let rows=st.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?)))?.collect::<std::result::Result<Vec<_>,_>>()?;Ok(rows)
-        })?;
-        for (id, version, files, answer, updated) in drafts {
-            let q = self.question(&id, Some(version))?;
-            let files: Value = serde_json::from_str(&files)?;
-            if files == q["starter_files"] && answer.trim().is_empty() {
-                continue;
-            }
-            let latest = self.latest_attempt(&id)?;
-            if latest.as_ref().is_some_and(|a| {
-                a["completion_status"] == "complete"
-                    && a["created_at"]
-                        .as_str()
-                        .is_some_and(|at| at >= updated.as_str())
-            }) {
-                continue;
-            }
-            return Ok(Some(
-                json!({"question_id":id,"question_version":version,"updated_at":updated}),
-            ));
-        }
-        Ok(None)
+        Ok(self.unfinished_drafts()?.into_iter().next())
     }
 }
 impl Service {
     pub fn continuation(&self) -> Result<Value> {
-        let active = self.active_session()?;
+        let mut active = self.active_session()?;
+        let draft = self.store.unfinished_draft()?;
+        let session_at = active["last_activity_at"]
+            .as_str()
+            .or_else(|| active["started_at"].as_str())
+            .unwrap_or("");
+        if draft
+            .as_ref()
+            .is_some_and(|d| d["updated_at"].as_str().unwrap_or("") > session_at)
+        {
+            active = Value::Null;
+        }
         let roadmap = self
             .store
             .get("settings", "active_roadmap")
@@ -275,16 +283,16 @@ impl Service {
                 active["question_version"].as_i64(),
             )?;
             return Ok(
-                json!({"kind":"session","label":"Resume session","reason":"Your session and its persisted timer are ready to resume.","question":self.summary(&q)?,"session":active,"roadmap_id":roadmap,"roadmap_title":roadmap_title}),
+                json!({"last_activity_at":active["last_activity_at"].as_str().or_else(||active["started_at"].as_str()),"kind":"session","label":"Resume","reason":"Your session and its persisted timer are ready to resume.","question":self.summary(&q)?,"session":active,"roadmap_id":roadmap,"roadmap_title":roadmap_title}),
             );
         }
-        if let Some(d) = self.store.unfinished_draft()? {
+        if let Some(d) = draft {
             let q = self.store.question(
                 d["question_id"].as_str().unwrap(),
                 d["question_version"].as_i64(),
             )?;
             return Ok(
-                json!({"kind":"draft","label":"Continue practice","reason":"Reopen your last unfinished draft.","question":self.summary(&q)?,"session":null,"roadmap_id":roadmap,"roadmap_title":roadmap_title}),
+                json!({"last_activity_at":d["updated_at"],"kind":"draft","label":"Resume","reason":"Reopen your last unfinished draft.","question":self.summary(&q)?,"session":null,"roadmap_id":roadmap,"roadmap_title":roadmap_title}),
             );
         }
         match self.next_question(&roadmap, &json!({})) {
@@ -314,7 +322,7 @@ impl Service {
         } else {
             let first =
                 today - Duration::days(51 * 7 + today.weekday().num_days_from_sunday() as i64);
-            let mut days:BTreeMap<NaiveDate,Value>=(0..364).map(|i|{let date=first+Duration::days(i);(date,json!({"date":date.to_string(),"activity":0,"solved":0,"active_seconds":0,"future":date>today}))}).collect();
+            let mut days:BTreeMap<NaiveDate,Value>=(0..364).map(|i|{let date=first+Duration::days(i);(date,json!({"date":date.to_string(),"activity":0,"attempts":0,"solved":0,"active_seconds":0,"future":date>today}))}).collect();
             let rows = self.store.activity_rows(at - Duration::days(370))?;
             let mut active_dates = HashSet::new();
             for event in &rows {
@@ -323,6 +331,11 @@ impl Service {
                         if event["data"]["meaningful"] == true {
                             v["activity"] = json!(v["activity"].as_i64().unwrap_or(0) + 1);
                             active_dates.insert(date);
+                        }
+                        if event["kind"] == "solution_submitted"
+                            && event["data"]["result"].is_string()
+                        {
+                            v["attempts"] = json!(v["attempts"].as_u64().unwrap_or(0) + 1);
                         }
                         if event["kind"] == "problem_solved" {
                             v["solved"] = json!(v["solved"].as_i64().unwrap_or(0) + 1);
@@ -374,6 +387,12 @@ impl Service {
             result
         };
         result["continuation"] = self.continuation()?;
+        let progress = self.compact_progress()?;
+        result["recommendations"] =
+            json!({"weak_topics":progress["weak_topics"],"goals":progress["goals"]});
+        result["metrics"]["completed_questions"] =
+            progress["summary"]["completed_questions"].clone();
+        result["metrics"]["attempts"] = progress["summary"]["attempts"].clone();
         result["generated_at"] = json!(at.to_rfc3339());
         Ok(result)
     }
