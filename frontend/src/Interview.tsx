@@ -187,7 +187,7 @@ export default function Interview({
     <div className="page interview-page">
       <div className="page-heading">
         <div>
-          <h2>Mock interview</h2>
+          <h2>Mock Interview</h2>
           <p>
             Explain your decisions, handle follow-ups, and review the session.
           </p>

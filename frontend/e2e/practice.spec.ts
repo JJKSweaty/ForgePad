@@ -29,7 +29,9 @@ test("code edits survive navigation, execute in Docker, and update progress", as
   await input.focus();
   await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
   await page.keyboard.insertText(question.reference_solution[name]);
-  await page.getByRole("button", { name: "Submit", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Submit all tests", exact: true })
+    .click();
   const output = page.getByRole("region", { name: "Execution output" });
   await expect(output).toContainText("8 / 8 tests passed", { timeout: 90000 });
   await page
@@ -49,7 +51,9 @@ test("code edits survive navigation, execute in Docker, and update progress", as
     .first()
     .click();
   await expect(page.locator(".monaco-editor")).toContainText("align_up");
-  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Run public tests", exact: true })
+    .click();
   await expect(output.locator(".badge").first()).toHaveText("passed", {
     timeout: 90000,
   });
@@ -107,7 +111,7 @@ test("guided interview supports pausing, responses, finishing, and replay", asyn
     .click();
   await page
     .getByRole("navigation", { name: "Practice modes" })
-    .getByRole("button", { name: "Mock interview" })
+    .getByRole("button", { name: "Mock Interview" })
     .click();
   await page
     .getByRole("combobox", { name: "Question", exact: true })

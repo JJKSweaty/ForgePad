@@ -58,7 +58,7 @@ export function QuestionBank({
     <div className="page">
       <div className="page-heading">
         <div>
-          <h2>Question library</h2>
+          <h2>Question Library</h2>
           <p>
             Choose a topic, explore an unfamiliar edge case, or bring your own
             problem.
@@ -160,7 +160,7 @@ export function QuestionBank({
         <span>{filtered.length} questions</span>
         <span>TYPE / DIFFICULTY / TIME</span>
       </div>
-      <section className="question-list" aria-label="Questions">
+      <section className="question-list" aria-label="Question Library">
         {filtered.map((q) => (
           <article
             className={`question-card ${q.archived ? "archived" : ""}`}

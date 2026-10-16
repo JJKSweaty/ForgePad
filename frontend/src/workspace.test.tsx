@@ -76,11 +76,11 @@ it("keeps the sidebar to three destinations and nests every practice mode", asyn
       .map((b) => b.textContent),
   ).toEqual(["Dashboard", "Practice", "Progress"]);
   await user.click(within(nav).getByText("Practice"));
-  await screen.findByRole("heading", { name: "Question library" });
+  await screen.findByRole("heading", { name: "Question Library" });
   const modes = screen.getByRole("navigation", { name: "Practice modes" });
   await user.click(within(modes).getByText("Roadmaps"));
   await screen.findByText("Roadmap content");
-  await user.click(within(modes).getByText("Mock interview"));
+  await user.click(within(modes).getByText("Mock Interview"));
   await screen.findByText("Interview content");
   expect(
     within(nav)
@@ -114,4 +114,25 @@ it("keeps the current screen when saving a draft fails during navigation", async
     expect.stringContaining("disk unavailable"),
   );
   expect(screen.getByText("Dashboard content")).toBeTruthy();
+});
+it("hides the sidebar, keeps its toggle reachable, and remembers the choice", async () => {
+  const user = userEvent.setup();
+  const view = render(<App />);
+  await screen.findByText("Dashboard content");
+  await user.click(screen.getByRole("button", { name: "Hide sidebar" }));
+  expect(
+    screen.queryByRole("navigation", { name: "Main navigation" }),
+  ).toBeNull();
+  expect(
+    screen
+      .getByRole("button", { name: "Show sidebar" })
+      .getAttribute("aria-expanded"),
+  ).toBe("false");
+  view.unmount();
+  render(<App />);
+  await screen.findByText("Dashboard content");
+  await user.click(screen.getByRole("button", { name: "Show sidebar" }));
+  expect(
+    screen.getByRole("navigation", { name: "Main navigation" }),
+  ).toBeTruthy();
 });

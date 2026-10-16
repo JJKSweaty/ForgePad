@@ -1,5 +1,10 @@
 # ForgePad release notes
 
+## 0.3.1 — 2026-10-16
+
+### Improved
+- A more comfortable coding workspace with local C/C++ autocomplete, remembered resizable panels and a hideable sidebar, explicit autosave and checkpoint controls, and line-linked compiler diagnostics.
+
 ## 0.3.0 — 2026-10-15
 
 ### Added

@@ -17,6 +17,9 @@ export function PaneDivider({
       aria-valuemin={25}
       aria-valuemax={60}
       aria-valuenow={Math.round(value)}
+      aria-valuetext={`${Math.round(value)}% problem, ${100 - Math.round(value)}% editor`}
+      aria-controls="problem-panel"
+      title="Drag to resize. Use Left/Right arrows, Home, or End when focused."
       tabIndex={0}
       className="pane-divider"
       onKeyDown={(event) => {
@@ -32,6 +35,8 @@ export function PaneDivider({
         }
       }}
       onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.currentTarget.focus();
         event.currentTarget.setPointerCapture(event.pointerId);
         event.preventDefault();
       }}
@@ -41,6 +46,10 @@ export function PaneDivider({
         if (rect) change(((event.clientX - rect.left) / rect.width) * 100);
       }}
       onPointerUp={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
+          event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={(event) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId))
           event.currentTarget.releasePointerCapture(event.pointerId);
       }}

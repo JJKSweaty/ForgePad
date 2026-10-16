@@ -1,7 +1,11 @@
 import Editor, { loader } from "@monaco-editor/react";
 import type { EditorProps } from "@monaco-editor/react";
+import { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
+import "monaco-editor/esm/vs/editor/editor.all";
 import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
+import { completionEntries } from "./editorSupport";
+import type { EditorDiagnostic } from "./editorSupport";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 loader.config({ monaco });
@@ -61,10 +65,137 @@ for (const [name, base, background, foreground, comment, keyword, string] of [
   });
 }
 
-export default function CodeEditor({ theme, options, ...props }: EditorProps) {
+type CodeEditorProps = EditorProps & {
+  workspaceFiles?: Record<string, string>;
+  diagnostics?: EditorDiagnostic[];
+  revealPosition?: { lineNumber: number; column: number };
+};
+export default function CodeEditor({
+  theme,
+  options,
+  workspaceFiles,
+  diagnostics,
+  revealPosition,
+  onMount,
+  ...props
+}: CodeEditorProps) {
+  const [instance, setInstance] =
+    useState<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const workspace = useRef(workspaceFiles);
+  workspace.current = workspaceFiles;
+  useEffect(() => {
+    if (!instance || !["c", "cpp"].includes(props.language ?? "")) return;
+    const provider = monaco.languages.registerCompletionItemProvider(
+      props.language!,
+      {
+        provideCompletionItems(model, position) {
+          if (model !== instance.getModel()) return { suggestions: [] };
+          const word = model.getWordUntilPosition(position);
+          const range = new monaco.Range(
+            position.lineNumber,
+            word.startColumn,
+            position.lineNumber,
+            word.endColumn,
+          );
+          const kinds = monaco.languages.CompletionItemKind;
+          const prefix = model
+            .getLineContent(position.lineNumber)
+            .slice(0, word.startColumn - 1)
+            .trimEnd();
+          const afterHash = prefix.endsWith("#");
+          const afterStd = prefix.endsWith("std::");
+          return {
+            suggestions: completionEntries(
+              model.getLanguageId(),
+              workspace.current ?? { source: model.getValue() },
+            )
+              .filter(
+                (entry) =>
+                  entry.kind !== "variable" || entry.label !== word.word,
+              )
+              .map((entry) => ({
+                ...entry,
+                insertText:
+                  entry.label === "include" && afterHash
+                    ? entry.insertText.slice(1)
+                    : afterStd && entry.label.startsWith("std::")
+                      ? entry.insertText.slice(5)
+                      : entry.insertText,
+                filterText:
+                  afterStd && entry.label.startsWith("std::")
+                    ? entry.label.slice(5)
+                    : entry.label,
+                kind:
+                  entry.kind === "keyword"
+                    ? kinds.Keyword
+                    : entry.kind === "snippet"
+                      ? kinds.Snippet
+                      : entry.kind === "function"
+                        ? kinds.Function
+                        : kinds.Variable,
+                insertTextRules:
+                  entry.kind === "snippet" || entry.kind === "function"
+                    ? monaco.languages.CompletionItemInsertTextRule
+                        .InsertAsSnippet
+                    : undefined,
+                range,
+              })),
+          };
+        },
+      },
+    );
+    return () => provider.dispose();
+  }, [instance, props.language]);
+  useEffect(() => {
+    if (!instance) return;
+    const apply = () => {
+      const model = instance.getModel();
+      if (!model) return;
+      monaco.editor.setModelMarkers(
+        model,
+        "forgepad-run",
+        (diagnostics ?? []).map((diagnostic) => {
+          const position = model.validatePosition({
+            lineNumber: diagnostic.line,
+            column: diagnostic.column,
+          });
+          return {
+            startLineNumber: position.lineNumber,
+            startColumn: position.column,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column + 1,
+            message: diagnostic.message,
+            severity:
+              diagnostic.severity === "warning"
+                ? monaco.MarkerSeverity.Warning
+                : diagnostic.severity === "note"
+                  ? monaco.MarkerSeverity.Info
+                  : monaco.MarkerSeverity.Error,
+          };
+        }),
+      );
+    };
+    apply();
+    const listener = instance.onDidChangeModel(apply);
+    return () => {
+      listener.dispose();
+      const model = instance.getModel();
+      if (model) monaco.editor.setModelMarkers(model, "forgepad-run", []);
+    };
+  }, [instance, props.path, diagnostics]);
+  useEffect(() => {
+    if (!instance || !revealPosition) return;
+    instance.setPosition(revealPosition);
+    instance.revealPositionInCenter(revealPosition);
+    instance.focus();
+  }, [instance, props.path, revealPosition]);
   return (
     <Editor
       {...props}
+      onMount={(editor, api) => {
+        setInstance(editor);
+        onMount?.(editor, api);
+      }}
       theme={theme === "light" ? "forgepad-light" : "forgepad-dark"}
       options={{
         fontSize: 14,
@@ -86,6 +217,16 @@ export default function CodeEditor({ theme, options, ...props }: EditorProps) {
         roundedSelection: true,
         scrollBeyondLastLine: false,
         automaticLayout: true,
+        quickSuggestions: { other: true, comments: false, strings: false },
+        suggestOnTriggerCharacters: true,
+        wordBasedSuggestions: "off",
+        snippetSuggestions: "top",
+        tabCompletion: "on",
+        acceptSuggestionOnEnter: "smart",
+        autoClosingBrackets: "languageDefined",
+        autoClosingQuotes: "languageDefined",
+        autoIndent: "full",
+        formatOnPaste: false,
         padding: { top: 14, bottom: 14 },
         scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9 },
         ...options,

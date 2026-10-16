@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Moon,
   PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   Search,
   Settings,
@@ -72,7 +73,9 @@ export default function App() {
       () => localStorage.getItem("forgepad.v1.theme") ?? "light",
     ),
     [resolvedTheme, setResolvedTheme] = useState("light"),
-    [compact, setCompact] = useState(false),
+    [sidebarHidden, setSidebarHidden] = useState(
+      () => localStorage.getItem("forgepad.sidebar.hidden") === "true",
+    ),
     [search, setSearch] = useState(false);
   const refresh = useCallback(async () => {
     try {
@@ -220,9 +223,9 @@ export default function App() {
     (question) => question.id === selected,
   );
   const practiceTabs: { id: Page; label: string }[] = [
-    { id: "questions", label: "Questions" },
+    { id: "questions", label: "Question Library" },
     { id: "roadmaps", label: "Roadmaps" },
-    { id: "interview", label: "Mock interview" },
+    { id: "interview", label: "Mock Interview" },
     ...(selected
       ? [
           {
@@ -239,11 +242,11 @@ export default function App() {
       ? "Settings"
       : navigation.find((n) => n.id === activePage)?.label;
   return (
-    <div className={`app ${compact ? "compact" : ""}`}>
+    <div className={`app ${sidebarHidden ? "sidebar-hidden" : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="sidebar">
+      <aside className="sidebar" id="workspace-sidebar" hidden={sidebarHidden}>
         <button
           className="brand"
           onClick={() => navigate("dashboard")}
@@ -263,8 +266,9 @@ export default function App() {
               key={id}
               className={`nav-item ${activePage === id ? "active" : ""}`}
               aria-current={activePage === id ? "page" : undefined}
+              aria-label={label}
               onClick={() => navigate(id)}
-              title={compact ? label : undefined}
+              title={label}
             >
               <Icon size={17} />
               <span>{label}</span>
@@ -275,6 +279,7 @@ export default function App() {
           <button
             className={`nav-item ${activePage === "settings" ? "active" : ""}`}
             aria-current={activePage === "settings" ? "page" : undefined}
+            aria-label="Settings"
             onClick={() => settings()}
           >
             <Settings size={17} />
@@ -308,18 +313,29 @@ export default function App() {
               )}
             </button>
             <span className="version">ForgePad {appVersion}</span>
-            <button
-              className="icon-button"
-              aria-label="Toggle sidebar"
-              onClick={() => setCompact((v) => !v)}
-            >
-              <PanelLeftClose size={16} />
-            </button>
           </div>
         </div>
       </aside>
       <div className="main-shell">
         <header className="topbar">
+          <button
+            className="icon-button sidebar-toggle"
+            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+            aria-controls="workspace-sidebar"
+            aria-expanded={!sidebarHidden}
+            title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+            onClick={() => {
+              const hidden = !sidebarHidden;
+              setSidebarHidden(hidden);
+              localStorage.setItem("forgepad.sidebar.hidden", String(hidden));
+            }}
+          >
+            {sidebarHidden ? (
+              <PanelLeftOpen size={18} />
+            ) : (
+              <PanelLeftClose size={18} />
+            )}
+          </button>
           <div className="breadcrumbs">
             <span>Workspace</span>
             <ChevronRight size={13} />

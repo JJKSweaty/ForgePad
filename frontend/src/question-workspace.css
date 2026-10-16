@@ -70,6 +70,8 @@
   font-size: 12px;
 }
 .practice-actions {
+  flex-direction: row;
+  align-items: center;
   gap: 12px;
   align-items: center;
 }
@@ -313,5 +315,286 @@
   }
   .coach-heading .badge {
     margin-left: 28px;
+  }
+}
+
+/* Practice editor controls stay available when either side panel is hidden. */
+.sidebar[hidden],
+.problem-pane[hidden] {
+  display: none !important;
+}
+.sidebar-hidden .main-shell {
+  margin-left: 0;
+  width: 100%;
+}
+.topbar {
+  gap: 12px;
+}
+.topbar .breadcrumbs {
+  margin-right: auto;
+}
+.sidebar-toggle {
+  flex-shrink: 0;
+}
+.practice-page {
+  container-type: inline-size;
+}
+.practice-heading > div:first-of-type {
+  min-width: 0;
+}
+.practice-heading h1 {
+  overflow-wrap: anywhere;
+}
+.practice-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+.practice-actions button {
+  font-size: 12px;
+}
+.practice-actions button > span {
+  display: inline;
+}
+.draft-saving-info {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: -4px 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.draft-saving-info .save-status {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-secondary);
+}
+.checkpoint-status {
+  margin-left: auto;
+}
+.practice-layout > .problem-pane {
+  align-self: start;
+  max-height: 78vh;
+  overflow: auto;
+}
+.pane-divider {
+  min-height: 120px;
+}
+.pane-divider::after {
+  inset: 0 5px;
+  border-radius: 2px;
+}
+.problem-collapsed .work-pane {
+  border-radius: 10px;
+}
+.editor-toolbar {
+  flex-wrap: wrap;
+  padding-right: 8px;
+  gap: 0 8px;
+}
+.editor-toolbar > .button-row {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.file-tabs {
+  max-width: 100%;
+}
+.editor-toolbar .autocomplete-trigger {
+  font-size: 11px;
+  min-height: 32px;
+}
+.editor-bottom {
+  flex-wrap: wrap;
+}
+.editor-bottom > span {
+  white-space: nowrap;
+}
+.editor-bottom .button-row {
+  margin-left: auto;
+}
+.run-toolbar {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+.execution-help {
+  flex: 1 1 220px;
+  max-width: 430px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.run-toolbar > .button-row {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.output-panel {
+  overflow-wrap: anywhere;
+}
+.output-panel pre {
+  overflow: auto;
+  max-height: 300px;
+}
+.execution-progress {
+  padding: 12px 18px 24px;
+}
+.execution-progress p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.execution-progress-track {
+  height: 4px;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: 4px;
+}
+.execution-progress-track span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: var(--accent);
+  animation: execution-pulse 1.5s ease-in-out infinite alternate;
+}
+@keyframes execution-pulse {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(185%);
+  }
+}
+.execution-error {
+  color: var(--danger);
+  padding: 12px 18px;
+  margin: 0;
+  font-size: 13px;
+}
+.result-context {
+  padding: 8px 18px 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.editor-diagnostics {
+  padding: 0 16px 16px;
+}
+.editor-diagnostics h3 {
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.editor-diagnostics ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.editor-diagnostics button {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 5px 10px;
+  padding: 8px 10px;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  background: var(--input);
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+.diagnostic-severity.error {
+  color: var(--danger);
+}
+.diagnostic-severity.warning {
+  color: var(--warning, var(--text-secondary));
+}
+.restore-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 101;
+  width: calc(100% - 32px);
+}
+@container (max-width: 760px) {
+  .practice-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .practice-layout > .problem-pane {
+    max-height: 380px;
+    width: 100%;
+  }
+  .pane-divider {
+    display: none;
+  }
+  .practice-heading {
+    flex-wrap: wrap;
+  }
+  .practice-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  .checkpoint-status {
+    margin-left: 0;
+  }
+}
+@media (max-width: 560px) {
+  .topbar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .topbar-actions {
+    gap: 4px;
+  }
+  .topbar .breadcrumbs > span,
+  .topbar .breadcrumbs > svg,
+  .search-trigger kbd,
+  .search-trigger span {
+    display: none;
+  }
+  .topbar .search-trigger {
+    min-width: 32px;
+    justify-content: center;
+  }
+  .topbar .runner-status {
+    font-size: 10px;
+  }
+  .practice-actions {
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .practice-actions button {
+    flex: 1;
+  }
+  .editor-bottom .button-row {
+    justify-content: flex-start;
+    margin-left: 0;
+    gap: 4px 12px;
+  }
+  .editor-toolbar > .button-row {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .run-toolbar > .button-row {
+    width: 100%;
+  }
+  .test-result summary {
+    flex-wrap: wrap;
+  }
+  .restore-dialog .modal-actions {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .execution-progress-track span {
+    animation: none;
   }
 }

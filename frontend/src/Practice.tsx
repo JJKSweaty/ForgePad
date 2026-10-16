@@ -1,7 +1,10 @@
 import { PaneDivider } from "./PaneDivider";
 import { usePracticeActivity } from "./usePracticeActivity";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import type * as monaco from "monaco-editor/esm/vs/editor/editor.api";
+import { parseDiagnostics } from "./editorSupport";
 import { native, nativeEvents } from "./native";
 import ReasoningWorkspace from "./ReasoningWorkspace";
 import QuestionCoach from "./QuestionCoach";
@@ -12,9 +15,11 @@ import {
   Check,
   ChevronLeft,
   Download,
-  Expand,
   FileCode2,
   Play,
+  PanelLeftClose,
+  PanelLeftOpen,
+  LoaderCircle,
   Plus,
   RotateCcw,
   Save,
@@ -25,6 +30,24 @@ import { api, download, message, post, readable } from "./api";
 import type { Draft, Question, Run } from "./api";
 const Editor = lazy(() => import("./CodeEditor"));
 type Checkpoint = { at: string; files: Record<string, string>; answer: string };
+function navigateTabs(event: ReactKeyboardEvent<HTMLDivElement>) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = [
+    ...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+  ];
+  const index = tabs.indexOf(event.target as HTMLButtonElement);
+  if (index < 0) return;
+  event.preventDefault();
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) %
+          tabs.length;
+  tabs[next]?.focus();
+  tabs[next]?.click();
+}
 export default function Practice({
   questionId,
   questionVersion,
@@ -42,6 +65,7 @@ export default function Practice({
 }) {
   usePracticeActivity(questionId, sessionId);
   const layout = useRef<HTMLDivElement>(null);
+  const dialogTrigger = useRef<HTMLButtonElement | null>(null);
   const [paneWidth, setPaneWidth] = useState(() =>
     Math.max(
       25,
@@ -60,11 +84,20 @@ export default function Practice({
     [saveStatus, setSaveStatus] = useState("Loading draft"),
     [run, setRun] = useState<Run | null>(null),
     [busy, setBusy] = useState(false),
+    [runMode, setRunMode] = useState<"run" | "submit">("run"),
+    [runFiles, setRunFiles] = useState<Record<string, string> | null>(null),
+    [executionError, setExecutionError] = useState(""),
+    [editorLocation, setEditorLocation] = useState<
+      { file: string; lineNumber: number; column: number } | undefined
+    >(),
+    [checkpointSaving, setCheckpointSaving] = useState(false),
     [dictating, setDictating] = useState(false),
     [fontSize, setFontSize] = useState(
       () => Number(localStorage.getItem("forgepad.editor.fontSize")) || 14,
     ),
-    [focus, setFocus] = useState(false),
+    [problemCollapsed, setProblemCollapsed] = useState(
+      () => localStorage.getItem("forgepad.problem.collapsed") === "true",
+    ),
     [tab, setTab] = useState<"problem" | "hints" | "rubric">("problem"),
     [confidence, setConfidence] = useState("partial"),
     [reflection, setReflection] = useState(""),
@@ -120,7 +153,7 @@ export default function Practice({
         savedAt.current = d.updated_at ?? null;
         savedContent.current = JSON.stringify(next);
         ready.current = true;
-        setSaveStatus("All changes saved");
+        setSaveStatus("Draft autosaved");
       })
       .catch((e) => {
         if (live) setError(message(e));
@@ -158,7 +191,7 @@ export default function Practice({
   }, [questionId, questionVersion, sessionId]);
   async function save(next: Draft = draft.current) {
     const seq = ++saveSequence.current;
-    setSaveStatus("Saving…");
+    setSaveStatus("Autosaving draft…");
     const request = saveQueue.current
       .catch(() => {})
       .then(async () => {
@@ -184,10 +217,15 @@ export default function Practice({
     saveQueue.current = request;
     try {
       await request;
-      if (seq === saveSequence.current) setSaveStatus("All changes saved");
+      if (seq === saveSequence.current)
+        setSaveStatus(
+          JSON.stringify(draft.current) === savedContent.current
+            ? "Draft autosaved"
+            : "Draft changed · autosave pending",
+        );
     } catch (e) {
       if (seq === saveSequence.current) {
-        setSaveStatus("Save failed · local recovery kept");
+        setSaveStatus("Autosave failed · local recovery kept");
         setError(message(e));
       }
       throw e;
@@ -255,7 +293,8 @@ export default function Practice({
       `forgepad.v1.recovery.${questionId}`,
       JSON.stringify(draft.current),
     );
-    setSaveStatus("Unsaved changes");
+    if (JSON.stringify(draft.current) === savedContent.current) return;
+    setSaveStatus("Draft changed · autosave pending");
     const timer = setTimeout(() => {
       void save(draft.current).catch(() => {});
     }, 650);
@@ -270,12 +309,15 @@ export default function Practice({
         const result = await api<Run>(`/runs/${run.id}`);
         if (cancelled) return;
         setRun(result);
+        setExecutionError("");
         if (["queued", "running"].includes(result.status))
           timer = setTimeout(() => void poll(), 700);
         else void onSaved();
       } catch (e) {
         if (!cancelled) {
-          setError(message(e));
+          setExecutionError(
+            `Could not refresh test results: ${message(e)}. Retrying…`,
+          );
           timer = setTimeout(() => void poll(), 1800);
         }
       }
@@ -289,68 +331,108 @@ export default function Practice({
   const running = busy || (!!run && ["queued", "running"].includes(run.status));
   const mode = question ? questionMode(question) : "coding";
   const coding = mode === "coding";
+  const resultsStale =
+    runFiles !== null &&
+    (Object.keys(files).length !== Object.keys(runFiles).length ||
+      Object.entries(files).some(([file, code]) => code !== runFiles[file]));
+  const diagnostics = useMemo(
+    () =>
+      parseDiagnostics(
+        [
+          run?.result?.compiler_output ?? "",
+          ...(run?.result?.tests
+            ?.filter((test) => test.visibility !== "hidden")
+            .map((test) => test.stderr ?? "") ?? []),
+        ].join("\n"),
+        runFiles ?? {},
+      ),
+    [run?.result, runFiles],
+  );
+  const activeDiagnostics = useMemo(
+    () =>
+      resultsStale
+        ? []
+        : diagnostics.filter((item) => item.file === activeFile),
+    [diagnostics, activeFile, resultsStale],
+  );
+  const executionStatus = busy
+    ? `Saving draft before ${runMode === "run" ? "running public tests" : "submitting all tests"}…`
+    : run?.status === "queued"
+      ? "Queued · waiting for the isolated runner…"
+      : `Compiling and running ${runMode === "run" ? "public tests" : "all tests"}…`;
   async function execute(mode: "run" | "submit") {
+    if (running || !Object.keys(draft.current.files).length) return;
     setError("");
+    setExecutionError("");
+    setRunMode(mode);
+    setRun(null);
+    const snapshot = draft.current;
+    setRunFiles(snapshot.files);
     setBusy(true);
     try {
-      await save();
+      await save(snapshot);
       setRun(
         await post<Run>("/runs", {
           question_id: questionId,
-          files: draft.current.files,
+          files: snapshot.files,
           ...(native ? { question_version: question?.version } : {}),
           mode,
           session_id: sessionId,
         }),
       );
     } catch (e) {
-      setError(message(e));
+      setExecutionError(message(e));
     } finally {
       setBusy(false);
     }
   }
   async function saveCheckpoint() {
+    if (!ready.current || checkpointSaving) return;
+    const snapshot = draft.current;
+    setCheckpointSaving(true);
     try {
       if (native)
         await post("/events", {
           kind: "code_snapshot",
           question_id: questionId,
           session_id: sessionId,
-          data: draft.current,
+          data: snapshot,
         });
-      await save();
-      const cp = { ...draft.current, at: new Date().toISOString() };
+      await save(snapshot);
+      const cp = { ...snapshot, at: new Date().toISOString() };
       localStorage.setItem(
         `forgepad.v1.checkpoint.${questionId}`,
         JSON.stringify(cp),
       );
       setCheckpoint(cp);
-      setSaveStatus("Checkpoint saved");
     } catch (e) {
       setError(message(e));
+    } finally {
+      setCheckpointSaving(false);
     }
   }
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void saveCheckpoint();
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && coding && !running) {
         e.preventDefault();
-        void execute(e.shiftKey ? "submit" : "run");
+        if (!resetConfirm && !showCheckpoint)
+          void execute(e.shiftKey ? "submit" : "run");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [coding, running]);
+  });
   if (!question)
     return (
       <div className="page">
         {error ? (
           <div className="error-banner" role="alert">
             {error}
-            <button onClick={onBrowse}>Back to questions</button>
+            <button onClick={onBrowse}>Back to Question Library</button>
           </div>
         ) : (
           <div className="empty">Loading problem and draft…</div>
@@ -358,11 +440,13 @@ export default function Practice({
       </div>
     );
   return (
-    <div className={`practice-page ${focus ? "editor-focus" : ""}`}>
+    <div
+      className={`practice-page ${problemCollapsed ? "problem-collapsed" : ""}`}
+    >
       <div className="practice-heading">
         <button
           className="icon-button"
-          aria-label="Back to question bank"
+          aria-label="Back to Question Library"
           onClick={onBrowse}
         >
           <ChevronLeft size={19} />
@@ -380,18 +464,52 @@ export default function Practice({
           </div>
         </div>
         <div className="practice-actions">
-          <span className="save-status" aria-live="polite">
-            {saveStatus}
-          </span>
           <button
             className="secondary"
-            title="Save checkpoint (Ctrl/Cmd+S)"
+            aria-expanded={!problemCollapsed}
+            aria-controls="problem-panel"
+            onClick={() => {
+              const collapsed = !problemCollapsed;
+              setProblemCollapsed(collapsed);
+              localStorage.setItem(
+                "forgepad.problem.collapsed",
+                String(collapsed),
+              );
+            }}
+          >
+            {problemCollapsed ? (
+              <PanelLeftOpen size={15} />
+            ) : (
+              <PanelLeftClose size={15} />
+            )}
+            {problemCollapsed ? "Show problem" : "Hide problem"}
+          </button>
+          <button
+            className="secondary"
+            title="Save a manual restore point on this device (Ctrl/Cmd+S)"
+            disabled={checkpointSaving}
             onClick={() => void saveCheckpoint()}
           >
             <Save size={15} />
-            <span>Save checkpoint</span>
+            <span>
+              {checkpointSaving ? "Saving checkpoint…" : "Save checkpoint"}
+            </span>
           </button>
         </div>
+      </div>
+      <div className="draft-saving-info">
+        <span className="save-status" role="status">
+          {saveStatus}
+        </span>
+        <span>
+          Drafts autosave as you type. Checkpoints keep a manual restore point
+          on this device.
+        </span>
+        <span className="checkpoint-status" role="status">
+          {checkpoint
+            ? `Checkpoint saved: ${new Date(checkpoint.at).toLocaleString()}`
+            : "No checkpoint saved yet."}
+        </span>
       </div>
       {error && (
         <div className="error-banner" role="alert">
@@ -452,17 +570,30 @@ export default function Practice({
         className="practice-layout"
         ref={layout}
         style={{
-          gridTemplateColumns: focus
+          gridTemplateColumns: problemCollapsed
             ? "minmax(0, 1fr)"
-            : `minmax(250px, ${paneWidth}%) 8px minmax(0, 1fr)`,
+            : `minmax(220px, ${paneWidth}%) 12px minmax(0, 1fr)`,
         }}
       >
-        <section className="problem-pane">
-          <div className="tabs" role="tablist" aria-label="Question details">
+        <section
+          className="problem-pane"
+          id="problem-panel"
+          aria-label="Problem panel"
+          hidden={problemCollapsed}
+        >
+          <div
+            className="tabs"
+            role="tablist"
+            aria-label="Question details"
+            onKeyDown={navigateTabs}
+          >
             {(["problem", "hints", "rubric"] as const).map((t) => (
               <button
                 role="tab"
                 aria-selected={tab === t}
+                id={`problem-tab-${t}`}
+                aria-controls="problem-tab-content"
+                tabIndex={tab === t ? 0 : -1}
                 key={t}
                 className={tab === t ? "active" : ""}
                 onClick={() => setTab(t)}
@@ -475,7 +606,13 @@ export default function Practice({
               </button>
             ))}
           </div>
-          <div className="problem-content">
+          <div
+            className="problem-content"
+            id="problem-tab-content"
+            role="tabpanel"
+            aria-labelledby={`problem-tab-${tab}`}
+            tabIndex={0}
+          >
             {tab === "problem" ? (
               <>
                 <div className="eyebrow">{question.topics.join(" / ")}</div>
@@ -581,7 +718,7 @@ export default function Practice({
             )}
           </div>
         </section>
-        {!focus && (
+        {!problemCollapsed && (
           <PaneDivider
             container={layout}
             value={paneWidth}
@@ -596,11 +733,15 @@ export default function Practice({
                   className="file-tabs"
                   role="tablist"
                   aria-label="Source files"
+                  onKeyDown={navigateTabs}
                 >
-                  {Object.keys(files).map((file) => (
+                  {Object.keys(files).map((file, index) => (
                     <button
                       role="tab"
                       aria-selected={file === activeFile}
+                      tabIndex={file === activeFile ? 0 : -1}
+                      id={`source-file-${index}`}
+                      aria-controls="source-editor"
                       className={activeFile === file ? "active" : ""}
                       key={file}
                       onClick={() => setActiveFile(file)}
@@ -639,6 +780,21 @@ export default function Practice({
                   </button>
                 </div>
                 <div className="button-row">
+                  <button
+                    className="text-button autocomplete-trigger"
+                    title="Show code suggestions (Ctrl+Space). Use arrows to choose, Tab to accept, and Escape to close."
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      editor.current?.focus();
+                      editor.current?.trigger(
+                        "toolbar",
+                        "editor.action.triggerSuggest",
+                        {},
+                      );
+                    }}
+                  >
+                    Autocomplete
+                  </button>
                   <select
                     aria-label="Editor font size"
                     value={fontSize}
@@ -657,17 +813,18 @@ export default function Practice({
                       </option>
                     ))}
                   </select>
-                  <button
-                    className="icon-button"
-                    aria-label={focus ? "Exit editor focus" : "Focus editor"}
-                    title="Toggle editor focus"
-                    onClick={() => setFocus(!focus)}
-                  >
-                    <Expand size={15} />
-                  </button>
                 </div>
               </div>
-              <div className="editor-container">
+              <div
+                className="editor-container"
+                id="source-editor"
+                role="tabpanel"
+                aria-labelledby={
+                  activeFile
+                    ? `source-file-${Object.keys(files).indexOf(activeFile)}`
+                    : undefined
+                }
+              >
                 {activeFile ? (
                   <Suspense
                     fallback={
@@ -680,6 +837,13 @@ export default function Practice({
                       language={question.language === "c" ? "c" : "cpp"}
                       theme={theme === "dark" ? "vs-dark" : "light"}
                       value={files[activeFile] ?? ""}
+                      workspaceFiles={files}
+                      diagnostics={activeDiagnostics}
+                      revealPosition={
+                        editorLocation?.file === activeFile
+                          ? editorLocation
+                          : undefined
+                      }
                       onChange={(value) =>
                         setFiles((previous) => ({
                           ...previous,
@@ -699,6 +863,7 @@ export default function Practice({
                         wordWrap: "off",
                         lineHeight: Math.round(fontSize * 1.6),
                         accessibilitySupport: "auto",
+                        ariaLabel: `${activeFile} code editor. Autocomplete: Control+Space. Toggle Tab key focus mode: Control+M.`,
                       }}
                     />
                   </Suspense>
@@ -726,24 +891,34 @@ export default function Practice({
                           ]),
                         ),
                       );
-                      setSaveStatus("Whitespace normalized");
                     }}
                   >
                     Format whitespace
                   </button>
                   <button
                     className="text-button"
-                    onClick={() => setResetConfirm(true)}
+                    onClick={(event) => {
+                      dialogTrigger.current = event.currentTarget;
+                      setResetConfirm(true);
+                    }}
                   >
                     <RotateCcw size={12} />
-                    Reset
+                    Reset to starter files
                   </button>
                   <button
                     className="text-button"
                     disabled={!checkpoint}
-                    onClick={() => setShowCheckpoint(true)}
+                    title={
+                      checkpoint
+                        ? `Replace draft with checkpoint from ${new Date(checkpoint.at).toLocaleString()}`
+                        : "Save a checkpoint first"
+                    }
+                    onClick={(event) => {
+                      dialogTrigger.current = event.currentTarget;
+                      setShowCheckpoint(true);
+                    }}
                   >
-                    Restore checkpoint
+                    Restore saved checkpoint
                   </button>
                 </div>
               </div>
@@ -801,37 +976,48 @@ export default function Practice({
             </div>
           )}
           <div className="run-toolbar">
+            {coding && (
+              <p className="execution-help" id="execution-help">
+                Run checks public tests. Submit checks all tests, including
+                hidden tests, and records an attempt.
+              </p>
+            )}
             <div className="button-row">
-              {running && run ? (
+              {run && ["queued", "running"].includes(run.status) ? (
                 <button
                   className="secondary"
                   onClick={() =>
                     void api(`/runs/${run.id}`, { method: "DELETE" })
-                      .then(() => setRun({ ...run, status: "cancelled" }))
-                      .catch((e) => setError(message(e)))
+                      .then(() => {
+                        setRun({ ...run, status: "cancelled" });
+                        setExecutionError("");
+                      })
+                      .catch((e) => setExecutionError(message(e)))
                   }
                 >
                   <Square size={13} />
-                  Cancel
+                  Cancel execution
                 </button>
               ) : null}
               {coding ? (
                 <>
                   <button
                     disabled={running || !Object.keys(files).length}
-                    title="Run public tests (Ctrl/Cmd+Enter)"
+                    title="Compile and run public tests (Ctrl/Cmd+Enter)"
+                    aria-describedby="execution-help"
                     onClick={() => void execute("run")}
                   >
                     <Play size={14} />
-                    Run
+                    Run public tests
                   </button>
                   <button
                     className="primary"
                     disabled={running || !Object.keys(files).length}
                     title="Submit all tests (Shift+Ctrl/Cmd+Enter)"
+                    aria-describedby="execution-help"
                     onClick={() => void execute("submit")}
                   >
-                    {running ? "Running…" : "Submit"}
+                    Submit all tests
                   </button>
                 </>
               ) : (
@@ -874,43 +1060,137 @@ export default function Practice({
             <section
               className="output-panel"
               aria-label="Execution output"
-              aria-live="polite"
+              aria-busy={running}
             >
               <div className="section-header">
-                <h2>Test results</h2>
+                <h2>Output &amp; test results</h2>
                 {run && (
                   <span
+                    role="status"
                     className={`badge ${run.result?.status === "passed" ? "success" : ""}`}
                   >
                     {readable(run.result?.status ?? run.status)}
                   </span>
                 )}
               </div>
-              {!run ? (
+              {executionError && (
+                <p className="execution-error" role="alert">
+                  {executionError}
+                </p>
+              )}
+              {running ? (
+                <div className="execution-progress">
+                  <p role="status">
+                    <LoaderCircle size={16} className="spinning" />
+                    {executionStatus}
+                  </p>
+                  <div
+                    className="execution-progress-track"
+                    role="progressbar"
+                    aria-label="Test execution in progress"
+                  >
+                    <span />
+                  </div>
+                </div>
+              ) : !run ? (
                 <div className="output-empty">
                   <span className="terminal-prompt">›_</span>
-                  <p>Run your code to inspect test results.</p>
+                  <p>
+                    {executionError
+                      ? "Execution could not start. Your code is still in the editor."
+                      : "Run public tests to see output and compiler diagnostics here."}
+                  </p>
                   <small>
-                    Ctrl / ⌘ + Enter to run · Shift + Ctrl / ⌘ + Enter to submit
+                    Ctrl / ⌘ + Enter: public tests · Shift + Ctrl / ⌘ + Enter:
+                    submit all tests
                   </small>
                 </div>
               ) : run.result ? (
                 <>
+                  <p className="result-context" role="status">
+                    {runMode === "run"
+                      ? "Public test run"
+                      : "Full test submission"}
+                    {run.attempt_id ? " · Attempt recorded" : ""}
+                    {resultsStale
+                      ? " · Code changed since these results. Run again to update."
+                      : ""}
+                  </p>
                   <div className="result-summary">
-                    <strong>
-                      {run.result.passed} / {run.result.total} tests passed
+                    <strong role="status">
+                      {run.result.total > 0
+                        ? `${run.result.passed} / ${run.result.total} tests passed`
+                        : ["compilation_error", "compile_error"].includes(
+                              run.result.status,
+                            )
+                          ? "Compilation failed · no tests ran"
+                          : run.result.status === "unavailable"
+                            ? "Runner unavailable · no tests ran"
+                            : run.result.status === "unsupported"
+                              ? "No executable tests for this question"
+                              : run.result.status === "cancelled"
+                                ? "Execution cancelled"
+                                : "No test results returned"}
                     </strong>
                     {run.result.elapsed_ms !== undefined && (
                       <span>{run.result.elapsed_ms} ms</span>
                     )}
                   </div>
+                  {diagnostics.length > 0 && (
+                    <div
+                      className="editor-diagnostics"
+                      aria-label="Source diagnostics"
+                    >
+                      <h3>Source diagnostics</h3>
+                      <ul>
+                        {diagnostics.map((item, index) => (
+                          <li key={index}>
+                            <button
+                              disabled={resultsStale}
+                              title={
+                                resultsStale
+                                  ? "Run tests again to update source locations"
+                                  : `Go to ${item.file}, line ${item.line}, column ${item.column}`
+                              }
+                              onClick={() => {
+                                setActiveFile(item.file);
+                                setEditorLocation({
+                                  file: item.file,
+                                  lineNumber: item.line,
+                                  column: item.column,
+                                });
+                              }}
+                            >
+                              <span
+                                className={`diagnostic-severity ${item.severity}`}
+                              >
+                                {item.severity}
+                              </span>
+                              <code>
+                                {item.file}:{item.line}:{item.column}
+                              </code>
+                              <span>{item.message}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {run.result.compiler_output && (
-                    <pre className="compiler-output">
+                    <pre
+                      className="compiler-output"
+                      tabIndex={0}
+                      aria-label="Compiler output"
+                    >
                       {run.result.compiler_output}
                     </pre>
                   )}
                   {run.result.tests?.map((test) => (
-                    <details className="test-result" key={test.id}>
+                    <details
+                      className="test-result"
+                      key={test.id}
+                      open={test.status !== "passed"}
+                    >
                       <summary>
                         <span
                           className={`test-dot ${test.status === "passed" ? "passed" : "failed"}`}
@@ -919,22 +1199,25 @@ export default function Practice({
                         <span className="muted-text">{test.visibility}</span>
                         <span className="badge">{readable(test.status)}</span>
                       </summary>
-                      {test.stdout && (
+                      {test.visibility !== "hidden" && (
                         <>
                           <h4>Output</h4>
-                          <pre>{test.stdout}</pre>
+                          <pre tabIndex={0}>{test.stdout || "(empty)"}</pre>
                         </>
                       )}
-                      {test.expected_stdout !== undefined && (
-                        <>
-                          <h4>Expected output</h4>
-                          <pre>{test.expected_stdout}</pre>
-                        </>
-                      )}
-                      {test.stderr && (
+                      {test.visibility !== "hidden" &&
+                        test.expected_stdout !== undefined && (
+                          <>
+                            <h4>Expected output</h4>
+                            <pre tabIndex={0}>
+                              {test.expected_stdout || "(empty)"}
+                            </pre>
+                          </>
+                        )}
+                      {test.visibility !== "hidden" && test.stderr && (
                         <>
                           <h4>Diagnostics</h4>
-                          <pre>{test.stderr}</pre>
+                          <pre tabIndex={0}>{test.stderr}</pre>
                         </>
                       )}
                       {test.visibility === "hidden" && (
@@ -956,25 +1239,35 @@ export default function Practice({
           )}
         </section>
       </div>
-      {(resetConfirm || showCheckpoint) && (
-        <div className="modal-backdrop">
-          <section
-            className="modal small-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="restore-title"
+      <Dialog.Root
+        open={resetConfirm || showCheckpoint}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResetConfirm(false);
+            setShowCheckpoint(false);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="dialog-overlay" />
+          <Dialog.Content
+            className="modal small-modal restore-dialog"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              dialogTrigger.current?.focus();
+            }}
           >
             <div className="modal-body">
-              <h2 id="restore-title">
+              <Dialog.Title>
                 {resetConfirm
                   ? "Reset to starter files?"
                   : "Restore saved checkpoint?"}
-              </h2>
-              <p>
+              </Dialog.Title>
+              <Dialog.Description>
                 {resetConfirm
-                  ? "Your current draft will be replaced with the question’s starter files."
-                  : `Your current draft will be replaced by the checkpoint from ${checkpoint ? new Date(checkpoint.at).toLocaleString() : ""}.`}
-              </p>
+                  ? "Replace all files in your current draft with the question’s starter files. This replacement will autosave. Your saved checkpoint will be kept."
+                  : `Replace your current draft with the checkpoint from ${checkpoint ? new Date(checkpoint.at).toLocaleString() : ""}. This replacement will autosave.`}
+              </Dialog.Description>
               <div className="modal-actions">
                 <button
                   onClick={() => {
@@ -997,13 +1290,15 @@ export default function Practice({
                     setShowCheckpoint(false);
                   }}
                 >
-                  Replace draft
+                  {resetConfirm
+                    ? "Reset draft to starter files"
+                    : "Restore checkpoint to draft"}
                 </button>
               </div>
             </div>
-          </section>
-        </div>
-      )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <div className="practice-footer">
         <button
           className="text-button"
