@@ -83,12 +83,25 @@ def test_output_flood(runner):
     assert "Output limit" in result["tests"][0]["stderr"]
 
 
-def test_memory_exhaustion(runner):
-    q = single_question()
+@pytest.mark.parametrize("compiler", ["gcc", "clang"])
+def test_memory_exhaustion(runner, compiler, monkeypatch):
+    q = single_question(compiler=compiler)
     q["test_config"]["timeout_seconds"] = 5
-    source = "#include <stdlib.h>\n#include <string.h>\nint main(void){for(;;){volatile char *p=malloc(16*1024*1024);if(!p)return 4;for(int i=0;i<16*1024*1024;i+=4096)p[i]=1;}}"
+    # Touch a fixed BSS region larger than the 256 MiB cgroup limit. A malloc
+    # loop can instead return NULL and exit normally on a constrained host,
+    # which is a runtime error rather than proof of a kernel OOM termination.
+    source = "#include <stddef.h>\nstatic volatile unsigned char memory[384u*1024u*1024u];\nint main(void){for(size_t i=0;i<sizeof memory;i+=4096u)memory[i]=1;return memory[0];}"
+    processes = []
+    container = runner._container
+
+    def record(*args, **kwargs):
+        process = container(*args, **kwargs)
+        processes.append(vars(process))
+        return process
+
+    monkeypatch.setattr(runner, "_container", record)
     result = runner.run(q, {"main.c": source})
-    assert result["status"] == "memory_limit", result
+    assert result["status"] == "memory_limit", {"result": result, "processes": processes}
 
 
 @pytest.mark.parametrize("compiler", ["gcc", "clang"])
