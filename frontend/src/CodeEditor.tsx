@@ -14,20 +14,20 @@ for (const [name, base, background, foreground, comment, keyword, string] of [
   [
     "forgepad-dark",
     "vs-dark",
-    "#20273c",
-    "#f0f3ff",
-    "#9daac6",
-    "#c7acff",
-    "#f4c58b",
+    "#1b1b1b",
+    "#eeeeee",
+    "#9b9b9b",
+    "#a6bfd3",
+    "#d2be96",
   ],
   [
     "forgepad-light",
     "vs",
     "#ffffff",
-    "#27334e",
-    "#687995",
-    "#7248b5",
-    "#9c4a29",
+    "#242424",
+    "#6b6b6b",
+    "#355a7a",
+    "#795b2f",
   ],
 ] as const) {
   monaco.editor.defineTheme(name, {
@@ -38,12 +38,12 @@ for (const [name, base, background, foreground, comment, keyword, string] of [
       { token: "comment", foreground: comment.slice(1) },
       { token: "keyword", foreground: keyword.slice(1) },
       { token: "keyword.directive", foreground: keyword.slice(1) },
-      { token: "type", foreground: base === "vs" ? "3759ba" : "9ebaff" },
+      { token: "type", foreground: base === "vs" ? "35675a" : "a7c8b4" },
       {
         token: "type.identifier",
-        foreground: base === "vs" ? "3759ba" : "9ebaff",
+        foreground: base === "vs" ? "35675a" : "a7c8b4",
       },
-      { token: "number", foreground: base === "vs" ? "8054a2" : "d7b2ff" },
+      { token: "number", foreground: base === "vs" ? "70577e" : "c7b796" },
       { token: "string", foreground: string.slice(1) },
     ],
     colors: {
@@ -52,15 +52,15 @@ for (const [name, base, background, foreground, comment, keyword, string] of [
       "editorGutter.background": background,
       "editorLineNumber.foreground": comment,
       "editorLineNumber.activeForeground": foreground,
-      "editorBracketMatch.border": "#8498f5",
+      "editorBracketMatch.border": "#8a8a8a",
       "editorBracketHighlight.foreground1":
-        base === "vs" ? "#495bd5" : "#a9baff",
+        base === "vs" ? "#666666" : "#cccccc",
       "editorBracketHighlight.foreground2":
-        base === "vs" ? "#945a29" : "#f4c58b",
+        base === "vs" ? "#856a43" : "#d2be96",
       "editorBracketHighlight.foreground3":
-        base === "vs" ? "#8648a6" : "#d7b2ff",
-      "editor.lineHighlightBackground": base === "vs" ? "#f4f6fd" : "#29324a",
-      "editor.selectionBackground": base === "vs" ? "#dce3ff" : "#404e7c",
+        base === "vs" ? "#70577e" : "#c7b796",
+      "editor.lineHighlightBackground": base === "vs" ? "#f5f5f5" : "#252525",
+      "editor.selectionBackground": base === "vs" ? "#dedede" : "#444444",
     },
   });
 }

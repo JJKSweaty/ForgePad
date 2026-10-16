@@ -17,7 +17,9 @@ export function QuestionBank({
   onPractice,
   refresh,
   onAuthor,
+  currentQuestion,
 }: {
+  currentQuestion?: Question;
   onAuthor?: () => void;
   questions: Question[];
   onPractice: (id: string) => void;
@@ -30,6 +32,7 @@ export function QuestionBank({
     [bookmarked, setBookmarked] = useState(false),
     [archived, setArchived] = useState(false),
     [importing, setImporting] = useState(false),
+    [managing, setManaging] = useState(false),
     [error, setError] = useState("");
   const topics = [...new Set(questions.flatMap((q) => q.topics))].sort();
   const filtered = questions.filter(
@@ -56,37 +59,88 @@ export function QuestionBank({
   }
   return (
     <div className="page">
+      <section className="practice-start" aria-label="How practice works">
+        <div>
+          <h2>Choose a question. Build your answer.</h2>
+          <p>
+            Practice at your own pace. Coding questions open an editor with
+            tests; design, theory, and debugging questions open a writing
+            workspace.
+          </p>
+        </div>
+        <ol>
+          <li>
+            <span>1</span>
+            <div>
+              <strong>Pick a question</strong>
+              <small>Filter by topic or difficulty below.</small>
+            </div>
+          </li>
+          <li>
+            <span>2</span>
+            <div>
+              <strong>Solve in your workspace</strong>
+              <small>Your draft saves automatically.</small>
+            </div>
+          </li>
+          <li>
+            <span>3</span>
+            <div>
+              <strong>Submit &amp; review</strong>
+              <small>Keep an attempt and see your progress.</small>
+            </div>
+          </li>
+        </ol>
+        {currentQuestion && !currentQuestion.archived && (
+          <button
+            className="continue-question"
+            onClick={() => onPractice(currentQuestion.id)}
+          >
+            <span>
+              <small>CONTINUE YOUR QUESTION</small>
+              <strong>{currentQuestion.title}</strong>
+            </span>
+            <ChevronRight size={18} />
+          </button>
+        )}
+      </section>
       <div className="page-heading">
         <div>
           <h2>Question Library</h2>
           <p>
-            Choose a topic, explore an unfamiliar edge case, or bring your own
-            problem.
+            Open a question below to start solving. Use Roadmaps for a guided
+            path or Mock Interview for a timed rehearsal.
           </p>
         </div>
-        <div className="button-row">
-          <button
-            className="secondary"
-            onClick={() =>
-              void api("/questions/export/all")
-                .then((data) => download("forgepad-questions.json", data))
-                .catch((e) => setError(message(e)))
-            }
-          >
-            <Download size={15} />
-            Export
-          </button>
-          <button onClick={() => setImporting(true)}>
-            <Upload size={15} />
-            Import
-          </button>
-          {onAuthor && (
-            <button className="primary" onClick={onAuthor}>
-              <Plus size={16} />
-              Add question
+        <details
+          className="library-tools"
+          onToggle={(event) => setManaging(event.currentTarget.open)}
+        >
+          <summary>Manage questions</summary>
+          <div className="button-row">
+            <button
+              className="secondary"
+              onClick={() =>
+                void api("/questions/export/all")
+                  .then((data) => download("forgepad-questions.json", data))
+                  .catch((e) => setError(message(e)))
+              }
+            >
+              <Download size={15} />
+              Export
             </button>
-          )}
-        </div>
+            <button onClick={() => setImporting(true)}>
+              <Upload size={15} />
+              Import
+            </button>
+            {onAuthor && (
+              <button className="primary" onClick={onAuthor}>
+                <Plus size={16} />
+                Add question
+              </button>
+            )}
+          </div>
+        </details>
       </div>
       {error && (
         <div className="error-banner" role="alert">
@@ -201,18 +255,21 @@ export function QuestionBank({
               <span className={`badge ${q.difficulty}`}>{q.difficulty}</span>
               <span className="muted-text">{q.duration_minutes} min</span>
               <div className="button-row">
+                {managing && (
+                  <button
+                    className="text-button"
+                    onClick={() => void patch(q, { archived: !q.archived })}
+                  >
+                    {q.archived ? "Restore" : "Archive"}
+                  </button>
+                )}
                 <button
-                  className="text-button"
-                  onClick={() => void patch(q, { archived: !q.archived })}
-                >
-                  {q.archived ? "Restore" : "Archive"}
-                </button>
-                <button
-                  className="icon-button"
-                  title="Open question"
+                  className="text-button start-question"
+                  title="Open the question workspace"
                   aria-label={`Open ${q.title}`}
                   onClick={() => onPractice(q.id)}
                 >
+                  {q.completion_status === "in_progress" ? "Continue" : "Start"}
                   <ChevronRight size={18} />
                 </button>
               </div>

@@ -77,6 +77,10 @@ it("keeps the sidebar to three destinations and nests every practice mode", asyn
   ).toEqual(["Dashboard", "Practice", "Progress"]);
   await user.click(within(nav).getByText("Practice"));
   await screen.findByRole("heading", { name: "Question Library" });
+  expect(
+    screen.getByRole("region", { name: "How practice works" }),
+  ).toBeTruthy();
+  expect(screen.getByText("Solve in your workspace")).toBeTruthy();
   const modes = screen.getByRole("navigation", { name: "Practice modes" });
   await user.click(within(modes).getByText("Roadmaps"));
   await screen.findByText("Roadmap content");
@@ -94,6 +98,7 @@ it("opens authoring from the library under Settings", async () => {
   render(<App />);
   await screen.findByText("Dashboard content");
   await user.click(screen.getByRole("button", { name: "Practice" }));
+  await user.click(await screen.findByText("Manage questions"));
   await user.click(await screen.findByRole("button", { name: "Add question" }));
   await screen.findByText("Question authoring content");
   expect(sessionStorage.getItem("forgepad.settings.section")).toBe("authoring");
@@ -123,6 +128,9 @@ it("hides the sidebar, keeps its toggle reachable, and remembers the choice", as
   expect(
     screen.queryByRole("navigation", { name: "Main navigation" }),
   ).toBeNull();
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Show sidebar" }),
+  );
   expect(
     screen
       .getByRole("button", { name: "Show sidebar" })
@@ -132,6 +140,9 @@ it("hides the sidebar, keeps its toggle reachable, and remembers the choice", as
   render(<App />);
   await screen.findByText("Dashboard content");
   await user.click(screen.getByRole("button", { name: "Show sidebar" }));
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Hide sidebar" }),
+  );
   expect(
     screen.getByRole("navigation", { name: "Main navigation" }),
   ).toBeTruthy();

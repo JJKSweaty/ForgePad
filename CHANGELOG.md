@@ -1,5 +1,14 @@
 # ForgePad release notes
 
+## 0.3.2 — 2026-10-16
+
+### Improved
+- Neutral light and dark themes, a clearer question-to-workspace practice flow, visible autocomplete guidance, and an upper-left sidebar control.
+
+### Fixed
+- Browser CI starts the compiler worker with the test server's Python interpreter, including on hosted runners without a local virtual environment.
+- Local desktop installation verifies the new signed app before replacing the installed build and moves older ForgePad copies to Trash.
+
 ## 0.3.1 — 2026-10-16
 
 ### Improved

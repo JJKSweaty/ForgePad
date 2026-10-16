@@ -44,3 +44,5 @@ npm run desktop:dev
 ```
 
 [QA and release process](docs/quality-and-releases.md) documents browser tests, packaging, signing, and the required version/patch-note updates for features. The web hosting experiment is documented separately in [hosting.md](docs/hosting.md); desktop releases provide a separate local workspace for each user.
+
+After changing the desktop app, use `npm run desktop:install` to build, sign, and verify the new bundle, install it in `/Applications/ForgePad.app`, and move older duplicate ForgePad apps to Trash. The installer checks the bundle identifier and refuses to replace a newer installed version. Drafts, progress, recordings, and models are preserved. The interface uses the [Radix neutral gray scale](https://www.radix-ui.com/colors/docs/palette-composition/composing-a-palette) for surfaces and text.

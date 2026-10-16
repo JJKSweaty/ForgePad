@@ -2,6 +2,59 @@ import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 const modifier = process.platform === "darwin" ? "Meta" : "Control";
+test("Practice explains the next step, uses readable neutral surfaces, and closes from the upper left", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Practice", exact: true })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "How practice works" }),
+  ).toContainText("Submit & review");
+  const close = await page
+    .getByRole("button", { name: "Hide sidebar" })
+    .boundingBox();
+  expect(close!.x).toBeLessThan(60);
+  expect(close!.y).toBeLessThan(80);
+  for (const theme of ["light", "dark"]) {
+    if (theme === "dark")
+      await page.getByRole("button", { name: "Use dark appearance" }).click();
+    const contrast = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement);
+      const rgb = (token: string) =>
+        style
+          .getPropertyValue(token)
+          .trim()
+          .replace("#", "")
+          .match(/.{2}/g)!
+          .map((part) => parseInt(part, 16) / 255);
+      const luminance = (token: string) =>
+        rgb(token)
+          .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+          .reduce(
+            (sum, value, index) =>
+              sum + value * [0.2126, 0.7152, 0.0722][index],
+            0,
+          );
+      const a = luminance("--muted"),
+        b = luminance("--bg");
+      const neutral = rgb("--bg");
+      return {
+        ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+        tint: Math.max(...neutral) - Math.min(...neutral),
+      };
+    });
+    expect(contrast.ratio).toBeGreaterThanOrEqual(4.5);
+    expect(contrast.tint).toBe(0);
+    await page.screenshot({
+      path: testInfo.outputPath(`practice-${theme}.png`),
+      fullPage: true,
+    });
+  }
+});
 async function openEditor(page: Page) {
   await page.goto("/");
   await page
@@ -228,6 +281,6 @@ test("execution feedback links compiler locations and clears stale editor marker
     .toBe("// diagnostic location");
   await page.getByRole("button", { name: "Submit all tests" }).click();
   await expect(page.getByRole("progressbar")).toBeVisible();
-  expect(mode).toBe("submit");
+  await expect.poll(() => mode).toBe("submit");
   await expect(diagnostic).toBeEnabled();
 });

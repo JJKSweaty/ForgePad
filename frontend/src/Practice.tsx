@@ -782,6 +782,7 @@ export default function Practice({
                 <div className="button-row">
                   <button
                     className="text-button autocomplete-trigger"
+                    aria-label="Autocomplete"
                     title="Show code suggestions (Ctrl+Space). Use arrows to choose, Tab to accept, and Escape to close."
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
@@ -794,6 +795,7 @@ export default function Practice({
                     }}
                   >
                     Autocomplete
+                    <kbd>Ctrl Space</kbd>
                   </button>
                   <select
                     aria-label="Editor font size"
@@ -874,6 +876,9 @@ export default function Practice({
               <div className="editor-bottom">
                 <span>
                   {question.language === "cpp" ? "C++17" : "C11"} · UTF-8
+                </span>
+                <span className="autocomplete-status">
+                  Suggestions on · type to complete
                 </span>
                 <div className="button-row">
                   <button

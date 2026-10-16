@@ -1,6 +1,13 @@
 import { version as appVersion } from "../package.json";
 import { flushDrafts } from "./drafts";
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ChevronRight,
   CircuitBoard,
@@ -77,6 +84,14 @@ export default function App() {
       () => localStorage.getItem("forgepad.sidebar.hidden") === "true",
     ),
     [search, setSearch] = useState(false);
+  const hideSidebarButton = useRef<HTMLButtonElement>(null);
+  const showSidebarButton = useRef<HTMLButtonElement>(null);
+  const sidebarInteraction = useRef(false);
+  useEffect(() => {
+    if (!sidebarInteraction.current) return;
+    (sidebarHidden ? showSidebarButton : hideSidebarButton).current?.focus();
+    sidebarInteraction.current = false;
+  }, [sidebarHidden]);
   const refresh = useCallback(async () => {
     try {
       const [q, p] = await Promise.all([
@@ -241,24 +256,43 @@ export default function App() {
     page === "settings"
       ? "Settings"
       : navigation.find((n) => n.id === activePage)?.label;
+  function toggleSidebar() {
+    sidebarInteraction.current = true;
+    const hidden = !sidebarHidden;
+    setSidebarHidden(hidden);
+    localStorage.setItem("forgepad.sidebar.hidden", String(hidden));
+  }
   return (
     <div className={`app ${sidebarHidden ? "sidebar-hidden" : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
       <aside className="sidebar" id="workspace-sidebar" hidden={sidebarHidden}>
-        <button
-          className="brand"
-          onClick={() => navigate("dashboard")}
-          aria-label="ForgePad dashboard"
-        >
-          <span className="brand-mark">
-            <CircuitBoard size={22} />
-          </span>
-          <span>
-            ForgePad<small>Firmware practice</small>
-          </span>
-        </button>
+        <div className="sidebar-heading">
+          <button
+            className="icon-button"
+            ref={hideSidebarButton}
+            aria-label="Hide sidebar"
+            aria-controls="workspace-sidebar"
+            aria-expanded={true}
+            title="Hide sidebar"
+            onClick={toggleSidebar}
+          >
+            <PanelLeftClose size={18} />
+          </button>
+          <button
+            className="brand"
+            onClick={() => navigate("dashboard")}
+            aria-label="ForgePad dashboard"
+          >
+            <span className="brand-mark">
+              <CircuitBoard size={22} />
+            </span>
+            <span>
+              ForgePad<small>Firmware practice</small>
+            </span>
+          </button>
+        </div>
         <div className="workspace-label">WORKSPACE</div>
         <nav aria-label="Main navigation">
           {navigation.map(({ id, label, icon: Icon }) => (
@@ -318,24 +352,23 @@ export default function App() {
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <button
-            className="icon-button sidebar-toggle"
-            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-            aria-controls="workspace-sidebar"
-            aria-expanded={!sidebarHidden}
-            title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-            onClick={() => {
-              const hidden = !sidebarHidden;
-              setSidebarHidden(hidden);
-              localStorage.setItem("forgepad.sidebar.hidden", String(hidden));
-            }}
-          >
-            {sidebarHidden ? (
-              <PanelLeftOpen size={18} />
-            ) : (
-              <PanelLeftClose size={18} />
-            )}
-          </button>
+          {sidebarHidden && (
+            <button
+              className="icon-button sidebar-toggle"
+              ref={showSidebarButton}
+              aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+              aria-controls="workspace-sidebar"
+              aria-expanded={!sidebarHidden}
+              title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+              onClick={toggleSidebar}
+            >
+              {sidebarHidden ? (
+                <PanelLeftOpen size={18} />
+              ) : (
+                <PanelLeftClose size={18} />
+              )}
+            </button>
+          )}
           <div className="breadcrumbs">
             <span>Workspace</span>
             <ChevronRight size={13} />
@@ -391,7 +424,10 @@ export default function App() {
                 <div className="practice-hub-header">
                   <div className="hub-heading">
                     <h1>Practice</h1>
-                    <p>Build your skills, one session at a time.</p>
+                    <p>
+                      Solve firmware questions, test your code, and review your
+                      progress.
+                    </p>
                   </div>
                   <nav className="hub-tabs" aria-label="Practice modes">
                     {practiceTabs.map((tab) => (
@@ -429,6 +465,7 @@ export default function App() {
                 {page === "questions" && (
                   <QuestionBank
                     questions={questions}
+                    currentQuestion={selectedQuestion}
                     onPractice={practice}
                     refresh={refresh}
                     onAuthor={() => settings("authoring")}
