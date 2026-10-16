@@ -7,6 +7,7 @@ import {
   Play,
   RotateCcw,
 } from "lucide-react";
+import { shortDate } from "./learning";
 import { api, message, post } from "./api";
 import { native, nativeEvents } from "./native";
 import { duration, eventLabel } from "./dashboardData";
@@ -22,11 +23,15 @@ export function Dashboard({
   onSession,
   onRoadmap,
   onSettings,
+  onBrowse,
+  onProgress,
 }: {
   onPractice: (id: string, version?: number) => void;
   onSession: (id: string) => void;
   onRoadmap: (id: string) => void;
   onSettings: () => void;
+  onBrowse: (topic?: string) => void;
+  onProgress: () => void;
 }) {
   const [data, setData] = useState<DashboardData | null>(null),
     [github, setGithub] = useState<GitHubStatus | null>(null),
@@ -97,6 +102,7 @@ export function Dashboard({
         next.question.id,
         next.kind === "draft" ? next.question.version : undefined,
       );
+    else onBrowse();
   };
   async function continuePractice() {
     setContinuing(true);
@@ -194,7 +200,13 @@ export function Dashboard({
           <p>{c.reason}</p>
           {q && (
             <div className="continue-meta">
-              <span>{q.topics.slice(0, 2).join(" · ")}</span>
+              <span>
+                {q.type === "coding" ? "Coding" : q.type?.replaceAll("_", " ")}{" "}
+                · {q.topics.slice(0, 2).join(" · ")}
+              </span>
+              {c.last_activity_at && (
+                <span>Last activity {shortDate(c.last_activity_at)}</span>
+              )}
               <span className={`difficulty-label ${q.difficulty}`}>
                 {q.difficulty}
               </span>
@@ -214,18 +226,22 @@ export function Dashboard({
         </div>
         <button
           className="primary"
-          disabled={continuing || !q}
+          disabled={continuing}
           onClick={() => void continuePractice()}
         >
           <Play size={14} />
-          {continuing ? "Opening…" : c.label}
+          {continuing
+            ? "Opening…"
+            : c.kind === "session" || c.kind === "draft"
+              ? "Resume"
+              : "Start Practice"}
         </button>
       </section>
       <section className="metric-strip" aria-label="Preparation overview">
         <Metric
-          label="Questions solved"
-          value={m.questions_solved.toLocaleString()}
-          note="Unique passing submissions"
+          label="Questions completed"
+          value={(m.completed_questions ?? m.questions_solved).toLocaleString()}
+          note="Unique questions with passing tests or a confident self assessment"
         />
         <Metric
           label="Practice time"
@@ -237,9 +253,9 @@ export function Dashboard({
           }
         />
         <Metric
-          label="Mock interviews"
-          value={m.mock_interviews_completed.toLocaleString()}
-          note="Completed sessions"
+          label="Submitted attempts"
+          value={(m.attempts ?? 0).toLocaleString()}
+          note="Saved assessments; repeated submissions are separate attempts"
         />
         <Metric
           label="Current streak"
@@ -256,6 +272,60 @@ export function Dashboard({
         onPractice={onPractice}
         onSession={onSession}
       />
+      <section
+        className="learning-section recommendations"
+        aria-label="Recommended next actions"
+      >
+        <div className="section-header">
+          <h2>Next actions</h2>
+        </div>
+        <div className="recommendation-list">
+          {(c.kind === "draft" || c.kind === "session") && (
+            <button onClick={() => navigate(c)}>
+              Resume {q?.title}
+              <ArrowRight size={14} />
+            </button>
+          )}
+          {data.due_reviews.slice(0, 2).map((r) => (
+            <button
+              key={r.question_id}
+              onClick={() => onPractice(r.question_id)}
+            >
+              Review {r.title}
+              <ArrowRight size={14} />
+            </button>
+          ))}
+          {data.recommendations?.weak_topics.slice(0, 2).map((t) => (
+            <button key={t.topic} onClick={() => onBrowse(t.topic)}>
+              Revisit {t.topic}
+              <small>{t.needs_review} recorded assessments to revisit</small>
+              <ArrowRight size={14} />
+            </button>
+          ))}
+          {data.recommendations?.goals
+            .filter((g) => g.status !== "complete")
+            .slice(0, 2)
+            .map((g) => (
+              <button
+                key={g.id}
+                onClick={() =>
+                  g.question_id
+                    ? onPractice(g.question_id)
+                    : g.topic
+                      ? onBrowse(g.topic)
+                      : onProgress()
+                }
+              >
+                Goal: {g.title}
+                <ArrowRight size={14} />
+              </button>
+            ))}
+          <button className="text-button" onClick={() => onBrowse()}>
+            Browse Question Library
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      </section>
       <section className="dashboard-roadmaps" aria-labelledby="roadmaps-title">
         <div className="section-header">
           <div>

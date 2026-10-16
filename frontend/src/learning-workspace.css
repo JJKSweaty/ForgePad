@@ -1,0 +1,484 @@
+/* Dense learning surfaces share the workspace tokens and keep actions near records. */
+.compact-heading {
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+.compact-heading h1,
+.compact-heading h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+.library-filters {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.library-filters .search-field {
+  max-width: 540px;
+}
+.library-filters .filters,
+.history-filters {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.library-filters select,
+.history-filters select {
+  min-width: 110px;
+  max-width: 180px;
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.filter-chips button {
+  font-size: 12px;
+  min-height: 26px;
+  padding: 2px 8px;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+}
+.library-page .list-caption {
+  margin: 8px 0;
+  font-size: 11px;
+}
+.dense-list {
+  display: block;
+  border-top: 1px solid var(--border);
+}
+.library-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(170px, 1fr) 83px 88px 48px 92px 92px 28px;
+  align-items: center;
+  gap: 10px;
+  min-height: 66px;
+  padding: 9px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.library-row:hover,
+.library-row:focus-within {
+  background: var(--panel-hover);
+}
+.library-row.archived {
+  opacity: 0.7;
+}
+.row-open-target {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  border-radius: 0;
+  z-index: 1;
+}
+.library-row:has(.row-open-target:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.library-row-title,
+.row-type,
+.row-difficulty,
+.row-duration,
+.question-state,
+.row-action-label {
+  pointer-events: none;
+}
+.library-row-title {
+  min-width: 0;
+}
+.library-row-title h3 {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 550;
+  margin: 0 0 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-row-title > span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-control {
+  position: relative;
+  z-index: 2;
+}
+.library-row .bookmark-button {
+  width: 28px;
+  height: 30px;
+  padding: 4px;
+}
+.row-type,
+.row-difficulty,
+.row-duration,
+.question-state {
+  color: var(--muted);
+}
+.state-in_progress {
+  color: var(--accent);
+}
+.state-completed {
+  color: var(--text-secondary);
+}
+.row-action-label {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  color: var(--text);
+  justify-content: flex-end;
+}
+.action-menu {
+  display: grid;
+  z-index: 100;
+  min-width: 160px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+}
+.action-menu button {
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  gap: 8px;
+  padding: 7px 9px;
+}
+.action-menu button:hover {
+  background: var(--panel-hover);
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.compact-empty {
+  padding: 24px 0;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.compact-empty p {
+  color: var(--muted);
+  margin: 0 0 4px;
+}
+.learning-section {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.learning-section .section-header {
+  padding: 0;
+  margin: 0 0 10px;
+}
+.learning-section h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+.learning-section h2 small {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.learning-summary {
+  margin: 0 0 4px;
+  padding: 10px 0 18px;
+}
+.learning-summary .metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.learning-summary .metric strong {
+  font-size: 23px;
+  font-weight: 550;
+  line-height: 1.2;
+}
+.learning-summary .metric span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.compact-note {
+  padding: 0;
+  margin: 3px 0;
+  font-size: 13px;
+}
+.review-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+}
+.review-row + .review-row {
+  border-top: 1px solid var(--border);
+}
+.review-row strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+.review-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.review-row p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 3px 0 0;
+}
+.review-row button {
+  flex-shrink: 0;
+}
+.topic-evidence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.topic-evidence {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  text-align: left;
+  gap: 2px 12px;
+  padding: 7px 10px;
+  background: transparent;
+}
+.topic-evidence strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.topic-evidence small {
+  color: var(--muted);
+  font-size: 11px;
+  grid-column: 1;
+}
+.topic-evidence svg {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+.goal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border-bottom: 1px solid var(--border);
+}
+.goal-row label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+  font-size: 13px;
+}
+.goal-row input {
+  width: auto;
+}
+.goal-row.done label span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.goal-link {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+.goal-create {
+  max-width: 600px;
+  margin-top: 10px;
+}
+.goal-editor {
+  display: grid;
+  gap: 14px;
+}
+.history-filters {
+  display: flex;
+  align-items: center;
+  margin: 12px 0;
+}
+.history-filters > input {
+  width: 210px;
+}
+.history-filters label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.history-filters input[type="date"] {
+  width: 145px;
+}
+.history-table {
+  min-width: 680px;
+}
+.history-table td,
+.history-table th {
+  padding: 10px 8px;
+  font-size: 12px;
+}
+.history-table td strong {
+  font-weight: 500;
+}
+.history-table td small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.record-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0008;
+  z-index: 110;
+}
+.record-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(820px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  z-index: 111;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+}
+.record-dialog > .section-header {
+  padding: 16px 20px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+.record-dialog h2 {
+  font-size: 17px;
+  margin: 0;
+}
+.record-dialog h3 {
+  font-size: 13px;
+  margin-top: 18px;
+}
+.record-dialog pre {
+  overflow: auto;
+  padding: 12px;
+  background: var(--input);
+  font-size: 12px;
+  max-height: 400px;
+  white-space: pre;
+}
+.record-dialog .prose {
+  white-space: pre-wrap;
+}
+.previous-attempts {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.recommendation-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.recommendation-list > button {
+  background: transparent;
+  justify-content: flex-start;
+  text-align: left;
+  border: 0;
+  padding: 4px 0;
+  gap: 8px;
+  font-size: 12px;
+}
+.recommendation-list small {
+  color: var(--muted);
+}
+.test-case-fields {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+.test-case-fields fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+}
+.test-case-fields legend {
+  color: var(--muted);
+  font-size: 12px;
+}
+.test-case-fields textarea,
+.test-case-fields input {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+@media (min-width: 1400px) {
+  .library-row {
+    grid-template-columns: 28px minmax(
+        260px,
+        1fr
+      ) 100px 100px 60px 100px 105px 28px;
+    gap: 14px;
+  }
+}
+@media (max-width: 1100px) {
+  .library-row {
+    grid-template-columns: 28px minmax(150px, 1fr) 78px 80px 85px 28px;
+    gap: 8px;
+  }
+  .row-duration,
+  .row-type {
+    display: none;
+  }
+  .row-action-label {
+    font-size: 11px;
+  }
+  .library-filters .filters {
+    row-gap: 8px;
+  }
+  .library-page .list-caption > span:last-child {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .library-row {
+    grid-template-columns: 28px minmax(120px, 1fr) 82px 28px;
+  }
+  .row-difficulty,
+  .row-action-label {
+    display: none;
+  }
+  .compact-heading {
+    flex-wrap: wrap;
+  }
+  .learning-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .goal-link {
+    display: none;
+  }
+  .review-row {
+    gap: 8px;
+  }
+  .recommendation-list {
+    display: grid;
+  }
+}

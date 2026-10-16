@@ -471,3 +471,23 @@ def test_shared_learning_states_history_details_and_goal_edits(tmp_path, package
     with client_for(tmp_path, package, runner) as client:
         assert len(client.get('/api/progress').json()['attempts']) == 2
         assert client.get('/api/questions').json()[0]['progress_status'] == 'needs_review'
+
+
+def test_pinned_drafts_and_retries_remain_on_the_original_version(tmp_path, package):
+    with client_for(tmp_path, package) as client:
+        store = client.app.state.store
+        old = store.question(package['id'])
+        newer = {**old, 'version': 2, 'prompt': 'A newer revision'}
+        with store.connect() as db:
+            store._insert_question(db, newer)
+        for version in (1, 2):
+            client.put('/api/drafts/' + package['id'], json={'files': {'main.c': f'// version {version}'}, 'question_version': version}).raise_for_status()
+        old_draft = client.get('/api/drafts/' + package['id'] + '?version=1').json()
+        assert old_draft['files']['main.c'] == '// version 1'
+        assert old_draft['question_version'] == 1
+        run = client.post('/api/runs', json={'question_id': package['id'], 'question_version': 1, 'files': old_draft['files'], 'mode': 'submit'}).json()
+        wait_run(client, run['id'])
+        assert client.get('/api/progress').json()['attempts'][0]['question_version'] == 1
+        client.put('/api/drafts/' + package['id'], json={'files': {'main.c': '// old retry'}, 'question_version': 1}).raise_for_status()
+        assert store.draft(package['id'])['version'] == 2
+        assert store.draft(package['id'], 1)['files']['main.c'] == '// old retry'

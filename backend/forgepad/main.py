@@ -41,6 +41,7 @@ class Flags(StrictModel):
 
 
 class Draft(StrictModel):
+    question_version: int | None = Field(default=None, ge=1)
     files: dict[str, str]
     answer: str = Field(default="", max_length=50000)
     session_id: str | None = Field(default=None, max_length=80)
@@ -88,6 +89,7 @@ class IdeaRequest(StrictModel):
 
 
 class AttemptRequest(StrictModel):
+    question_version: int | None = Field(default=None, ge=1)
     question_id: str
     session_id: str | None = Field(default=None, max_length=80)
     answer: str = Field(min_length=1, max_length=50000)
@@ -475,9 +477,14 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         return practice_question(question)
 
     @app.get("/api/drafts/{question_id}")
-    def get_draft(question_id: str):
-        question = question_or_404(question_id)
-        row = store().draft(question_id)
+    def get_draft(question_id: str, version: int | None = None, session_id: str | None = None):
+        if session_id:
+            session = load_session(session_id)
+            if session["question_id"] != question_id:
+                raise HTTPException(409, "Draft does not belong to this interview")
+            version = session["question_version"]
+        question = question_or_404(question_id, version)
+        row = store().draft(question_id, question["version"])
         return (
             {
                 "files": row["files"],
@@ -496,12 +503,13 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
 
     @app.put("/api/drafts/{question_id}")
     def save_draft(question_id: str, request: Draft):
-        question = question_or_404(question_id)
+        question = question_or_404(question_id, request.question_version)
         if request.session_id:
             session = load_session(request.session_id)
             if session["question_id"] != question_id or session["state"] == "COMPLETE":
                 raise HTTPException(409, "Draft does not belong to an active interview")
-        previous = store().draft(question_id)
+            question = question_or_404(question_id, session["question_version"])
+        previous = store().draft(question_id, question["version"])
         record = store().save_draft(question, request.files, request.answer)
         if request.session_id and (not previous or previous["files"] != request.files or previous["answer"] != request.answer):
             store().add_replay(request.session_id, "code", {"files": request.files, "answer": request.answer})
@@ -509,7 +517,10 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
 
     @app.post("/api/runs", status_code=202)
     def create_run(request: RunRequest):
-        question = question_or_404(request.question_id)
+        question = question_or_404(request.question_id, request.question_version)
+        if request.session_id:
+            pinned = load_session(request.session_id)
+            question = question_or_404(request.question_id, pinned["question_version"])
         if not question.get("test_config"):
             raise HTTPException(422, "This question has no executable tests. Save a theory response instead.")
         if not request.files:
@@ -546,7 +557,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
         session = load_session(request.session_id) if request.session_id else None
         if session and (session["question_id"] != request.question_id or session["state"] == "COMPLETE"):
             raise HTTPException(409, "Response does not belong to this active interview")
-        question = question_or_404(request.question_id, session["question_version"] if session else None)
+        question = question_or_404(request.question_id, session["question_version"] if session else request.question_version)
         if question.get("test_config"):
             raise HTTPException(
                 422, "Use Submit for executable questions; confidence cannot mark code tests correct"

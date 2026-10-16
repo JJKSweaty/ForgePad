@@ -1,38 +1,66 @@
-import { useState } from "react";
-import {
-  Check,
-  ChevronRight,
-  Download,
-  Plus,
-  TrendingUp,
-  X,
-} from "lucide-react";
+import { useRef, useState } from "react";
+import { Download, Plus, Pencil, Trash2, ArrowRight } from "lucide-react";
 import { api, download, message, post, readable } from "./api";
-import type { Attempt, Progress, Question } from "./api";
+import type { Attempt, Goal, Progress, Question } from "./api";
+import { attemptOutcome, shortDate } from "./learning";
+import { RecordDialog } from "./RecordDialog";
+
 export function ProgressPage({
   progress,
   questions,
   refresh,
   onPractice,
+  onBrowse,
+  onDashboard,
 }: {
   progress: Progress;
   questions: Question[];
   refresh: () => Promise<void>;
-  onPractice: (id: string) => void;
+  onPractice: (id: string, version?: number) => void;
+  onBrowse: (topic?: string) => void;
+  onDashboard: () => void;
 }) {
-  const [goal, setGoal] = useState(""),
-    [error, setError] = useState(""),
-    [selected, setSelected] = useState<Attempt | null>(null),
+  const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [reset, setReset] = useState(false),
-    [resetText, setResetText] = useState("");
+    [goal, setGoal] = useState(""),
+    [goalStatuses, setGoalStatuses] = useState<Record<string, string>>({}),
+    [editing, setEditing] = useState<Partial<Goal> | null>(null),
+    [selected, setSelected] = useState<Attempt | null>(null),
+    [loading, setLoading] = useState(false),
+    [detailError, setDetailError] = useState(""),
+    [query, setQuery] = useState(""),
+    [result, setResult] = useState(""),
+    [type, setType] = useState(""),
+    [after, setAfter] = useState(""),
+    [page, setPage] = useState(0);
+  const detailRequest = useRef(0);
   const title = (id: string) => questions.find((q) => q.id === id)?.title ?? id;
-  async function addGoal() {
-    if (!goal.trim()) return;
+  const attemptType = (a: Attempt) =>
+    a.type ??
+    questions.find((q) => q.id === a.question_id)?.type ??
+    a.language ??
+    "";
+  const history = progress.attempts.filter(
+    (a) =>
+      (a.question_title ?? a.title ?? title(a.question_id))
+        .toLowerCase()
+        .includes(query.toLowerCase()) &&
+      (!result ||
+        (result === "passed"
+          ? a.result?.status === "passed"
+          : result === "self"
+            ? !!a.confidence
+            : !!a.result && a.result.status !== "passed")) &&
+      (!type || attemptType(a) === type) &&
+      (!after || a.created_at.slice(0, 10) >= after),
+  );
+  const pages = Math.max(1, Math.ceil(history.length / 30)),
+    current = Math.min(page, pages - 1);
+  async function action(fn: () => Promise<unknown>) {
     setBusy(true);
+    setError("");
     try {
-      await post("/goals", { title: goal.trim() });
-      setGoal("");
+      await fn();
       await refresh();
     } catch (e) {
       setError(message(e));
@@ -40,195 +68,370 @@ export function ProgressPage({
       setBusy(false);
     }
   }
+  async function changeGoal(g: Goal, status: string) {
+    setGoalStatuses((current) => ({ ...current, [g.id]: status }));
+    await action(() =>
+      api(`/goals/${g.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+    );
+    setGoalStatuses((current) => {
+      const next = { ...current };
+      delete next[g.id];
+      return next;
+    });
+  }
+  async function inspect(a: Attempt) {
+    const request = ++detailRequest.current;
+    setSelected(a);
+    setDetailError("");
+    setLoading(true);
+    setError("");
+    try {
+      const detail = await api<Attempt>(
+        `/attempts/${encodeURIComponent(a.id)}`,
+      );
+      if (detailRequest.current === request) setSelected(detail);
+    } catch (e) {
+      if (detailRequest.current === request) setDetailError(message(e));
+    } finally {
+      if (detailRequest.current === request) setLoading(false);
+    }
+  }
+  const summary = progress.summary;
   return (
-    <div className="page">
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">LEARNING RECORD</div>
-          <h1>Progress</h1>
-          <p>
-            Review your attempts, revisit gaps, and decide what to work on next.
-          </p>
+    <div className="page learning-page">
+      <div className="page-heading compact-heading">
+        <h1>Progress</h1>
+        <div className="button-row">
+          <button className="text-button" onClick={onDashboard}>
+            Activity overview <ArrowRight size={14} />
+          </button>
+          <button
+            className="secondary"
+            onClick={() =>
+              void action(async () =>
+                download("forgepad-progress.json", await api("/progress")),
+              )
+            }
+            disabled={busy}
+          >
+            <Download size={14} />
+            Export
+          </button>
         </div>
-        <button
-          className="secondary"
-          onClick={() => download("forgepad-progress.json", progress)}
-        >
-          <Download size={15} />
-          Export progress
-        </button>
       </div>
       {error && (
         <div className="error-banner" role="alert">
           {error}
         </div>
       )}
-      <div className="progress-grid">
-        <section className="panel">
-          <div className="section-header">
-            <div>
-              <h2>Practice goals</h2>
-              <p>Keep the next step specific.</p>
-            </div>
-            <TrendingUp size={18} />
+      <section
+        className="metric-strip learning-summary"
+        aria-label="Learning summary"
+      >
+        {[
+          ["Attempts", summary.attempts ?? progress.attempts.length],
+          ["Passed attempts", summary.passed_attempts ?? 0],
+          ["Questions completed", summary.completed_questions ?? 0],
+          ["Reviews due", summary.due_reviews ?? progress.due_reviews.length],
+        ].map(([label, value]) => (
+          <div className="metric" key={label}>
+            <strong>{value}</strong>
+            <span>{label}</span>
           </div>
-          <div className="goal-list">
-            {progress.goals.map((g) => (
-              <label
-                className={`goal ${g.status === "complete" ? "done" : ""}`}
-                key={g.id}
-              >
-                <input
-                  type="checkbox"
-                  checked={g.status === "complete"}
-                  onChange={() =>
-                    void api(`/goals/${g.id}`, {
-                      method: "PATCH",
-                      body: JSON.stringify({
-                        status: g.status === "complete" ? "active" : "complete",
-                      }),
-                    })
-                      .then(refresh)
-                      .catch((e) => setError(message(e)))
-                  }
-                />
-                <span>{g.title}</span>
-                {g.status === "complete" && <Check size={14} />}
-              </label>
-            ))}
-            {!progress.goals.length && (
-              <p className="muted-text">
-                No goals yet. Add one to guide your next session.
-              </p>
-            )}
-            <form
-              className="inline-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void addGoal();
-              }}
-            >
-              <input
-                aria-label="New practice goal"
-                placeholder="e.g. Explain volatile and its limits"
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-              />
-              <button disabled={!goal.trim() || busy} aria-label="Add goal">
-                <Plus size={17} />
-              </button>
-            </form>
-          </div>
-        </section>
-        <section className="panel">
-          <div className="section-header">
-            <div>
-              <h2>Review queue</h2>
-              <p>Questions scheduled for another look</p>
-            </div>
-            <span className="badge">{progress.due_reviews.length} due</span>
-          </div>
-          {progress.due_reviews.map((r, i) => {
-            const id =
-              typeof r === "string" ? r : (r.question_id ?? r.id ?? "");
-            return (
-              <button
-                className="question-row"
-                key={`${id}-${i}`}
-                onClick={() => onPractice(id)}
-              >
-                <span className="row-main">
+        ))}
+      </section>
+      {!progress.attempts.length && (
+        <div className="compact-empty">
+          <strong>Build your learning record</strong>
+          <p>
+            Submit a solution or save a written assessment to record your first
+            attempt.
+          </p>
+          <button className="primary" onClick={() => onBrowse()}>
+            Start Practice
+          </button>
+        </div>
+      )}
+      <section
+        className="learning-section"
+        aria-labelledby="review-queue-title"
+      >
+        <div className="section-header">
+          <h2 id="review-queue-title">
+            Review queue <small>{progress.due_reviews.length} due</small>
+          </h2>
+        </div>
+        {progress.due_reviews.map((r, i) => {
+          const id = typeof r === "string" ? r : (r.question_id ?? r.id ?? "");
+          return (
+            <div className="review-row" key={`${id}-${i}`}>
+              <div>
+                <strong>
                   {typeof r === "string"
                     ? title(id)
-                    : (r.question_title ?? r.title ?? title(id))}
-                </span>
-                <ChevronRight size={16} />
+                    : (r.title ?? r.question_title ?? title(id))}
+                </strong>
+                <small>
+                  {typeof r !== "string" && (
+                    <>
+                      {r.topics?.join(" · ")} ·{" "}
+                      {readable(r.previous_result ?? "Recorded")} ·{" "}
+                      {shortDate(r.last_attempted_at)}
+                    </>
+                  )}
+                </small>
+                <p>
+                  {typeof r !== "string" && (r.reason ?? "Scheduled review")}
+                </p>
+              </div>
+              <button onClick={() => onPractice(id)}>Practice again</button>
+            </div>
+          );
+        })}
+        {!progress.due_reviews.length && (
+          <p className="muted-text compact-note">
+            No reviews due
+            {progress.attempts.length
+              ? ". Your next review follows the saved assessment schedule."
+              : " yet."}
+          </p>
+        )}
+      </section>
+      <section className="learning-section">
+        <div className="section-header">
+          <h2>Topics to revisit</h2>
+        </div>
+        <div className="topic-evidence-list">
+          {progress.weak_topics.map((t) => {
+            const topic = typeof t === "string" ? t : t.topic;
+            const count =
+              typeof t === "string" ? 0 : (t.needs_review ?? t.count ?? 0);
+            return (
+              <button
+                key={topic}
+                className="topic-evidence"
+                onClick={() => onBrowse(topic)}
+              >
+                <strong>{topic}</strong>
+                <small>
+                  {count
+                    ? `${count} unsuccessful or uncertain assessment${count === 1 ? "" : "s"}`
+                    : "Recorded review evidence"}
+                </small>
+                <ArrowRight size={14} />
               </button>
             );
           })}
-          {!progress.due_reviews.length && (
-            <div className="empty">
-              No reviews due.
-              <small>Reviews appear as you record attempts.</small>
-            </div>
-          )}
-        </section>
-      </div>
-      <section className="panel topics-panel">
-        <div className="section-header">
-          <div>
-            <h2>Topics to revisit</h2>
-            <p>Based on recorded attempts and confidence</p>
-          </div>
-        </div>
-        <div className="tags">
-          {progress.weak_topics.map((t, i) => (
-            <span key={i}>
-              {typeof t === "string" ? t : t.topic}
-              {typeof t !== "string" && t.count !== undefined
-                ? ` · ${t.count}`
-                : ""}
-            </span>
-          ))}
           {!progress.weak_topics.length && (
-            <p className="muted-text">No topic gaps identified yet.</p>
+            <p className="muted-text compact-note">
+              No learning gaps established from recorded assessments.{" "}
+              <button className="text-button" onClick={() => onBrowse()}>
+                Browse questions
+              </button>
+            </p>
           )}
         </div>
       </section>
-      <section className="panel">
+      <section className="learning-section">
         <div className="section-header">
-          <div>
-            <h2>Attempt history</h2>
-            <p>
-              Each submission preserves the question version and your response.
-            </p>
-          </div>
-          <span className="badge">{progress.attempts.length} attempts</span>
+          <h2>Practice goals</h2>
         </div>
+        <div className="compact-goals">
+          {progress.goals.map((g) => (
+            <div
+              className={`goal-row ${(goalStatuses[g.id] ?? g.status) === "complete" ? "done" : ""}`}
+              key={g.id}
+            >
+              <label>
+                <input
+                  type="checkbox"
+                  checked={(goalStatuses[g.id] ?? g.status) === "complete"}
+                  disabled={busy}
+                  onChange={(e) =>
+                    void changeGoal(g, e.target.checked ? "complete" : "active")
+                  }
+                />
+                <span>{g.title}</span>
+              </label>
+              {(g.question_id || g.topic) && (
+                <button
+                  className="text-button goal-link"
+                  onClick={() =>
+                    g.question_id
+                      ? onPractice(g.question_id)
+                      : onBrowse(g.topic)
+                  }
+                >
+                  {g.question_id ? title(g.question_id) : g.topic}
+                  <ArrowRight size={12} />
+                </button>
+              )}
+              <button
+                className="icon-button"
+                aria-label={`Edit goal ${g.title}`}
+                onClick={() => setEditing({ ...g })}
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                className="icon-button"
+                disabled={busy}
+                aria-label={`Delete goal ${g.title}`}
+                onClick={() =>
+                  void action(() => api(`/goals/${g.id}`, { method: "DELETE" }))
+                }
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <form
+          className="inline-form goal-create"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void action(async () => {
+              await post("/goals", { title: goal.trim() });
+              setGoal("");
+            });
+          }}
+        >
+          <input
+            aria-label="New practice goal"
+            placeholder="Add a specific practice goal…"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            maxLength={500}
+          />
+          <button disabled={busy || !goal.trim()} aria-label="Add goal">
+            <Plus size={16} />
+          </button>
+        </form>
+      </section>
+      <section className="learning-section">
+        <div className="section-header">
+          <h2>
+            Attempt history <small>{history.length} results</small>
+          </h2>
+        </div>
+        {progress.attempts.length > 0 && (
+          <div className="history-filters filters">
+            <input
+              aria-label="Filter history by question"
+              placeholder="Question…"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
+            />
+            <select
+              aria-label="Filter attempt result"
+              value={result}
+              onChange={(e) => {
+                setResult(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="">All results</option>
+              <option value="passed">Passed tests</option>
+              <option value="failed">Unsuccessful tests</option>
+              <option value="self">Self assessment</option>
+            </select>
+            <select
+              aria-label="Filter attempt type"
+              value={type}
+              onChange={(e) => {
+                setType(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="">All types</option>
+              {[...new Set(progress.attempts.map(attemptType))]
+                .filter(Boolean)
+                .map((t) => (
+                  <option key={t} value={t}>
+                    {readable(t)}
+                  </option>
+                ))}
+            </select>
+            <label>
+              Since{" "}
+              <input
+                type="date"
+                aria-label="Attempts since"
+                value={after}
+                onChange={(e) => {
+                  setAfter(e.target.value);
+                  setPage(0);
+                }}
+              />
+            </label>
+            {(query || result || type || after) && (
+              <button
+                onClick={() => {
+                  setQuery("");
+                  setResult("");
+                  setType("");
+                  setAfter("");
+                  setPage(0);
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
         <div className="table-scroll">
-          <table>
+          <table className="history-table">
             <thead>
               <tr>
                 <th>Question</th>
-                <th>Result</th>
-                <th>Saved</th>
+                <th>Outcome</th>
+                <th>Type / language</th>
+                <th>Duration</th>
+                <th>Submitted</th>
                 <th>
-                  <span className="sr-only">Details</span>
+                  <span className="sr-only">Review</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {progress.attempts.map((a) => (
+              {history.slice(current * 30, current * 30 + 30).map((a) => (
                 <tr key={a.id}>
                   <td>
                     <strong>
                       {a.question_title ?? a.title ?? title(a.question_id)}
                     </strong>
-                    <small>
-                      {a.question_version
-                        ? `Version ${a.question_version}`
-                        : a.question_id}
-                    </small>
+                    <small>Version {a.question_version ?? "—"}</small>
+                  </td>
+                  <td>{readable(attemptOutcome(a))}</td>
+                  <td>
+                    {readable(
+                      a.language && a.language !== "independent"
+                        ? a.language
+                        : attemptType(a),
+                    )}
                   </td>
                   <td>
-                    <span
-                      className={`badge ${a.result?.status === "passed" ? "success" : ""}`}
-                    >
-                      {readable(
-                        a.result?.status ??
-                          a.status ??
-                          a.confidence ??
-                          "recorded",
-                      )}
-                    </span>
+                    {a.duration_seconds
+                      ? `${Math.round(a.duration_seconds / 60)} min`
+                      : "—"}
                   </td>
-                  <td>{new Date(a.created_at).toLocaleString()}</td>
+                  <td>
+                    <time dateTime={a.created_at}>
+                      {shortDate(a.created_at)}
+                    </time>
+                  </td>
                   <td>
                     <button
                       className="text-button"
-                      onClick={() => setSelected(a)}
+                      onClick={() => void inspect(a)}
                     >
-                      Review <ChevronRight size={14} />
+                      Review
                     </button>
                   </td>
                 </tr>
@@ -236,54 +439,75 @@ export function ProgressPage({
             </tbody>
           </table>
         </div>
-        {!progress.attempts.length && (
-          <div className="empty">Your first submission will appear here.</div>
+        {!history.length && (
+          <p className="muted-text compact-note">
+            {progress.attempts.length
+              ? "No attempts match these filters."
+              : "Submitted work is preserved here with its question version."}
+          </p>
+        )}
+        {pages > 1 && (
+          <nav className="pagination" aria-label="Attempt pages">
+            <button
+              disabled={current === 0}
+              onClick={() => setPage(current - 1)}
+            >
+              Previous
+            </button>
+            <span>
+              {current + 1} / {pages}
+            </span>
+            <button
+              disabled={current + 1 === pages}
+              onClick={() => setPage(current + 1)}
+            >
+              Next
+            </button>
+          </nav>
         )}
       </section>
-      <div className="data-controls">
-        <span>
-          Attempts preserve your question revision and submitted work.
-        </span>
-        <button
-          className="text-button danger-text"
-          onClick={() => setReset(true)}
-        >
-          Reset practice data
-        </button>
-      </div>
       {selected && (
-        <div className="modal-backdrop">
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="attempt-title"
-          >
-            <div className="section-header">
-              <div>
-                <h2 id="attempt-title">
-                  {selected.question_title ?? title(selected.question_id)}
-                </h2>
-                <p>{new Date(selected.created_at).toLocaleString()}</p>
-              </div>
-              <button
-                className="icon-button"
-                aria-label="Close attempt"
-                onClick={() => setSelected(null)}
-              >
-                <X size={18} />
+        <RecordDialog
+          title={
+            selected.question_title ??
+            selected.title ??
+            title(selected.question_id)
+          }
+          onClose={() => {
+            ++detailRequest.current;
+            setSelected(null);
+            setLoading(false);
+          }}
+        >
+          <p>
+            Version {selected.question_version} ·{" "}
+            {shortDate(selected.created_at)}
+          </p>
+          {loading ? (
+            <p role="status">Loading submitted work…</p>
+          ) : detailError ? (
+            <div role="alert">
+              {detailError}
+              <button onClick={() => void inspect(selected)}>
+                Retry loading attempt
               </button>
             </div>
-            <div className="modal-body">
+          ) : (
+            <>
+              {selected.confidence && (
+                <p>
+                  <strong>Self assessment:</strong> {selected.confidence}
+                </p>
+              )}
               {selected.answer && (
                 <>
-                  <h3>Response</h3>
+                  <h3>Submitted answer</h3>
                   <div className="prose">{selected.answer}</div>
                 </>
               )}
               {selected.reflection && (
                 <>
-                  <h3>Reflection</h3>
+                  <h3>Your reflection</h3>
                   <p>{selected.reflection}</p>
                 </>
               )}
@@ -295,10 +519,37 @@ export function ProgressPage({
               ))}
               {selected.result && (
                 <>
-                  <h3>Result</h3>
+                  <h3>Deterministic test results</h3>
                   <pre>{JSON.stringify(selected.result, null, 2)}</pre>
                 </>
               )}
+              <h3>AI feedback</h3>
+              {selected.ai_feedback ? (
+                <pre>
+                  {typeof selected.ai_feedback === "string"
+                    ? selected.ai_feedback
+                    : JSON.stringify(selected.ai_feedback, null, 2)}
+                </pre>
+              ) : (
+                <p className="muted-text">
+                  No AI feedback saved for this attempt.
+                </p>
+              )}
+              <h3>Other submitted attempts</h3>
+              <div className="previous-attempts">
+                {progress.attempts
+                  .filter(
+                    (a) =>
+                      a.question_id === selected.question_id &&
+                      a.id !== selected.id,
+                  )
+                  .map((a) => (
+                    <button key={a.id} onClick={() => void inspect(a)}>
+                      v{a.question_version} · {shortDate(a.created_at)} ·{" "}
+                      {readable(attemptOutcome(a))}
+                    </button>
+                  ))}
+              </div>
               <div className="modal-actions">
                 <button
                   onClick={() =>
@@ -310,77 +561,90 @@ export function ProgressPage({
                 </button>
                 <button
                   className="primary"
-                  onClick={() => onPractice(selected.question_id)}
+                  onClick={() =>
+                    onPractice(selected.question_id, selected.question_version)
+                  }
                 >
-                  Practice again
+                  Practice this version again
                 </button>
               </div>
-            </div>
-          </section>
-        </div>
+            </>
+          )}
+        </RecordDialog>
       )}
-      {reset && (
-        <div className="modal-backdrop">
-          <section
-            className="modal small-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-title"
+      {editing && (
+        <RecordDialog
+          error={error}
+          title="Edit practice goal"
+          onClose={() => setEditing(null)}
+        >
+          <form
+            className="goal-editor"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void action(async () => {
+                await api(`/goals/${editing.id}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({
+                    title: editing.title?.trim(),
+                    question_id: editing.question_id || null,
+                    topic: editing.topic || null,
+                  }),
+                });
+                setEditing(null);
+              });
+            }}
           >
-            <div className="modal-body">
-              <h2 id="reset-title">Reset practice data?</h2>
-              <p>
-                This deletes saved attempts, drafts, interviews, and goals.
-                Question packages remain. Export your workspace first if you
-                need a copy.
-              </p>
-              <label>
-                Type RESET to confirm
-                <input
-                  autoFocus
-                  value={resetText}
-                  onChange={(e) => setResetText(e.target.value)}
-                />
-              </label>
-              <div className="modal-actions">
-                <button
-                  onClick={() => {
-                    setReset(false);
-                    setResetText("");
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="danger"
-                  disabled={resetText !== "RESET" || busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      await api("/data", { method: "DELETE" });
-                      Object.keys(localStorage)
-                        .filter(
-                          (k) =>
-                            k.startsWith("forgepad.v1.") &&
-                            k !== "forgepad.v1.theme",
-                        )
-                        .forEach((k) => localStorage.removeItem(k));
-                      await refresh();
-                      setReset(false);
-                      setResetText("");
-                    } catch (e) {
-                      setError(message(e));
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  Delete practice data
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
+            <label>
+              Goal
+              <input
+                value={editing.title ?? ""}
+                onChange={(e) =>
+                  setEditing({ ...editing, title: e.target.value })
+                }
+                maxLength={500}
+              />
+            </label>
+            <label>
+              Linked question
+              <select
+                value={editing.question_id ?? ""}
+                onChange={(e) =>
+                  setEditing({ ...editing, question_id: e.target.value })
+                }
+              >
+                <option value="">No question</option>
+                {questions.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Linked topic
+              <select
+                value={editing.topic ?? ""}
+                onChange={(e) =>
+                  setEditing({ ...editing, topic: e.target.value })
+                }
+              >
+                <option value="">No topic</option>
+                {[...new Set(questions.flatMap((q) => q.topics))]
+                  .sort()
+                  .map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+              </select>
+            </label>
+            <button
+              className="primary"
+              disabled={busy || !editing.title?.trim()}
+            >
+              Save goal
+            </button>
+          </form>
+        </RecordDialog>
       )}
     </div>
   );

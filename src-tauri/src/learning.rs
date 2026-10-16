@@ -16,7 +16,7 @@ pub fn states(attempts: &[Value], drafts: &[Value]) -> HashMap<String, Value> {
             .is_some_and(|d| d <= chrono::Utc::now());
         let v = out.entry(id.to_string()).or_insert_with(||json!({
             "progress_status":if due || a["completion_status"] != "complete" {"needs_review"}else{"completed"},
-            "attempt_count":0,"latest_attempt_id":a["id"],"latest_result":a["result"]["status"],
+            "completion_status":a["completion_status"],"attempt_count":0,"latest_attempt_id":a["id"],"latest_result":a["result"]["status"],
             "last_activity_at":a["created_at"],"review_due_at":a["review_due_at"]
         }));
         v["attempt_count"] = json!(v["attempt_count"].as_u64().unwrap_or(0) + 1);

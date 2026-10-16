@@ -59,7 +59,7 @@ def snapshot(store, timezone="UTC"):
         }
         for i in range(364)
     }
-    attempts = store.records("attempts")
+    attempts = store.attempt_metadata()
     questions = {q["id"]: q for q in store.questions()}
     solved = set()
     recent = []

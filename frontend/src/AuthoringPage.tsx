@@ -8,6 +8,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { api, download, message, post, readable } from "./api";
+import { TestCasesEditor, type AuthoredTest } from "./TestCasesEditor";
 import type { Question } from "./api";
 import { native } from "./native";
 import { DesktopFeature } from "./RoadmapsPage";
@@ -67,12 +68,25 @@ export function AuthoringPage({
     type: "theory",
     difficulty: "intermediate",
     duration: 15,
+    description: "",
+    language: "independent",
+    constraints: "",
+    hints: "",
+    followUps: "",
+    starter: "{}",
+    solution: "{}",
+    testMode: "stdio",
+    solutionNotes: "",
+    timeComplexity: "",
+    spaceComplexity: "",
   });
+  const [tests, setTests] = useState<AuthoredTest[]>([]);
   const [workflow, setWorkflow] = useState("form"),
     [input, setInput] = useState(""),
     [drafts, setDrafts] = useState<Draft[]>([]),
     [selected, setSelected] = useState<Draft | null>(null),
     [source, setSource] = useState(""),
+    [extraction, setExtraction] = useState(""),
     [job, setJob] = useState<Job | null>(null),
     [auditId, setAuditId] = useState(""),
     [audit, setAudit] = useState<unknown>(null),
@@ -102,6 +116,9 @@ export function AuthoringPage({
               const d = await api<Draft>(`/question-drafts/${selected.id}`);
               if (live) {
                 setSelected(d);
+                setExtraction(
+                  d.extraction ? JSON.stringify(d.extraction, null, 2) : "",
+                );
                 setSource(JSON.stringify(d.package, null, 2) ?? "");
               }
             }
@@ -121,6 +138,7 @@ export function AuthoringPage({
   if (!native) return <DesktopFeature />;
   async function choose(d: Draft) {
     setSelected(d);
+    setExtraction(d.extraction ? JSON.stringify(d.extraction, null, 2) : "");
     setSource(d.package ? JSON.stringify(d.package, null, 2) : "");
     setApproved(false);
     setOriginal(null);
@@ -153,26 +171,55 @@ export function AuthoringPage({
                 }-${crypto.randomUUID().slice(0, 8)}`,
                 version: 1,
                 title: form.title.trim(),
-                description: form.prompt.trim().slice(0, 1800),
+                description:
+                  form.description.trim() || form.prompt.trim().slice(0, 1800),
                 type: form.type,
                 difficulty: form.difficulty,
                 duration_minutes: form.duration,
-                language: "independent",
+                language: ["theory", "design"].includes(form.type)
+                  ? "independent"
+                  : form.language,
                 prompt: form.prompt.trim(),
                 topics: form.topics
                   .split(",")
                   .map((s) => s.trim())
                   .filter(Boolean),
-                constraints: [],
-                starter_files: {},
-                test_config: null,
-                reference_solution: {},
+                constraints: form.constraints
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+                starter_files: ["theory", "design"].includes(form.type)
+                  ? {}
+                  : JSON.parse(form.starter),
+                test_config:
+                  !["theory", "design"].includes(form.type) &&
+                  (form.type === "coding" || tests.length)
+                    ? {
+                        mode: form.testMode,
+                        compiler: "gcc",
+                        sanitizers: false,
+                        timeout_seconds: 2,
+                        tests,
+                      }
+                    : null,
+                reference_solution: ["theory", "design"].includes(form.type)
+                  ? {}
+                  : JSON.parse(form.solution),
+                solution_notes: form.solutionNotes,
+                time_complexity: form.timeComplexity,
+                space_complexity: form.spaceComplexity,
                 rubric: form.rubric
                   .split("\n")
                   .map((s) => s.trim())
                   .filter(Boolean),
-                follow_ups: [],
-                hints: [],
+                follow_ups: form.followUps
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+                hints: form.hints
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
                 source: {
                   name: "Personal question",
                   url: "",
@@ -307,14 +354,12 @@ export function AuthoringPage({
                   value={workflow}
                   onChange={(e) => setWorkflow(e.target.value)}
                 >
-                  <option value="form">Write a question</option>
+                  <option value="form">Create manually</option>
                   <option value="json">
                     Import a coding or question package
                   </option>
                   <option value="idea">Generate from an idea</option>
-                  <option value="extract">
-                    Extract existing question text
-                  </option>
+                  <option value="extract">Paste with AI</option>
                 </select>
               </label>
               {workflow === "form" ? (
@@ -336,11 +381,24 @@ export function AuthoringPage({
                       <select
                         value={form.type}
                         onChange={(e) =>
-                          setForm({ ...form, type: e.target.value })
+                          setForm({
+                            ...form,
+                            type: e.target.value,
+                            language:
+                              e.target.value === "coding" &&
+                              form.language === "independent"
+                                ? "c"
+                                : ["theory", "design"].includes(e.target.value)
+                                  ? "independent"
+                                  : form.language,
+                          })
                         }
                       >
                         <option value="theory">Theory</option>
                         <option value="design">System design</option>
+                        <option value="coding">Coding</option>
+                        <option value="debugging">Debugging</option>
+                        <option value="code_review">Code review</option>
                       </select>
                     </label>
                     <label>
@@ -359,6 +417,17 @@ export function AuthoringPage({
                       </select>
                     </label>
                   </div>
+                  <label>
+                    Description
+                    <input
+                      value={form.description}
+                      maxLength={2000}
+                      onChange={(e) =>
+                        setForm({ ...form, description: e.target.value })
+                      }
+                      placeholder="Short library description"
+                    />
+                  </label>
                   <label>
                     Question
                     <textarea
@@ -391,6 +460,128 @@ export function AuthoringPage({
                       placeholder="One evaluation criterion per line"
                     />
                   </label>
+                  <label>
+                    Language / runtime
+                    <select
+                      value={form.language}
+                      onChange={(e) =>
+                        setForm({ ...form, language: e.target.value })
+                      }
+                    >
+                      <option value="independent">Language independent</option>
+                      <option value="c">C (GCC / Clang)</option>
+                      <option value="cpp">C++ (GCC / Clang)</option>
+                    </select>
+                  </label>
+                  <label>
+                    Constraints (one per line)
+                    <textarea
+                      rows={3}
+                      value={form.constraints}
+                      onChange={(e) =>
+                        setForm({ ...form, constraints: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Hints (at least one)
+                    <textarea
+                      rows={3}
+                      value={form.hints}
+                      onChange={(e) =>
+                        setForm({ ...form, hints: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Three technical follow-ups (one per line)
+                    <textarea
+                      rows={3}
+                      value={form.followUps}
+                      onChange={(e) =>
+                        setForm({ ...form, followUps: e.target.value })
+                      }
+                    />
+                  </label>
+                  {!["theory", "design"].includes(form.type) && (
+                    <details open={form.type === "coding"}>
+                      <summary>Code and evaluation tests</summary>
+                      <label>
+                        Starter files (JSON filename → source)
+                        <textarea
+                          rows={5}
+                          value={form.starter}
+                          onChange={(e) =>
+                            setForm({ ...form, starter: e.target.value })
+                          }
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label>
+                        Reference solution files (private JSON)
+                        <textarea
+                          rows={5}
+                          value={form.solution}
+                          onChange={(e) =>
+                            setForm({ ...form, solution: e.target.value })
+                          }
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label>
+                        Test runtime
+                        <select
+                          value={form.testMode}
+                          onChange={(e) =>
+                            setForm({ ...form, testMode: e.target.value })
+                          }
+                        >
+                          <option value="stdio">
+                            Standard input / output program
+                          </option>
+                          <option value="fixture">
+                            C/C++ main fixture per test
+                          </option>
+                        </select>
+                      </label>
+                      <TestCasesEditor
+                        tests={tests}
+                        onChange={setTests}
+                        fixture={form.testMode === "fixture"}
+                      />
+                      <label>
+                        Solution notes
+                        <textarea
+                          rows={3}
+                          value={form.solutionNotes}
+                          onChange={(e) =>
+                            setForm({ ...form, solutionNotes: e.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Time complexity
+                        <input
+                          value={form.timeComplexity}
+                          onChange={(e) =>
+                            setForm({ ...form, timeComplexity: e.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Space complexity
+                        <input
+                          value={form.spaceComplexity}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              spaceComplexity: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </details>
+                  )}
                   <label>
                     Time in minutes
                     <input
@@ -491,9 +682,13 @@ export function AuthoringPage({
                     Resolve the listed ambiguities, then build the package
                     below. No tests are generated from unreviewed extraction.
                   </p>
-                  <pre className="report">
-                    {JSON.stringify(selected.extraction, null, 2)}
-                  </pre>
+                  <textarea
+                    aria-label="Review extracted question fields"
+                    rows={10}
+                    value={extraction}
+                    onChange={(e) => setExtraction(e.target.value)}
+                    disabled={pending}
+                  />
                 </div>
               )}
               {!selected.package && (
@@ -505,13 +700,15 @@ export function AuthoringPage({
                     onClick={() =>
                       void post<Job>(
                         `/question-drafts/${selected.id}/generate`,
-                        {},
+                        { reviewed_extraction: extraction },
                       )
                         .then(setJob)
                         .catch((e) => setError(message(e)))
                     }
                   >
-                    Generate using configured local model
+                    {selected.extraction
+                      ? "Generate package from reviewed fields"
+                      : "Generate using configured local model"}
                   </button>
                 </div>
               )}
@@ -529,6 +726,14 @@ export function AuthoringPage({
                   spellCheck={false}
                 />
               </label>
+              <EditablePreviewTests
+                source={source}
+                disabled={selected.status === "published" || pending}
+                onChange={(value) => {
+                  setSource(value);
+                  setApproved(false);
+                }}
+              />
               {selected.errors?.length > 0 && (
                 <div className="error-banner">
                   <ul>
@@ -701,5 +906,42 @@ export function AuthoringPage({
         </div>
       </details>
     </div>
+  );
+}
+
+function EditablePreviewTests({
+  source,
+  disabled,
+  onChange,
+}: {
+  source: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  let pkg;
+  try {
+    pkg = JSON.parse(source);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(pkg?.test_config?.tests)) return null;
+  return (
+    <details>
+      <summary>Edit sample and hidden tests</summary>
+      <TestCasesEditor
+        tests={pkg.test_config.tests}
+        disabled={disabled}
+        fixture={pkg.test_config.mode === "fixture"}
+        onChange={(tests) =>
+          onChange(
+            JSON.stringify(
+              { ...pkg, test_config: { ...pkg.test_config, tests } },
+              null,
+              2,
+            ),
+          )
+        }
+      />
+    </details>
   );
 }

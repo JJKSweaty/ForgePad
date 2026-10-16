@@ -164,12 +164,8 @@ export default function Practice({
         const finalDraft = {
           ...draft.current,
           session_id: sessionId,
-          ...(native
-            ? {
-                question_version: loadedVersion.current,
-                updated_at: savedAt.current,
-              }
-            : {}),
+          question_version: loadedVersion.current,
+          ...(native ? { updated_at: savedAt.current } : {}),
         };
         saveQueue.current = saveQueue.current
           .catch(() => {})
@@ -202,12 +198,8 @@ export default function Practice({
             body: JSON.stringify({
               ...next,
               session_id: sessionId,
-              ...(native
-                ? {
-                    question_version: question?.version,
-                    updated_at: savedAt.current,
-                  }
-                : {}),
+              question_version: question?.version,
+              ...(native ? { updated_at: savedAt.current } : {}),
             }),
           },
         );
@@ -375,7 +367,7 @@ export default function Practice({
         await post<Run>("/runs", {
           question_id: questionId,
           files: snapshot.files,
-          ...(native ? { question_version: question?.version } : {}),
+          question_version: question?.version,
           mode,
           session_id: sessionId,
         }),
@@ -1037,11 +1029,7 @@ export default function Practice({
                       await post("/attempts", {
                         question_id: questionId,
                         session_id: sessionId,
-                        ...(native
-                          ? {
-                              question_version: question.version,
-                            }
-                          : {}),
+                        question_version: question.version,
                         answer,
                         confidence,
                         reflection,

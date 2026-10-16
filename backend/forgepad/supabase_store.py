@@ -79,6 +79,36 @@ class SupabaseStore:
         rows = self._rows("forgepad_records", {"namespace": f"eq.{table}", "order": "created_at.desc,key.desc"})
         return [row["payload"] for row in rows]
 
+    def attempt_metadata(self):
+        # PostgREST projects only summary fields, keeping source and test payloads off the wire.
+        fields = ("id", "question_id", "question_version", "title", "topics", "language", "type", "created_at", "confidence", "completion_status", "review_due_at", "review_interval_days", "assessment_basis", "session_type", "duration_seconds")
+        select = ",".join(f"{key}:payload->{key}" for key in fields)
+        select += ",result_status:payload->result->status,result_passed:payload->result->passed,result_total:payload->result->total"
+        rows = self._rows("forgepad_records", {"namespace": "eq.attempts", "order": "created_at.desc,key.desc", "select": select})
+        for a in rows:
+            status, passed, total = a.pop("result_status", None), a.pop("result_passed", None), a.pop("result_total", None)
+            a["result"] = {"status": status, "passed": passed, "total": total} if status else None
+        return rows
+
+    def unfinished_drafts(self):
+        drafts = self.records("draft_versions")
+        keys = {(d["question_id"], d["version"]) for d in drafts if "question_id" in d}
+        for d in self.records("drafts"):
+            if (d["id"], d["version"]) not in keys:
+                drafts.append({**d, "question_id": d["id"]})
+        attempts = self.records("attempts")
+        out = []
+        for d in sorted(drafts, key=lambda d: d["updated_at"], reverse=True):
+            qid = d.get("question_id", d["id"].rsplit(":", 1)[0])
+            q = self.question(qid, d["version"])
+            if not q or self.flags(qid).get("archived") or (d["files"] == q["starter_files"] and not d["answer"].strip()):
+                continue
+            a = next((a for a in attempts if a["question_id"] == qid and a["question_version"] == d["version"]), None)
+            if a and ((a.get("files", {}) == d["files"] and a.get("answer", "") == d["answer"]) or a["created_at"] >= d["updated_at"]):
+                continue
+            out.append({"question_id": qid, "question_version": d["version"], "updated_at": d["updated_at"]})
+        return out
+
     def record(self, table, record_id):
         rows = self._request("GET", "forgepad_records", params={"namespace": f"eq.{table}",
                             "key": f"eq.{record_id}", "limit": "1"})
@@ -123,7 +153,7 @@ class SupabaseStore:
     def summary_state(self):
         flags = {r["id"]: r for r in self.records("flags")}
         latest = {}
-        for record in self.records("attempts"):
+        for record in self.attempt_metadata():
             latest.setdefault(record["question_id"], record)
         return flags, latest
 
@@ -139,13 +169,21 @@ class SupabaseStore:
             raise ValueError(result["error"])
         return result
 
-    def draft(self, question_id):
-        return self.record("drafts", question_id)
+    def draft(self, question_id, version=None):
+        if version is not None:
+            pinned = self.record("draft_versions", f"{question_id}:{version}")
+            if pinned:
+                return pinned
+        draft = self.record("drafts", question_id)
+        return draft if draft and (version is None or draft["version"] == version) else None
 
     def save_draft(self, question, files, answer):
-        record = {"id": question["id"], "version": question["version"], "question_version": question["version"],
+        record = {"id": question["id"], "version": question["version"], "question_version": question["version"], "question_id": question["id"],
                   "files": files, "answer": answer, "updated_at": now()}
-        self.save_record("drafts", record)
+        self.save_record("draft_versions", {**record, "id": f"{question['id']}:{question['version']}"})
+        current = self.draft(question["id"])
+        if not current or current["version"] <= question["version"]:
+            self.save_record("drafts", record)
         return record
 
     def add_replay(self, session_id, kind, data):
@@ -164,10 +202,10 @@ class SupabaseStore:
         private = self._rows("forgepad_solutions", {"order": "id.asc,version.asc"})
         solutions = {(r["id"], r["version"]): r["payload"] for r in private}
         result["questions"] = [{**r["payload"], **solutions.get((r["id"], r["version"]), {})} for r in rows]
-        for table in ("drafts", "attempts", "runs", "interviews", "goals", "replay"):
+        for table in ("drafts", "draft_versions", "attempts", "runs", "interviews", "goals", "replay"):
             result[table] = self.records(table)
         result["question_flags"] = self.records("flags")
         return result
 
     def reset_user_data(self):
-        self._request("DELETE", "forgepad_records", params={"namespace": "in.(drafts,attempts,runs,interviews,goals,replay,flags,imports)"}, prefer="return=minimal")
+        self._request("DELETE", "forgepad_records", params={"namespace": "in.(drafts,draft_versions,attempts,runs,interviews,goals,replay,flags,imports)"}, prefer="return=minimal")

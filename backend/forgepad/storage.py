@@ -154,9 +154,28 @@ class Store:
         with self.connect() as db:
             flags = {r["question_id"]: dict(r) for r in db.execute("SELECT * FROM question_flags")}
         latest = {}
-        for record in self.records("attempts"):
+        for record in self.attempt_metadata():
             latest.setdefault(record["question_id"], record)
         return flags, latest
+
+    def attempt_metadata(self):
+        with self.connect() as db:
+            rows = db.execute("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts ORDER BY created_at DESC,rowid DESC").fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+    def unfinished_drafts(self):
+        with self.connect() as db:
+            rows = db.execute("SELECT d.*,q.package,(SELECT payload FROM attempts a WHERE a.question_id=d.question_id AND a.version=d.version ORDER BY created_at DESC,rowid DESC LIMIT 1) latest FROM draft_versions d JOIN questions q ON q.id=d.question_id AND q.version=d.version LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC").fetchall()
+        out = []
+        for row in rows:
+            q, files = json.loads(row['package']), json.loads(row['files'])
+            if files == q['starter_files'] and not row['answer'].strip():
+                continue
+            a = json.loads(row['latest']) if row['latest'] else None
+            if a and ((a.get('files', {}) == files and a.get('answer', '') == row['answer']) or a['created_at'] >= row['updated_at']):
+                continue
+            out.append({'question_id': row['question_id'], 'question_version': row['version'], 'updated_at': row['updated_at']})
+        return out
 
     def latest_attempt(self, question_id):
         with self.connect() as db:
@@ -189,9 +208,9 @@ class Store:
             db.execute("DELETE FROM imports WHERE token=?", (token,))
         return question
 
-    def draft(self, question_id):
+    def draft(self, question_id, version=None):
         with self.connect() as db:
-            row = db.execute("SELECT * FROM draft_versions WHERE question_id=? ORDER BY version DESC LIMIT 1", (question_id,)).fetchone()
+            row = db.execute("SELECT * FROM draft_versions WHERE question_id=? AND (? IS NULL OR version=?) ORDER BY version DESC LIMIT 1", (question_id, version, version)).fetchone()
         return {**dict(row), "files": json.loads(row["files"])} if row else None
 
     def save_draft(self, question, files, answer):
@@ -199,7 +218,7 @@ class Store:
         with self.connect() as db:
             db.execute("INSERT INTO draft_versions VALUES(?,?,?,?,?) ON CONFLICT(question_id,version) DO UPDATE SET files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",
                        (question["id"], question["version"], encode(files), answer, record["updated_at"]))
-            db.execute("INSERT INTO drafts VALUES (?,?,?,?,?) ON CONFLICT(question_id) DO UPDATE SET version=excluded.version,files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",
+            db.execute("INSERT INTO drafts VALUES (?,?,?,?,?) ON CONFLICT(question_id) DO UPDATE SET version=excluded.version,files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at WHERE excluded.version>=drafts.version",
                        (question["id"], question["version"], encode(files), answer, record["updated_at"]))
         return record
 

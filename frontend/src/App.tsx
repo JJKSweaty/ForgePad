@@ -83,7 +83,8 @@ export default function App() {
     [sidebarHidden, setSidebarHidden] = useState(
       () => localStorage.getItem("forgepad.sidebar.hidden") === "true",
     ),
-    [search, setSearch] = useState(false);
+    [search, setSearch] = useState(false),
+    [libraryTopic, setLibraryTopic] = useState("");
   const hideSidebarButton = useRef<HTMLButtonElement>(null);
   const showSidebarButton = useRef<HTMLButtonElement>(null);
   const sidebarInteraction = useRef(false);
@@ -96,7 +97,7 @@ export default function App() {
     try {
       const [q, p] = await Promise.all([
         api<Question[]>("/questions"),
-        api<Progress>("/progress"),
+        api<Progress>("/progress?compact=true"),
       ]);
       setQuestions(q);
       setProgress(p);
@@ -142,15 +143,20 @@ export default function App() {
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
   }, [theme]);
-  const navigate = useCallback((target: Page, prepare?: () => void) => {
-    void flushDrafts()
-      .then(() => {
-        prepare?.();
-        setPage(target === "practice" && !prepare ? "questions" : target);
-        window.scrollTo({ top: 0 });
-      })
-      .catch((e) => setError(`Draft could not be saved: ${message(e)}`));
-  }, []);
+  const navigate = useCallback(
+    (target: Page, prepare?: () => void) => {
+      void flushDrafts()
+        .then(() => {
+          prepare?.();
+          setPage(target === "practice" && !prepare ? "questions" : target);
+          if (["questions", "progress", "dashboard"].includes(target))
+            void refresh();
+          window.scrollTo({ top: 0 });
+        })
+        .catch((e) => setError(`Draft could not be saved: ${message(e)}`));
+    },
+    [refresh],
+  );
   const practice = useCallback(
     (id: string, revision?: number) => {
       navigate("practice", () => {
@@ -452,8 +458,12 @@ export default function App() {
                   <Dashboard
                     onPractice={practice}
                     onSession={openSession}
+                    onProgress={() => navigate("progress")}
                     onRoadmap={openRoadmap}
                     onSettings={() => settings("github")}
+                    onBrowse={(topic = "") =>
+                      navigate("questions", () => setLibraryTopic(topic))
+                    }
                   />
                 )}
                 {page === "roadmaps" && (
@@ -465,7 +475,8 @@ export default function App() {
                 {page === "questions" && (
                   <QuestionBank
                     questions={questions}
-                    currentQuestion={selectedQuestion}
+                    initialTopic={libraryTopic}
+                    onSession={openSession}
                     onPractice={practice}
                     refresh={refresh}
                     onAuthor={() => settings("authoring")}
@@ -509,6 +520,10 @@ export default function App() {
                 )}
                 {page === "progress" && (
                   <ProgressPage
+                    onBrowse={(topic = "") =>
+                      navigate("questions", () => setLibraryTopic(topic))
+                    }
+                    onDashboard={() => navigate("dashboard")}
                     progress={progress}
                     questions={questions}
                     refresh={refresh}
@@ -519,6 +534,7 @@ export default function App() {
                   <SettingsPage
                     theme={theme}
                     onTheme={setTheme}
+                    onReset={refresh}
                     authoring={
                       <AuthoringPage
                         questions={questions}

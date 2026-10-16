@@ -196,9 +196,18 @@ impl Store {
             .execute("DELETE FROM goals WHERE id=?", [id])?;
         Ok(())
     }
+    /// Read-only session projection: safe while the session mutation mutex is held.
+    pub fn unfinished_session_metadata(&self) -> Result<Vec<Value>> {
+        let db = self.db.lock().unwrap();
+        let mut st=db.prepare("SELECT json_remove(payload,'$.transcript','$.events','$.report') FROM interviews WHERE json_extract(payload,'$.state')!='COMPLETE' ORDER BY COALESCE(json_extract(payload,'$.last_activity_at'),json_extract(payload,'$.started_at')) DESC")?;
+        let rows = st
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        rows.iter().map(|p| Ok(serde_json::from_str(p)?)).collect()
+    }
     pub fn attempt_metadata(&self) -> Result<Vec<Value>> {
         let db = self.db.lock().unwrap();
-        let mut st=db.prepare("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.result.tests','$.result.compiler_output') FROM attempts ORDER BY created_at DESC")?;
+        let mut st=db.prepare("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts ORDER BY created_at DESC")?;
         let rows = st
             .query_map([], |r| r.get::<_, String>(0))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -206,7 +215,7 @@ impl Store {
     }
     pub fn latest_attempt(&self, id: &str) -> Result<Option<Value>> {
         let db = self.db.lock().unwrap();
-        let payload:Option<String>=db.query_row("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.result.tests','$.result.compiler_output') FROM attempts WHERE question_id=? ORDER BY created_at DESC LIMIT 1",[id],|r|r.get(0)).optional()?;
+        let payload:Option<String>=db.query_row("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts WHERE question_id=? ORDER BY created_at DESC LIMIT 1",[id],|r|r.get(0)).optional()?;
         payload.map(|p| Ok(serde_json::from_str(&p)?)).transpose()
     }
     pub fn save(&self, kind: &str, record: &Value) -> Result<()> {

@@ -114,7 +114,25 @@ impl Service {
             &self.store.attempt_metadata()?,
             &self.store.unfinished_drafts()?,
         );
-        let active = self.active_session()?;
+        let active = self
+            .store
+            .unfinished_session_metadata()?
+            .into_iter()
+            .find(|s| {
+                let remaining = s["remaining_seconds"].as_f64().unwrap_or(0.0);
+                remaining > 0.0
+                    && (s["paused"] == true
+                        || s["clock_at"]
+                            .as_str()
+                            .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                            .is_some_and(|at| {
+                                (chrono::Utc::now() - at.with_timezone(&chrono::Utc))
+                                    .num_milliseconds() as f64
+                                    / 1000.0
+                                    < remaining
+                            }))
+            })
+            .unwrap_or(Value::Null);
         if let Some(id) = active["question_id"].as_str() {
             let at = active["last_activity_at"]
                 .as_str()
@@ -161,10 +179,10 @@ impl Service {
                 out[k] = v.clone();
             }
         }
-        out["completion_status"] = self
-            .store
-            .latest_attempt(q["id"].as_str().unwrap_or(""))?
-            .map_or(json!("not_started"), |a| a["completion_status"].clone());
+        out["completion_status"] = state
+            .and_then(|s| s.get("completion_status"))
+            .cloned()
+            .unwrap_or(json!("not_started"));
         out["progress_status"] = json!("not_started");
         if let Some(state) = state {
             for (k, v) in state.as_object().unwrap() {

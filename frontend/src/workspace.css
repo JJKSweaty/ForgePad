@@ -57,7 +57,7 @@ textarea:focus-visible {
   max-width: 650px;
 }
 .sidebar {
-  padding-top: 26px;
+  padding-top: 18px;
 }
 .sidebar nav {
   display: flex;
@@ -94,18 +94,18 @@ textarea:focus-visible {
 .practice-hub-header {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 30px 40px 0;
+  padding: 22px 40px 0;
 }
 .hub-heading {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 10px 20px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 .hub-heading h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 22px;
 }
 .hub-heading p {
   margin: 0;
@@ -928,11 +928,37 @@ select {
 }
 
 /* Shared control rhythm and readable secondary text. */
-.settings-section > p { max-width: 65ch; color: var(--muted); font-size: 13px; }
-.advanced-settings label { display: block; margin: 16px 0; }
-.success-text { display: flex; align-items: center; gap: 6px; color: var(--accent); }
-.runner-status { min-height: 32px; }
-.practice-footer { justify-content: flex-end; }
-@keyframes forgepad-spin { to { transform: rotate(360deg); } }
-.spinning { animation: forgepad-spin 1.5s linear infinite; }
-@media (prefers-reduced-motion: reduce) { .spinning { animation: none; } }
+.settings-section > p {
+  max-width: 65ch;
+  color: var(--muted);
+  font-size: 13px;
+}
+.advanced-settings label {
+  display: block;
+  margin: 16px 0;
+}
+.success-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+.runner-status {
+  min-height: 32px;
+}
+.practice-footer {
+  justify-content: flex-end;
+}
+@keyframes forgepad-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinning {
+  animation: forgepad-spin 1.5s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+}

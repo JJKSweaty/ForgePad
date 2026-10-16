@@ -14,6 +14,7 @@ import { native } from "./native";
 import RunnerSetup from "./RunnerSetup";
 import LocalCoachSettings from "./LocalCoachSettings";
 import type { GitHubStatus } from "./dashboardData";
+import { RecordDialog } from "./RecordDialog";
 import { PageHeader } from "./ui";
 import {
   InterviewAISettings,
@@ -36,7 +37,7 @@ const sections = [
   ["general", "General"],
   ["audio", "Interview & AI"],
   ["github", "Connections"],
-  ["compiler", "Workspace & data"],
+  ["compiler", "Data Management"],
   ["authoring", "Question authoring"],
 ] as const;
 type Section = (typeof sections)[number][0];
@@ -47,10 +48,12 @@ const sectionAliases: Record<string, Section> = {
 };
 export function SettingsPage({
   authoring,
+  onReset,
   theme = "dark",
   onTheme = () => {},
 }: {
   authoring?: ReactNode;
+  onReset?: () => Promise<void>;
   theme?: string;
   onTheme?: (theme: string) => void;
 }) {
@@ -86,7 +89,9 @@ export function SettingsPage({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [apiKey, setApiKey] = useState("");
+    [apiKey, setApiKey] = useState(""),
+    [reset, setReset] = useState(false),
+    [resetText, setResetText] = useState("");
   const loadIntegration = useCallback(
     async () =>
       setIntegration(await api<Integration>("/integrations/heyclicky")),
@@ -756,7 +761,7 @@ export function SettingsPage({
               )}
               {section === "compiler" && (
                 <section className="settings-section">
-                  <h2>Storage</h2>
+                  <h2>Data Management</h2>
                   <p className="settings-description">
                     Question revisions and practice history are saved by your
                     workspace service.
@@ -787,17 +792,75 @@ export function SettingsPage({
                       Export JSON
                     </button>
                   </div>
-                  <p>
-                    Destructive practice resets remain in Progress, behind the
-                    existing confirmation. Published question revisions are
-                    preserved.
-                  </p>
+                  <div className="setting-row">
+                    <div>
+                      <strong>Reset Practice Data</strong>
+                      <p>
+                        Delete attempts, drafts, interviews, and goals.
+                        Published question revisions remain.
+                      </p>
+                    </div>
+                    <button
+                      className="danger-text"
+                      onClick={() => setReset(true)}
+                    >
+                      Reset Practice Data
+                    </button>
+                  </div>
                 </section>
               )}
             </>
           )}
         </div>
       </div>
+      {reset && (
+        <RecordDialog
+          error={error}
+          title="Reset Practice Data?"
+          onClose={() => {
+            setReset(false);
+            setResetText("");
+          }}
+        >
+          <p>
+            This permanently deletes saved attempts, source drafts, interviews,
+            and goals. Export your workspace first if you need a copy. Published
+            questions remain.
+          </p>
+          <label>
+            Type RESET to confirm
+            <input
+              autoFocus
+              value={resetText}
+              onChange={(e) => setResetText(e.target.value)}
+            />
+          </label>
+          <div className="modal-actions">
+            <button onClick={() => setReset(false)}>Cancel</button>
+            <button
+              className="danger"
+              disabled={resetText !== "RESET" || busy}
+              onClick={() =>
+                void action(async () => {
+                  await api("/data", { method: "DELETE" });
+                  Object.keys(localStorage)
+                    .filter(
+                      (k) =>
+                        k.startsWith("forgepad.v1.") &&
+                        k !== "forgepad.v1.theme",
+                    )
+                    .forEach((k) => localStorage.removeItem(k));
+                  await onReset?.();
+                  setReset(false);
+                  setResetText("");
+                }, "Practice data deleted.")
+              }
+            >
+              Delete practice data
+            </button>
+          </div>
+        </RecordDialog>
+      )}
     </div>
   );
 }

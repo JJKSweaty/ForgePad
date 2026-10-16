@@ -472,3 +472,48 @@ async fn goal_edits_links_and_deletion_use_the_same_record() {
         .unwrap()
         .is_empty());
 }
+
+#[tokio::test]
+async fn continuation_and_library_resume_the_most_recent_unfinished_work() {
+    let (_dir, s) = workspace();
+    let session = s
+        .start_session(
+            &json!({"question_id":"align-up","duration_minutes":30}),
+            "interview",
+        )
+        .unwrap();
+    let q = s.store.question("adc-average", None).unwrap();
+    s.store
+        .save_draft(
+            &q,
+            &json!({"files":{"main.c":"// unfinished ADC work"},"answer":""}),
+        )
+        .unwrap();
+    assert_eq!(s.continuation().unwrap()["kind"], "draft");
+    s.store
+        .event(
+            session["id"].as_str(),
+            "candidate",
+            json!({"content":"I will check integer overflow."}),
+        )
+        .unwrap();
+    let c = s.continuation().unwrap();
+    assert_eq!(c["kind"], "session");
+    assert_eq!(c["session"]["id"], session["id"]);
+    let library = s.questions(&json!({})).unwrap();
+    let alignment = library.iter().find(|q| q["id"] == "align-up").unwrap();
+    assert_eq!(alignment["progress_status"], "in_progress");
+    assert_eq!(alignment["session_id"], session["id"]);
+    assert_eq!(s.store.records("interviews").unwrap().len(), 1);
+}
+
+#[test]
+fn automatic_mock_selection_does_not_reenter_the_session_lock() {
+    let (_dir, s) = workspace();
+    let session = s
+        .start_session(&json!({"kind":"theory","duration_minutes":15}), "interview")
+        .unwrap();
+    assert_eq!(session["state"], "INTRODUCTION");
+    assert!(session["question_id"].is_string());
+    assert_eq!(s.store.records("interviews").unwrap().len(), 1);
+}

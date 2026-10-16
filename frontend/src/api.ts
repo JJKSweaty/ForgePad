@@ -18,6 +18,17 @@ export type Question = {
   bookmarked?: boolean;
   archived?: boolean;
   completion_status?: string;
+  progress_status?:
+    | "not_started"
+    | "in_progress"
+    | "completed"
+    | "needs_review";
+  has_completed?: boolean;
+  attempt_count?: number;
+  last_activity_at?: string;
+  draft_version?: number;
+  session_id?: string;
+  latest_result?: string;
   coaching_available?: boolean;
   has_tests?: boolean;
   test_config?: {
@@ -72,8 +83,21 @@ export type Attempt = {
   files?: Record<string, string>;
   reflection?: string;
   question_version?: number;
+  type?: string;
+  language?: string;
+  completion_status?: string;
+  assessment_basis?: string;
+  review_due_at?: string;
+  duration_seconds?: number;
+  ai_feedback?: unknown;
 };
-export type Goal = { id: string; title: string; status: string };
+export type Goal = {
+  id: string;
+  title: string;
+  status: string;
+  question_id?: string;
+  topic?: string;
+};
 export type Progress = {
   attempts: Attempt[];
   due_reviews: (
@@ -82,10 +106,23 @@ export type Progress = {
         question_id?: string;
         title?: string;
         question_title?: string;
+        topics?: string[];
+        previous_result?: string;
+        last_attempted_at?: string;
+        reason?: string;
+        due_at?: string;
       }
     | string
   )[];
-  weak_topics: ({ topic: string; count?: number } | string)[];
+  weak_topics: (
+    | {
+        topic: string;
+        count?: number;
+        needs_review?: number;
+        evidence_ids?: string[];
+      }
+    | string
+  )[];
   goals: Goal[];
   summary: Record<string, number>;
 };

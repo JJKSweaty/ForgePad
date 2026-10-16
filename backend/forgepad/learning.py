@@ -7,12 +7,12 @@ def completed(a):
 
 
 def metadata(a):
-    return {**{k: v for k, v in a.items() if k not in {"files", "answer", "reflection"}},
+    return {**{k: v for k, v in a.items() if k not in {"files", "answer", "reflection", "ai_feedback"}},
             "result": {k: v for k, v in (a.get("result") or {}).items() if k not in {"tests", "compiler_output"}} or None}
 
 
 def states(store, questions, attempts=None):
-    attempts = attempts if attempts is not None else store.records("attempts")
+    attempts = attempts if attempts is not None else store.attempt_metadata()
     out = {}
     for a in attempts:
         due = a.get("review_due_at") and datetime.fromisoformat(a["review_due_at"]) <= datetime.now(UTC)
@@ -22,20 +22,10 @@ def states(store, questions, attempts=None):
             "last_activity_at": a["created_at"], "review_due_at": a.get("review_due_at"), "has_completed": False})
         v["attempt_count"] += 1
         v["has_completed"] |= completed(a)
-    for q in questions:
-        d = store.draft(q["id"])
-        if not d or store.flags(q["id"]).get("archived"):
-            continue
-        version = d.get("question_version", d.get("version", q["version"]))
-        pinned = store.question(q["id"], version) or q
-        if d["files"] == pinned.get("starter_files", {}) and not d["answer"].strip():
-            continue
-        last = next((a for a in attempts if a["question_id"] == q["id"] and a["question_version"] == version), None)
-        if last and ((last.get("files", {}) == d["files"] and last.get("answer", "") == d["answer"]) or last["created_at"] >= d["updated_at"]):
-            continue
-        v = out.setdefault(q["id"], {"attempt_count": 0})
+    for d in reversed(store.unfinished_drafts()):
+        v = out.setdefault(d["question_id"], {"attempt_count": 0})
         if d["updated_at"] >= v.get("last_activity_at", ""):
-            v.update(progress_status="in_progress", draft_version=version, last_activity_at=d["updated_at"])
+            v.update(progress_status="in_progress", draft_version=d["question_version"], last_activity_at=d["updated_at"])
     from .interviews import update_clock
     for session in sorted(store.records("interviews"), key=lambda s: s.get("last_activity_at", s["started_at"])):
         update_clock(session)
@@ -49,7 +39,7 @@ def states(store, questions, attempts=None):
 
 
 def progress(store, compact=False):
-    attempts = store.records("attempts")
+    attempts = store.attempt_metadata() if compact else store.records("attempts")
     latest, topics = {}, {}
     for a in attempts:
         latest.setdefault(a["question_id"], a)

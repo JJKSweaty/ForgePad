@@ -1,5 +1,15 @@
 # ForgePad release notes
 
+## 0.3.3 — 2026-10-16
+
+### Improved
+- Connect Dashboard, Question Library, and Progress with persisted learning states, compact controls, versioned retries, and review history.
+
+### Fixed
+- Keep submitted code, question versions, completion totals, review evidence, and resumable drafts consistent across the three learning pages.
+- Restore older-version drafts and submit retries against their original version in both native and browser workspaces.
+- Move confirmed practice-data deletion to Settings → Data Management; preserve published questions.
+
 ## 0.3.2 — 2026-10-16
 
 ### Improved

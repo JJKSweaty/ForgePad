@@ -2,6 +2,7 @@ import type { Question } from "./api";
 export type ActivityDay = {
   date: string;
   activity: number;
+  attempts?: number;
   solved: number;
   active_seconds: number;
   future: boolean;
@@ -44,6 +45,7 @@ export type Continuation = {
     remaining_seconds: number;
     paused: boolean;
   } | null;
+  last_activity_at?: string;
   roadmap_id: string;
   roadmap_title: string;
 };
@@ -54,6 +56,8 @@ export type DashboardData = {
   days: ActivityDay[];
   metrics: {
     questions_solved: number;
+    completed_questions?: number;
+    attempts?: number;
     practice_seconds: number;
     mock_interviews_completed: number;
     current_streak: number;
@@ -66,6 +70,10 @@ export type DashboardData = {
     available?: boolean;
     basis: string;
     idle_cutoff_seconds?: number;
+  };
+  recommendations?: {
+    weak_topics: { topic: string; needs_review: number }[];
+    goals: import("./api").Goal[];
   };
   generated_at: string;
 };
@@ -81,9 +89,10 @@ export type GitHubStatus = {
   error: string | null;
   publishing_available: false;
 };
-export type Dataset = "activity" | "solved" | "time" | "github";
+export type Dataset = "activity" | "attempts" | "solved" | "time" | "github";
 export const datasets: { id: Dataset; label: string; unit: string }[] = [
   { id: "activity", label: "Practice activity", unit: "practice actions" },
+  { id: "attempts", label: "Coding submissions", unit: "coding submissions" },
   { id: "solved", label: "Problems solved", unit: "unique solves" },
   { id: "time", label: "Practice time", unit: "active minutes" },
   { id: "github", label: "GitHub contributions", unit: "GitHub contributions" },
@@ -138,7 +147,7 @@ export function dayValue(
     ? Math.floor(day.active_seconds / 60)
     : dataset === "github"
       ? (github.get(day.date) ?? 0)
-      : day[dataset];
+      : (day[dataset] ?? 0);
 }
 export function calendarMonths(days: ActivityDay[]) {
   return Array.from({ length: Math.ceil(days.length / 7) }, (_, week) => {

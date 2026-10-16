@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 const modifier = process.platform === "darwin" ? "Meta" : "Control";
-test("Practice explains the next step, uses readable neutral surfaces, and closes from the upper left", async ({
+test("Practice is compact, uses readable neutral surfaces, and closes from the upper left", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -12,8 +12,9 @@ test("Practice explains the next step, uses readable neutral surfaces, and close
     .getByRole("button", { name: "Practice", exact: true })
     .click();
   await expect(
-    page.getByRole("region", { name: "How practice works" }),
-  ).toContainText("Submit & review");
+    page.getByRole("heading", { name: "Question Library" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Progress status")).toBeVisible();
   const close = await page
     .getByRole("button", { name: "Hide sidebar" })
     .boundingBox();
@@ -49,6 +50,38 @@ test("Practice explains the next step, uses readable neutral surfaces, and close
     });
     expect(contrast.ratio).toBeGreaterThanOrEqual(4.5);
     expect(contrast.tint).toBe(0);
+    // Theme changes animate controls briefly; assert their final text contrast too.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const ratio = (element: Element) => {
+            const s = getComputedStyle(element),
+              lum = (color: string) =>
+                color
+                  .match(/[\d.]+/g)!
+                  .slice(0, 3)
+                  .map((x) => Number(x) / 255)
+                  .map((c) =>
+                    c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+                  )
+                  .reduce(
+                    (sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i],
+                    0,
+                  );
+            const a = lum(s.color),
+              b = lum(s.backgroundColor);
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+          };
+          return Math.min(
+            ...[
+              ...document.querySelectorAll(
+                ".sidebar .nav-item.active,.library-page button.primary",
+              ),
+            ].map(ratio),
+          );
+        }),
+      )
+      .toBeGreaterThanOrEqual(4.5);
     await page.screenshot({
       path: testInfo.outputPath(`practice-${theme}.png`),
       fullPage: true,
@@ -62,9 +95,9 @@ async function openEditor(page: Page) {
     .getByRole("button", { name: "Practice", exact: true })
     .click();
   await page
-    .locator(".question-card")
+    .locator(".library-row")
     .filter({ hasText: "Checked alignment for DMA buffers" })
-    .locator(".question-link")
+    .locator(".row-open-target")
     .click();
   await expect(
     page.locator(".monaco-editor textarea.inputarea"),
