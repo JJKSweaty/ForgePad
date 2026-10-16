@@ -19,7 +19,7 @@ Release notes state whether a download is Apple notarized. Until a Developer ID 
 
 ## Use
 
-- **Coding:** edit source files with local C/C++ autocomplete, then **Run public tests** or **Submit all tests** to record an attempt against the complete suite. `⌘/Ctrl + Enter` runs; add `Shift` to submit. `Ctrl + Space` opens suggestions; use arrows to choose, `Tab` to accept, and `Escape` to close. Suggestions include keywords, snippets, common functions, and identifiers from your draft files.
+- **Coding:** edit source files with local C/C++ autocomplete, then **Run all tests** to check the entire visible suite or **Submit all tests** to run that same suite and record an attempt. `⌘/Ctrl + Enter` runs; add `Shift` to submit. `Ctrl + Space` opens suggestions; use arrows to choose, `Tab` to accept, and `Escape` to close. Suggestions include keywords, snippets, common functions, and identifiers from your draft files.
 - **Editor layout:** drag the problem/editor divider, or focus it and use arrow keys, `Home`, or `End`. Hide the problem panel or sidebar when you want more editing space; ForgePad remembers these choices. Narrow windows stack the problem above the editor.
 - **Drafts and checkpoints:** drafts autosave as you type. **Save checkpoint** (`⌘/Ctrl + S`) keeps a manual restore point on this device. **Reset to starter files** and **Restore saved checkpoint** confirm before replacing the draft; the replacement autosaves. Compiler diagnostics appear below the editor and link to their source line.
 - **Design, theory, debugging:** use the question's writing workspace and thinking prompts. Submit a response for self-review.

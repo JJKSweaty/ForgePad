@@ -74,7 +74,7 @@ test("code edits survive navigation, execute in Docker, and update progress", as
     .click();
   await expect(page.locator(".monaco-editor")).toContainText("align_up");
   await page
-    .getByRole("button", { name: "Run public tests", exact: true })
+    .getByRole("button", { name: "Run all tests", exact: true })
     .click();
   await expect(output.locator(".badge").first()).toHaveText("passed", {
     timeout: 90000,

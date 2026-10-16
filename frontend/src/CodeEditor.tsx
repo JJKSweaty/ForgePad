@@ -3,64 +3,121 @@ import type { EditorProps } from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import "monaco-editor/esm/vs/editor/editor.all";
-import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
+import {
+  language as cppLanguage,
+  conf as cppConfiguration,
+} from "monaco-editor/esm/vs/basic-languages/cpp/cpp.js";
 import { completionEntries } from "./editorSupport";
 import type { EditorDiagnostic } from "./editorSupport";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 loader.config({ monaco });
 
-for (const [name, base, background, foreground, comment, keyword, string] of [
+// Extend Monaco's C/C++ grammar rather than coloring plain text. These lexical
+// roles distinguish calls, fixed-width types and constants without claiming type checking.
+const identifierRules: monaco.languages.IMonarchLanguageRule[] = [
   [
-    "forgepad-dark",
-    "vs-dark",
-    "#1b1b1b",
-    "#eeeeee",
-    "#9b9b9b",
-    "#a6bfd3",
-    "#d2be96",
+    /[a-zA-Z_]\w*(?=\s*\()/,
+    {
+      cases: { "@keywords": "keyword.$0", "@default": "entity.name.function" },
+    },
   ],
   [
-    "forgepad-light",
-    "vs",
-    "#ffffff",
-    "#242424",
-    "#6b6b6b",
-    "#355a7a",
-    "#795b2f",
+    /\b(?:u?int(?:8|16|32|64)_t|u?intptr_t|size_t|ptrdiff_t|[A-Za-z_]\w*_t)\b/,
+    "type.identifier",
   ],
-] as const) {
-  monaco.editor.defineTheme(name, {
-    base,
+  [/[A-Z][A-Z0-9_]+\b/, "constant"],
+  [
+    /[a-zA-Z_]\w*/,
+    {
+      cases: {
+        "@typeKeywords": "type",
+        "@keywords": "keyword.$0",
+        "@default": "identifier",
+      },
+    },
+  ],
+];
+const cppTokens: monaco.languages.IMonarchLanguage = {
+  ...cppLanguage,
+  typeKeywords: [
+    "void",
+    "char",
+    "short",
+    "int",
+    "long",
+    "float",
+    "double",
+    "bool",
+    "signed",
+    "unsigned",
+    "wchar_t",
+    "char16_t",
+    "char32_t",
+  ],
+  tokenizer: {
+    ...cppLanguage.tokenizer,
+    root: cppLanguage.tokenizer.root.flatMap((rule) =>
+      Array.isArray(rule) &&
+      rule[0] instanceof RegExp &&
+      rule[0].source === "[a-zA-Z_]\\w*"
+        ? identifierRules
+        : [rule],
+    ),
+  },
+};
+for (const id of ["c", "cpp"]) {
+  if (!monaco.languages.getLanguages().some((language) => language.id === id))
+    monaco.languages.register({ id });
+  monaco.languages.setLanguageConfiguration(id, cppConfiguration);
+  monaco.languages.setMonarchTokensProvider(id, cppTokens);
+}
+for (const light of [false, true]) {
+  const background = light ? "#ffffff" : "#181c24",
+    foreground = light ? "#24292f" : "#d8dee9";
+  monaco.editor.defineTheme(light ? "forgepad-light" : "forgepad-dark", {
+    base: light ? "vs" : "vs-dark",
     inherit: true,
     rules: [
       { token: "", foreground: foreground.slice(1) },
-      { token: "comment", foreground: comment.slice(1) },
-      { token: "keyword", foreground: keyword.slice(1) },
-      { token: "keyword.directive", foreground: keyword.slice(1) },
-      { token: "type", foreground: base === "vs" ? "35675a" : "a7c8b4" },
+      { token: "identifier", foreground: light ? "005f99" : "9cdcfe" },
       {
-        token: "type.identifier",
-        foreground: base === "vs" ? "35675a" : "a7c8b4",
+        token: "comment",
+        foreground: light ? "477039" : "86ad77",
+        fontStyle: "italic",
       },
-      { token: "number", foreground: base === "vs" ? "70577e" : "c7b796" },
-      { token: "string", foreground: string.slice(1) },
+      { token: "keyword", foreground: light ? "7c329f" : "c792ea" },
+      { token: "keyword.directive", foreground: light ? "225e9c" : "82aaff" },
+      { token: "type", foreground: light ? "007d74" : "4ec9b0" },
+      { token: "type.identifier", foreground: light ? "007d74" : "4ec9b0" },
+      {
+        token: "entity.name.function",
+        foreground: light ? "795e26" : "ffd580",
+      },
+      { token: "constant", foreground: light ? "995115" : "f4b779" },
+      { token: "number", foreground: light ? "116329" : "b5cea8" },
+      { token: "string", foreground: light ? "a31515" : "ef9a78" },
+      { token: "string.escape", foreground: light ? "8d357f" : "e8b7ed" },
+      { token: "delimiter", foreground: light ? "46556a" : "b4c7df" },
     ],
     colors: {
       "editor.background": background,
       "editor.foreground": foreground,
       "editorGutter.background": background,
-      "editorLineNumber.foreground": comment,
+      "editorLineNumber.foreground": light ? "#65717e" : "#7c879b",
       "editorLineNumber.activeForeground": foreground,
-      "editorBracketMatch.border": "#8a8a8a",
-      "editorBracketHighlight.foreground1":
-        base === "vs" ? "#666666" : "#cccccc",
-      "editorBracketHighlight.foreground2":
-        base === "vs" ? "#856a43" : "#d2be96",
-      "editorBracketHighlight.foreground3":
-        base === "vs" ? "#70577e" : "#c7b796",
-      "editor.lineHighlightBackground": base === "vs" ? "#f5f5f5" : "#252525",
-      "editor.selectionBackground": base === "vs" ? "#dedede" : "#444444",
+      "editorBracketMatch.border": light ? "#6366b8" : "#a4a9ff",
+      "editorBracketHighlight.foreground1": light ? "#906000" : "#ffd580",
+      "editorBracketHighlight.foreground2": light ? "#9237a1" : "#c792ea",
+      "editorBracketHighlight.foreground3": light ? "#006e9e" : "#80cbc4",
+      "editorBracketHighlight.foreground4": light ? "#9c3a42" : "#f78c6c",
+      "editorBracketHighlight.foreground5": light ? "#176a37" : "#addb67",
+      "editorBracketHighlight.foreground6": light ? "#315dc0" : "#82aaff",
+      "editor.lineHighlightBackground": light ? "#f1f5fa" : "#232b38",
+      "editor.selectionBackground": light ? "#cce2ff" : "#385477",
+      "editorCursor.foreground": light ? "#315dc0" : "#b4bdff",
+      "editorIndentGuide.background1": light ? "#dce3ed" : "#303b4d",
+      "editorIndentGuide.activeBackground1": light ? "#9cadd0" : "#6981aa",
     },
   });
 }

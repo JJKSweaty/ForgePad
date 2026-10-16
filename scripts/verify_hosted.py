@@ -58,7 +58,7 @@ def main():
         print("Reference validation and transactional question import passed.", flush=True)
         public = request(f"/questions/{qid}")
         assert "reference_solution" not in public and "solution_notes" not in public
-        assert len(public["test_config"]["tests"]) == 3
+        assert len(public["test_config"]["tests"]) == len(package["test_config"]["tests"])
         session = request("/interviews", "POST", {"question_id": qid, "duration_minutes":15, "kind":"coding"})
         session_id = session["id"]
         draft = {"files":package["reference_solution"], "answer":"Verify bounded UART recovery.", "session_id":session_id}
@@ -75,8 +75,8 @@ def main():
         assert replay["session"]["state"] == "COMPLETE"
         assert {"code", "candidate", "run"}.issubset({event["kind"] for event in replay["events"]})
         assert any(event.get("result", {}).get("status") == "passed" for event in replay["events"] if event.get("result"))
-        print("Hosted C11 run passed 3/3 public tests; interview and replay persisted.", flush=True)
-        print("Candidate responses omit reference solutions and all six hidden tests.", flush=True)
+        print("Hosted C11 run passed the complete visible suite; interview and replay persisted.", flush=True)
+        print("Candidate responses include all test cases and omit reference solutions.", flush=True)
     finally:
         if session_id:
             store._request("DELETE", "forgepad_records", params={"namespace":"eq.replay", "payload->>session_id":f"eq.{session_id}"}, prefer="return=minimal")

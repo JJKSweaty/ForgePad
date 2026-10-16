@@ -332,9 +332,7 @@ export default function Practice({
       parseDiagnostics(
         [
           run?.result?.compiler_output ?? "",
-          ...(run?.result?.tests
-            ?.filter((test) => test.visibility !== "hidden")
-            .map((test) => test.stderr ?? "") ?? []),
+          ...(run?.result?.tests?.map((test) => test.stderr ?? "") ?? []),
         ].join("\n"),
         runFiles ?? {},
       ),
@@ -348,10 +346,10 @@ export default function Practice({
     [diagnostics, activeFile, resultsStale],
   );
   const executionStatus = busy
-    ? `Saving draft before ${runMode === "run" ? "running public tests" : "submitting all tests"}…`
+    ? `Saving draft before ${runMode === "run" ? "running all tests" : "submitting all tests"}…`
     : run?.status === "queued"
       ? "Queued · waiting for the isolated runner…"
-      : `Compiling and running ${runMode === "run" ? "public tests" : "all tests"}…`;
+      : "Compiling and running all tests…";
   async function execute(mode: "run" | "submit") {
     if (running || !Object.keys(draft.current.files).length) return;
     setError("");
@@ -622,7 +620,9 @@ export default function Practice({
                 )}
                 {(question.test_config?.tests?.length ?? 0) > 0 && (
                   <>
-                    <h3>Public examples</h3>
+                    <h3>
+                      Visible test cases ({question.test_config?.tests.length})
+                    </h3>
                     {question.test_config?.tests.map((t) => (
                       <details key={t.id}>
                         <summary>{t.name}</summary>
@@ -975,8 +975,8 @@ export default function Practice({
           <div className="run-toolbar">
             {coding && (
               <p className="execution-help" id="execution-help">
-                Run checks public tests. Submit checks all tests, including
-                hidden tests, and records an attempt.
+                Run checks every visible test. Submit checks the same suite and
+                saves an attempt.
               </p>
             )}
             <div className="button-row">
@@ -1000,12 +1000,12 @@ export default function Practice({
                 <>
                   <button
                     disabled={running || !Object.keys(files).length}
-                    title="Compile and run public tests (Ctrl/Cmd+Enter)"
+                    title="Compile and run all tests (Ctrl/Cmd+Enter)"
                     aria-describedby="execution-help"
                     onClick={() => void execute("run")}
                   >
                     <Play size={14} />
-                    Run public tests
+                    Run all tests
                   </button>
                   <button
                     className="primary"
@@ -1091,10 +1091,10 @@ export default function Practice({
                   <p>
                     {executionError
                       ? "Execution could not start. Your code is still in the editor."
-                      : "Run public tests to see output and compiler diagnostics here."}
+                      : "Run all tests to see output and compiler diagnostics here."}
                   </p>
                   <small>
-                    Ctrl / ⌘ + Enter: public tests · Shift + Ctrl / ⌘ + Enter:
+                    Ctrl / ⌘ + Enter: all tests · Shift + Ctrl / ⌘ + Enter:
                     submit all tests
                   </small>
                 </div>
@@ -1102,7 +1102,7 @@ export default function Practice({
                 <>
                   <p className="result-context" role="status">
                     {runMode === "run"
-                      ? "Public test run"
+                      ? "Complete test run"
                       : "Full test submission"}
                     {run.attempt_id ? " · Attempt recorded" : ""}
                     {resultsStale
@@ -1189,34 +1189,28 @@ export default function Practice({
                           className={`test-dot ${test.status === "passed" ? "passed" : "failed"}`}
                         />
                         <strong>{test.name || test.id}</strong>
-                        <span className="muted-text">{test.visibility}</span>
+                        <span className="muted-text">Visible</span>
                         <span className="badge">{readable(test.status)}</span>
                       </summary>
-                      {test.visibility !== "hidden" && (
+                      {
                         <>
                           <h4>Output</h4>
                           <pre tabIndex={0}>{test.stdout || "(empty)"}</pre>
                         </>
+                      }
+                      {test.expected_stdout !== undefined && (
+                        <>
+                          <h4>Expected output</h4>
+                          <pre tabIndex={0}>
+                            {test.expected_stdout || "(empty)"}
+                          </pre>
+                        </>
                       )}
-                      {test.visibility !== "hidden" &&
-                        test.expected_stdout !== undefined && (
-                          <>
-                            <h4>Expected output</h4>
-                            <pre tabIndex={0}>
-                              {test.expected_stdout || "(empty)"}
-                            </pre>
-                          </>
-                        )}
-                      {test.visibility !== "hidden" && test.stderr && (
+                      {test.stderr && (
                         <>
                           <h4>Diagnostics</h4>
                           <pre tabIndex={0}>{test.stderr}</pre>
                         </>
-                      )}
-                      {test.visibility === "hidden" && (
-                        <p className="muted-text">
-                          Hidden test inputs and expected outputs are withheld.
-                        </p>
                       )}
                     </details>
                   ))}

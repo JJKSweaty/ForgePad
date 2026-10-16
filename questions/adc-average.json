@@ -49,7 +49,7 @@
       {
         "id": "t3",
         "name": "Full scale",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "65535\n",
@@ -58,7 +58,7 @@
       {
         "id": "t4",
         "name": "Maximum batch",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "65535\n",

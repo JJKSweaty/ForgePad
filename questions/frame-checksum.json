@@ -49,7 +49,7 @@
       {
         "id": "t3",
         "name": "Truncated input",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "negative",
         "stdin": "",
         "expected_stdout": "0 0\n",
@@ -58,7 +58,7 @@
       {
         "id": "t4",
         "name": "Bad checksum",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "negative",
         "stdin": "",
         "expected_stdout": "0\n",
@@ -67,7 +67,7 @@
       {
         "id": "t5",
         "name": "Modulo checksum",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",

@@ -52,7 +52,9 @@ export function ProgressPage({
             ? !!a.confidence
             : !!a.result && a.result.status !== "passed")) &&
       (!type || attemptType(a) === type) &&
-      (!after || a.created_at.slice(0, 10) >= after),
+      (!after ||
+        new Date(a.created_at).getTime() >=
+          new Date(`${after}T00:00:00`).getTime()),
   );
   const pages = Math.max(1, Math.ceil(history.length / 30)),
     current = Math.min(page, pages - 1);
@@ -520,7 +522,7 @@ export function ProgressPage({
               {selected.result && (
                 <>
                   <h3>Deterministic test results</h3>
-                  <pre>{JSON.stringify(selected.result, null, 2)}</pre>
+                  <AttemptResults result={selected.result} />
                 </>
               )}
               <h3>AI feedback</h3>
@@ -645,6 +647,76 @@ export function ProgressPage({
             </button>
           </form>
         </RecordDialog>
+      )}
+    </div>
+  );
+}
+
+function AttemptResults({
+  result,
+}: {
+  result: NonNullable<Attempt["result"]>;
+}) {
+  return (
+    <div className="saved-test-results">
+      <p>
+        <strong>{readable(result.status ?? "Recorded")}</strong>
+        {typeof result.passed === "number" &&
+          typeof result.total === "number" &&
+          ` · ${result.passed} / ${result.total} tests passed`}
+      </p>
+      {!!result.compiler_output && (
+        <details open>
+          <summary>Compiler diagnostics</summary>
+          <pre>{result.compiler_output}</pre>
+        </details>
+      )}
+      {!!result.tests?.length && (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Test</th>
+                <th>Visibility</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.tests.map((test, index) => (
+                <tr key={test.id ?? index}>
+                  <td>
+                    {test.name ?? test.id}
+                    {(test.stdout || test.stderr || test.expected_stdout) && (
+                      <details>
+                        <summary>Output</summary>
+                        {test.stdout && (
+                          <>
+                            <small>Standard output</small>
+                            <pre>{test.stdout}</pre>
+                          </>
+                        )}
+                        {test.expected_stdout && (
+                          <>
+                            <small>Expected output</small>
+                            <pre>{test.expected_stdout}</pre>
+                          </>
+                        )}
+                        {test.stderr && (
+                          <>
+                            <small>Standard error</small>
+                            <pre>{test.stderr}</pre>
+                          </>
+                        )}
+                      </details>
+                    )}
+                  </td>
+                  <td>Visible</td>
+                  <td>{readable(test.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

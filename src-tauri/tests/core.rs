@@ -246,7 +246,7 @@ async fn mcp_handshake_discovery_validation_and_revocation() {
     )
     .await
     .unwrap();
-    assert_eq!(discovered["result"]["tools"].as_array().unwrap().len(), 25);
+    assert_eq!(discovered["result"]["tools"].as_array().unwrap().len(), 26);
     let bad = tool(
         s.clone(),
         "forgepad_search_questions",
@@ -500,4 +500,50 @@ fn written_question_projection_does_not_create_an_executable_test_config() {
         assert_eq!(candidate, question);
         assert!(!candidate["test_config"].is_object());
     }
+}
+
+#[tokio::test]
+async fn external_authoring_uses_the_same_visible_edge_case_contract() {
+    let (_dir, s) = workspace();
+    enable(&s).await;
+    let reply = tool(
+        s.clone(),
+        "forgepad_get_authoring_prompt",
+        json!({"idea":"A bounded DMA queue"}),
+    )
+    .await;
+    assert_eq!(reply["result"]["isError"], false);
+    let prompt = reply["result"]["structuredContent"]["data"]["prompt"]
+        .as_str()
+        .unwrap();
+    for required in [
+        "EIGHT and THIRTY",
+        "visibility=\"public\"",
+        "coverage matrix",
+        "starter_files",
+        "reference_solution",
+        "independently",
+    ] {
+        assert!(prompt.contains(required), "{required}");
+    }
+    let mut q = s.store.question("align-up", None).unwrap();
+    let count = q["test_config"]["tests"].as_array().unwrap().len();
+    q["test_config"]["tests"][0]["visibility"] = json!("hidden");
+    assert!(!schema::validate(&q).is_empty());
+    let visible = schema::candidate(&q);
+    assert_eq!(
+        visible["test_config"]["tests"].as_array().unwrap().len(),
+        count
+    );
+    assert_eq!(visible["test_config"]["tests"][0]["visibility"], "public");
+    assert_eq!(
+        visible["test_config"]["tests"][0]["fixture"],
+        q["test_config"]["tests"][0]["fixture"]
+    );
+    q["test_config"]["tests"][0]["visibility"] = json!("public");
+    q["test_config"]["tests"][1] = q["test_config"]["tests"][0].clone();
+    q["test_config"]["tests"][1]["id"] = json!("renamed-duplicate");
+    assert!(schema::validate(&q)
+        .iter()
+        .any(|e| e.contains("Duplicate test stimuli")));
 }

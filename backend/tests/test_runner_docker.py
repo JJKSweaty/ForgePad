@@ -29,17 +29,20 @@ def single_question(**kwargs):
     return q
 
 
-def test_correct_wrong_and_hidden_privacy(runner):
+def test_complete_suite_and_outputs_are_visible_in_both_modes(runner):
     source = (
         '#include <stdio.h>\nint main(void){int n; if(scanf("%d", &n)!=1)return 1; printf("%d\\n", 2*n);}'
     )
     result = runner.run(question(), {"main.c": source}, include_hidden=True)
     assert result["status"] == "passed", result
     assert (result["passed"], result["total"]) == (2, 2)
-    hidden = result["tests"][1]
-    assert hidden["stdout"] == hidden["stderr"] == ""
-    assert "9183" not in json.dumps(result)
-    assert "18366" not in json.dumps(result)
+    visible = result["tests"][1]
+    assert visible["stdout"] == "18366\n" and visible["stderr"] == ""
+    assert visible["expected_stdout"] == "18366\n"
+    assert visible["visibility"] == "public"
+    public_run = runner.run(question(), {"main.c": source}, include_hidden=False)
+    assert public_run["status"] == "passed" and public_run["total"] == 2
+    assert public_run["tests"][1]["stdout"] == "18366\n"
     wrong = runner.run(single_question(), {"main.c": source.replace("2*n", "3*n")})
     assert wrong["status"] == "wrong_answer"
     assert wrong["tests"][0]["stdout"] == "21\n"

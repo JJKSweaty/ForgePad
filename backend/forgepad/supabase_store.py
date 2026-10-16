@@ -64,7 +64,8 @@ class SupabaseStore:
         package = rows[0]["payload"]
         solution = self._request("GET", "forgepad_solutions", params={"id": f"eq.{question_id}",
                                   "version": f"eq.{package['version']}"})
-        return {**package, **(solution[0]["payload"] if solution else {})}
+        from .schema import visible_test_package
+        return visible_test_package({**package, **(solution[0]["payload"] if solution else {})})
 
     def questions(self):
         rows = self._rows("forgepad_questions", {"order": "version.desc,id.asc"})
@@ -73,7 +74,8 @@ class SupabaseStore:
         latest = {}
         for row in rows:
             latest.setdefault(row["id"], {**row["payload"], **private.get((row["id"], row["version"]), {})})
-        return [latest[key] for key in sorted(latest)]
+        from .schema import visible_test_package
+        return [visible_test_package(latest[key]) for key in sorted(latest)]
 
     def records(self, table):
         rows = self._rows("forgepad_records", {"namespace": f"eq.{table}", "order": "created_at.desc,key.desc"})

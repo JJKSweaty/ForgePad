@@ -4,7 +4,7 @@ Hosted deployments preserve this application and use Supabase plus Vercel Sandbo
 
 ForgePad is a local modular monolith: React/TypeScript and Monaco, a FastAPI API, SQLite in WAL mode, and disposable Docker workers. The backend binds to loopback. The browser uses the same-origin `/api` route through Vite in development. Runtime data lives in ignored `data/`; credentials belong only in server environment variables.
 
-The runner is the only component allowed to execute submitted code. It must fail closed if Docker is unavailable. Compiler results determine correctness; interview dialogue never changes a test result. Authoring exports contain reference solutions and hidden tests; practice responses exclude both. Historical attempts retain the question version and submitted source.
+The runner is the only component allowed to execute submitted code. It must fail closed if Docker is unavailable. Compiler results determine correctness; interview dialogue never changes a test result. Authoring exports include reference solutions; practice responses exclude reference solutions but include every authored test. Historical attempts retain the question version and submitted source.
 
 Initial delivery prioritizes the complete edit → save → run → submit → review loop, validated question imports, and persistent timed interviews usable without inference. Optional local AI and speech adapters must report unavailable capabilities honestly.
 
@@ -12,13 +12,13 @@ Initial delivery prioritizes the complete edit → save → run → submit → r
 
 Question package (schema version `1.0`): `id`, `version` integer, `title`, `description`, `type` (`coding`, `theory`, `debugging`, `design`, `code_review`), `difficulty` (`beginner`, `intermediate`, `advanced`, `expert`), `topics` string[], `duration_minutes`, `language` (`c`, `cpp`, `independent`), `prompt`, `constraints` string[], `starter_files` mapping path→text, optional `test_config`, `reference_solution` mapping path→text, `rubric` string[], `follow_ups` string[], `hints` string[], `source` {`name`, `url`, `license`}.
 
-`test_config`: `mode` (`stdio` or `fixture`), `compiler` (`gcc` or `clang`), `sanitizers` boolean, `timeout_seconds` (1–5), `tests`: [{`id`, `name`, `visibility`: `public`/`hidden`, `stdin`, `expected_stdout`, optional `fixture` (a C/C++ main file), `category`: `normal`/`boundary`/`negative`}]. Fixture tests compile source files with the provided main; stdio tests compile the user's main. Fixtures are explicit and support buffers, mutable outputs, and peripheral doubles without opaque generated assertions. Flat safe filenames only in v1.
+`test_config`: `mode` (`stdio` or `fixture`), `compiler` (`gcc` or `clang`), `sanitizers` boolean, `timeout_seconds` (1–5), `tests`: [{`id`, `name`, `visibility`: `public` (legacy `hidden` labels are read as visible at execution), `stdin`, `expected_stdout`, optional `fixture` (a C/C++ main file), `category`: `normal`/`boundary`/`negative`}]. Fixture tests compile source files with the provided main; stdio tests compile the user's main. Fixtures are explicit and support buffers, mutable outputs, and peripheral doubles without opaque generated assertions. Flat safe filenames only in v1.
 
 All endpoints below are under `/api`. Responses are JSON. Error bodies contain actionable `detail`.
 
 - `GET /health`: {status, runner:{available,detail}, ai:{available,...}, speech:{available,...}}
 - `GET /questions?q=&type=&difficulty=&topic=` → question summary array, including `bookmarked`, `archived`, `completion_status`.
-- `GET /questions/{id}` → practice-safe question (no reference solution or hidden test data).
+- `GET /questions/{id}` → practice-safe question (all visible tests, no reference solution).
 - `PATCH /questions/{id}` {bookmarked?, archived?} → summary.
 - `GET /questions/{id}/export` → full authoring package.
 - `GET /questions/export/all` → full package array.
@@ -35,7 +35,7 @@ All endpoints below are under `/api`. Responses are JSON. Error bodies contain a
 - `GET /interviews` → sessions array. `GET /context` → compact progress context. `GET /data/export` → all local user data; `DELETE /data` resets user records only.
 - `POST /speech/transcribe` multipart audio → {text,confidence?}, unavailable returns 503. `POST /commands` {text} → deterministic recognized intent or unknown.
 
-Runner module interface (backend/forgepad/runner.py): `DockerRunner().availability() -> dict`; `run(question: dict, files: dict[str,str], include_hidden: bool = False, cancel_event: threading.Event | None = None) -> dict`. Thread-safe, bounded concurrency owned by API queue. Return result statuses: passed, wrong_answer, compilation_error, runtime_error, timeout, memory_limit, sanitizer_failure, unavailable, cancelled, unsupported. Never expose hidden stdin/expected output/fixture, including compiler output, in practice responses.
+Runner module interface (backend/forgepad/runner.py): `DockerRunner().availability() -> dict`; `run(question: dict, files: dict[str,str], include_hidden: bool = False, cancel_event: threading.Event | None = None) -> dict`. Thread-safe, bounded concurrency owned by API queue. Return result statuses: passed, wrong_answer, compilation_error, runtime_error, timeout, memory_limit, sanitizer_failure, unavailable, cancelled, unsupported. The legacy include_hidden argument is retained for compatibility; both values execute every case and expose test inputs, expected outputs, fixtures and diagnostics. New packages require 8–30 distinct visible cases, including at least two normal and three boundary tests. Reference answers remain author-only.
 
 ## Verification boundaries
 

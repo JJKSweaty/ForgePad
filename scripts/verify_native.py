@@ -82,11 +82,11 @@ async def verify(output, binaries=None):
                     init = await session.initialize()
                     assert init.serverInfo.name == "ForgePad"
                     tools = await session.list_tools()
-                    assert len(tools.tools) == 25
+                    assert len(tools.tools) == 26
                     report["timings_ms"]["mcp_handshake_and_discovery"] = round(
                         (time.perf_counter() - at) * 1000, 3
                     )
-                    report["checks"].append("Official SDK initializes and discovers all 25 tools")
+                    report["checks"].append("Official SDK initializes and discovers all 26 tools")
 
                     async def call(name, args=None):
                         r = await session.call_tool(name, args or {})

@@ -195,7 +195,7 @@ test("layout resizes by pointer and keyboard, persists, and fits a narrow screen
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(divider).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Run public tests" }),
+    page.getByRole("button", { name: "Run all tests" }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -283,7 +283,7 @@ test("execution feedback links compiler locations and clears stale editor marker
     }
   });
   await openEditor(page);
-  await page.getByRole("button", { name: "Run public tests" }).click();
+  await page.getByRole("button", { name: "Run all tests" }).click();
   await expect(
     page.getByRole("progressbar", { name: "Test execution in progress" }),
   ).toBeVisible();
@@ -316,4 +316,39 @@ test("execution feedback links compiler locations and clears stale editor marker
   await expect(page.getByRole("progressbar")).toBeVisible();
   await expect.poll(() => mode).toBe("submit");
   await expect(diagnostic).toBeEnabled();
+});
+
+test("C syntax uses distinct colors for functions, types, variables and literals in both themes", async ({
+  page,
+}, testInfo) => {
+  await openEditor(page);
+  await replaceCode(
+    page,
+    '#include <stdint.h>\n// Color regression fixture\nuint32_t colorful(uint32_t value) {\n  const char *label = "ready";\n  return value + 42;\n}\n',
+  );
+  for (const theme of ["light", "dark"]) {
+    if (theme === "dark")
+      await page.getByRole("button", { name: "Use dark appearance" }).click();
+    const tokenColors = () =>
+      page.locator(".view-lines").evaluate((root) => {
+        const spans = [...root.querySelectorAll("span")];
+        return ["colorful", "uint32_t", "value", "return", "42"].map((text) => {
+          const element = spans.find(
+            (s) => s.textContent?.trim() === text && !s.querySelector("span"),
+          );
+          return element ? getComputedStyle(element).color : "missing";
+        });
+      });
+    await expect
+      .poll(async () => new Set(await tokenColors()).size)
+      .toBeGreaterThanOrEqual(4);
+    expect(await tokenColors()).not.toContain("missing");
+    await expect
+      .poll(async () => (await tokenColors())[0])
+      .toBe(theme === "dark" ? "rgb(255, 213, 128)" : "rgb(121, 94, 38)");
+    await page.screenshot({
+      path: testInfo.outputPath(`syntax-${theme}.png`),
+      fullPage: true,
+    });
+  }
 });

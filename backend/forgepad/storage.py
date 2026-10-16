@@ -133,7 +133,8 @@ class Store:
             package = json.loads(row[0])
             solution = db.execute("SELECT payload FROM solutions WHERE id=? AND version=?",
                                   (package["id"], package["version"])).fetchone()
-            return {**package, **(json.loads(solution[0]) if solution else {})}
+            from .schema import visible_test_package
+            return visible_test_package({**package, **(json.loads(solution[0]) if solution else {})})
 
     def questions(self) -> list[dict]:
         with self.connect() as db:

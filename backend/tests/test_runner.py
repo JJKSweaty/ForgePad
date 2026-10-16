@@ -66,7 +66,7 @@ def test_cancel_before_compilation():
     )
 
 
-def test_hidden_compile_errors_are_redacted(monkeypatch):
+def test_legacy_hidden_cases_now_expose_compile_errors(monkeypatch):
     q = question(mode="fixture")
     q["test_config"]["tests"] = [q["test_config"]["tests"][1]]
     q["test_config"]["tests"][0]["fixture"] = "SECRET_FIXTURE_9183"
@@ -82,6 +82,7 @@ def test_hidden_compile_errors_are_redacted(monkeypatch):
     monkeypatch.setattr(DockerRunner, "_container", fake)
     result = DockerRunner().run(q, {"main.c": "int main(){}"}, include_hidden=True)
     assert result["status"] == "compilation_error"
-    assert "9183" not in str(result)
-    assert "expected_stdout" not in result["tests"][0]
-    assert result["tests"][0]["name"] == "Hidden test"
+    assert "SECRET_FIXTURE_9183" in str(result)
+    assert result["tests"][0]["expected_stdout"] == "18366\n"
+    assert result["tests"][0]["name"] == "Secret: 9183"
+    assert result["tests"][0]["visibility"] == "public"

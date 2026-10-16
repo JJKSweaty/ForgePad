@@ -13,7 +13,7 @@ def package(qid, title, prompt, constraints, starter, solution, cases, topics, n
             {
                 "id": f"case-{i + 1}",
                 "name": name,
-                "visibility": "public" if i < 3 else "hidden",
+                "visibility": "public",
                 "category": category,
                 "stdin": "",
                 "expected_stdout": expected,

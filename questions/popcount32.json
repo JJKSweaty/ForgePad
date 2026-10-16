@@ -48,7 +48,7 @@
       {
         "id": "t3",
         "name": "Every fault",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "32\n",
@@ -57,7 +57,7 @@
       {
         "id": "t4",
         "name": "Highest bit",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",

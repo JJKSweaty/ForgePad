@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
         "@monaco-editor/react",
         "monaco-editor/esm/vs/editor/editor.api",
         "monaco-editor/esm/vs/editor/editor.all",
-        "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution",
+        "monaco-editor/esm/vs/basic-languages/cpp/cpp.js",
       ],
     },
     server: {

@@ -50,7 +50,7 @@
       {
         "id": "t3",
         "name": "Full-scale sample",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "65535 3 128 0 0 0 0\n",

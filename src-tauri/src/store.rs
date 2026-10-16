@@ -134,6 +134,7 @@ impl Store {
                 }
             }
         }
+        crate::schema::expose_tests(&mut q);
         Ok(q)
     }
     pub fn questions(&self) -> Result<Vec<Value>> {

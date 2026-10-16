@@ -20,16 +20,20 @@ export function TestCasesEditor({
 }) {
   const edit = (index: number, patch: Partial<AuthoredTest>) =>
     onChange(
-      tests.map((test, i) => (i === index ? { ...test, ...patch } : test)),
+      tests.map((test, i) =>
+        i === index
+          ? { ...test, ...patch, visibility: "public" }
+          : { ...test, visibility: "public" },
+      ),
     );
-  const add = (visibility: AuthoredTest["visibility"]) =>
+  const add = (category: AuthoredTest["category"]) =>
     onChange([
       ...tests,
       {
         id: `test-${crypto.randomUUID().slice(0, 8)}`,
         name: "",
-        visibility,
-        category: "normal",
+        visibility: "public",
+        category,
         stdin: "",
         expected_stdout: "",
         fixture: fixture ? "" : null,
@@ -38,15 +42,14 @@ export function TestCasesEditor({
   return (
     <div className="test-case-fields">
       <p className="muted-text">
-        Sample tests are visible during practice. Hidden tests run on Submit.
-        Publishing requires 3 samples and 5 hidden tests, with normal and
-        boundary coverage.
+        Every test is visible and runs on both Run and Submit. Publish 8–30
+        distinct cases: at least 2 normal and 3 boundary cases, plus
+        contract-defined invalid inputs where applicable. Explain each test ID,
+        its purpose and expected output in Solution notes.
       </p>
       {tests.map((t, i) => (
         <fieldset key={t.id} disabled={disabled}>
-          <legend>
-            {t.visibility === "public" ? "Sample" : "Hidden"} test {i + 1}
-          </legend>
+          <legend>Visible test {i + 1}</legend>
           <label>
             Name
             <input
@@ -55,20 +58,6 @@ export function TestCasesEditor({
             />
           </label>
           <div className="two-columns">
-            <label>
-              Visibility
-              <select
-                value={t.visibility}
-                onChange={(e) =>
-                  edit(i, {
-                    visibility: e.target.value as AuthoredTest["visibility"],
-                  })
-                }
-              >
-                <option value="public">Sample (public)</option>
-                <option value="hidden">Hidden evaluation</option>
-              </select>
-            </label>
             <label>
               Coverage
               <select
@@ -123,16 +112,16 @@ export function TestCasesEditor({
         <button
           type="button"
           disabled={disabled || tests.length >= 30}
-          onClick={() => add("public")}
+          onClick={() => add("normal")}
         >
-          Add sample test
+          Add normal test
         </button>
         <button
           type="button"
           disabled={disabled || tests.length >= 30}
-          onClick={() => add("hidden")}
+          onClick={() => add("boundary")}
         >
-          Add hidden test
+          Add boundary test
         </button>
       </div>
     </div>

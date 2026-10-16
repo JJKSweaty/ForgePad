@@ -64,7 +64,7 @@
       {
         "id": "case-4",
         "name": "zero delay",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",
@@ -73,7 +73,7 @@
       {
         "id": "case-5",
         "name": "bounce resets window",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "0\n",
@@ -82,7 +82,7 @@
       {
         "id": "case-6",
         "name": "rollover",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",
@@ -91,7 +91,7 @@
       {
         "id": "case-7",
         "name": "repeated timestamp",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "0\n",
@@ -100,7 +100,7 @@
       {
         "id": "case-8",
         "name": "stable unchanged",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "normal",
         "stdin": "",
         "expected_stdout": "1\n",

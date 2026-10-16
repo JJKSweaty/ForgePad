@@ -265,14 +265,15 @@ class DockerRunner:
                         raise ValueError(f"Test {field} must be text no larger than 64 KiB.")
                 if config["mode"] == "fixture" and not test.get("fixture"):
                     raise ValueError("Fixture tests require an explicit C/C++ main file.")
-            tests = [test for test in tests if include_hidden or test["visibility"] == "public"]
+            # Legacy visibility labels are accepted on disk, but every case is now visible and runs.
+            tests = [{**test, "visibility": "public"} for test in tests]
         except (ValueError, TypeError, KeyError) as exc:
             return finish("unsupported", str(exc))
         result["total"] = len(tests)
         if cancel.is_set():
             return finish("cancelled")
         if not tests:
-            return finish("unsupported", "There are no public tests to run. Submit to evaluate hidden tests.")
+            return finish("unsupported", "There are no authored tests to run.")
         availability = self.availability()
         if not availability["available"]:
             return finish("unavailable", availability["detail"])
@@ -289,7 +290,7 @@ class DockerRunner:
             flags += ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
         cache = CompilerCache(
             os.getenv("FORGEPAD_COMPILE_CACHE"),
-            cache_key(question, files, image, compiler, flags, include_hidden=include_hidden),
+            cache_key(question, files, image, compiler, flags, include_hidden=True),
         )
         artifacts = {}
         scratch = Path(
@@ -346,18 +347,16 @@ class DockerRunner:
                 object_names.append(f"/objects/{obj}")
             for index, test in enumerate(tests):
                 test_start = time.monotonic()
-                hidden = test["visibility"] == "hidden"
                 item = {
                     "id": test.get("id", str(index)),
-                    "name": "Hidden test" if hidden else test.get("name", "Test"),
+                    "name": test.get("name", "Test"),
                     "visibility": test["visibility"],
                     "status": "runtime_error",
                     "stdout": "",
                     "stderr": "",
                     "elapsed_ms": 0,
                 }
-                if not hidden:
-                    item["expected_stdout"] = test.get("expected_stdout", "")
+                item["expected_stdout"] = test.get("expected_stdout", "")
                 # Fresh output/fixture directories prevent one test affecting another.
                 test_build = root / f"build_{index}"
                 test_build.mkdir(mode=0o777)
@@ -413,7 +412,7 @@ class DockerRunner:
                     )
                 if compiled.returncode or compiled.timeout or compiled.overflow:
                     item["status"] = "compilation_error"
-                    item["stderr"] = "Hidden test compilation failed." if hidden else compiled.stderr
+                    item["stderr"] = compiled.stderr
                 else:
                     binary = test_build / "submission"
                     if (
@@ -464,8 +463,7 @@ class DockerRunner:
                         item["status"] = "passed"
                     else:
                         item["status"] = "wrong_answer"
-                    if not hidden:
-                        item["stdout"], item["stderr"] = executed.stdout, executed.stderr
+                    item["stdout"], item["stderr"] = executed.stdout, executed.stderr
                 item["elapsed_ms"] = round((time.monotonic() - test_start) * 1000)
                 result["tests"].append(item)
                 result["passed"] += item["status"] == "passed"

@@ -51,7 +51,7 @@
       {
         "id": "t3",
         "name": "Duplicate values",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "normal",
         "stdin": "",
         "expected_stdout": "0\n",
@@ -60,7 +60,7 @@
       {
         "id": "t4",
         "name": "Past last sample",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "3\n",

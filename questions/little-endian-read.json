@@ -49,7 +49,7 @@
       {
         "id": "t3",
         "name": "Overflowing offset",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "0 99\n",
@@ -58,7 +58,7 @@
       {
         "id": "t4",
         "name": "Maximum field",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1 65535\n",

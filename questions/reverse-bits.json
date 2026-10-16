@@ -63,7 +63,7 @@
       {
         "id": "case-4",
         "name": "zero",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "0\n",
@@ -72,7 +72,7 @@
       {
         "id": "case-5",
         "name": "all bits",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "4294967295\n",
@@ -81,7 +81,7 @@
       {
         "id": "case-6",
         "name": "top bit",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",
@@ -90,7 +90,7 @@
       {
         "id": "case-7",
         "name": "alternating",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1431655765\n",
@@ -99,7 +99,7 @@
       {
         "id": "case-8",
         "name": "middle boundary",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "32768\n",

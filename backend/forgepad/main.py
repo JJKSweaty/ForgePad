@@ -85,7 +85,7 @@ class IdeaRequest(StrictModel):
     difficulty: Literal["beginner", "intermediate", "advanced", "expert"] = "intermediate"
     duration_minutes: Literal[15, 30, 45] = 30
     language: Literal["c", "cpp", "independent"] = "c"
-    type: Literal["coding", "theory", "debugging", "design"] = "coding"
+    type: Literal["coding", "theory", "debugging", "design", "code_review"] = "coding"
 
 
 class AttemptRequest(StrictModel):

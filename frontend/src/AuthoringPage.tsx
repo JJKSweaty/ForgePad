@@ -87,6 +87,8 @@ export function AuthoringPage({
     [selected, setSelected] = useState<Draft | null>(null),
     [source, setSource] = useState(""),
     [extraction, setExtraction] = useState(""),
+    [authoringPrompt, setAuthoringPrompt] = useState(""),
+    [promptNotice, setPromptNotice] = useState(""),
     [job, setJob] = useState<Job | null>(null),
     [auditId, setAuditId] = useState(""),
     [audit, setAudit] = useState<unknown>(null),
@@ -151,6 +153,35 @@ export function AuthoringPage({
       }
     }
   }
+  async function preparePrompt() {
+    setError("");
+    setPromptNotice("");
+    try {
+      const idea = (
+        workflow === "form"
+          ? `${form.title}\n${form.prompt}\nConstraints: ${form.constraints}`
+          : input
+      ).trim();
+      const response = await post<{ prompt: string }>("/generator-prompt", {
+        idea: idea.slice(0, 5000),
+        type: form.type,
+        difficulty: form.difficulty,
+        duration_minutes: form.duration,
+        language: form.language,
+      });
+      setAuthoringPrompt(response.prompt);
+      try {
+        await navigator.clipboard.writeText(response.prompt);
+        setPromptNotice(
+          "Complete authoring prompt copied. Paste it into HeyClicky or your preferred assistant, then import its JSON for validation.",
+        );
+      } catch {
+        setPromptNotice("Prompt ready. Select and copy it below.");
+      }
+    } catch (e) {
+      setError(message(e));
+    }
+  }
   async function stage() {
     setBusy(true);
     setError("");
@@ -197,7 +228,7 @@ export function AuthoringPage({
                     ? {
                         mode: form.testMode,
                         compiler: "gcc",
-                        sanitizers: false,
+                        sanitizers: true,
                         timeout_seconds: 2,
                         tests,
                       }
@@ -362,6 +393,27 @@ export function AuthoringPage({
                   <option value="extract">Paste with AI</option>
                 </select>
               </label>
+              <button
+                onClick={() => void preparePrompt()}
+                disabled={
+                  busy ||
+                  !(workflow === "form" ? form.prompt.trim() : input.trim())
+                }
+              >
+                Copy complete authoring prompt
+              </button>
+              {promptNotice && <p role="status">{promptNotice}</p>}
+              {authoringPrompt && (
+                <details>
+                  <summary>Complete prompt for external authoring</summary>
+                  <textarea
+                    aria-label="Complete question authoring prompt"
+                    readOnly
+                    rows={12}
+                    value={authoringPrompt}
+                  />
+                </details>
+              )}
               {workflow === "form" ? (
                 <div className="question-create-form">
                   <label>
@@ -550,7 +602,8 @@ export function AuthoringPage({
                         fixture={form.testMode === "fixture"}
                       />
                       <label>
-                        Solution notes
+                        Solution notes: algorithm, invariants, and test-ID
+                        coverage matrix
                         <textarea
                           rows={3}
                           value={form.solutionNotes}
@@ -927,7 +980,7 @@ function EditablePreviewTests({
   if (!Array.isArray(pkg?.test_config?.tests)) return null;
   return (
     <details>
-      <summary>Edit sample and hidden tests</summary>
+      <summary>Edit visible test cases</summary>
       <TestCasesEditor
         tests={pkg.test_config.tests}
         disabled={disabled}

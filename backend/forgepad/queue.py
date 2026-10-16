@@ -13,9 +13,7 @@ def safe_result(result: dict) -> dict:
     result = dict(result)
     result["tests"] = [dict(test) for test in result.get("tests", [])]
     for test in result["tests"]:
-        if test.get("visibility") == "hidden":
-            for key in ("stdin", "expected_stdout", "fixture", "stdout", "stderr"):
-                test.pop(key, None)
+        test["visibility"] = "public"
     return result
 
 
@@ -93,7 +91,7 @@ class RunQueue:
                 else:
                     result = safe_result(
                         self.runner.run(
-                            question, files, include_hidden=run["mode"] == "submit", cancel_event=cancel
+                            question, files, include_hidden=True, cancel_event=cancel
                         )
                     )
             with self.lock:

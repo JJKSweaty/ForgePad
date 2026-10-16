@@ -55,8 +55,8 @@ def progress(store, compact=False):
             "last_attempted_at": a["created_at"],
             "reason": "Scheduled review after a completed attempt" if completed(a) else "Revisit the previous assessment"}
            for a in latest.values() if a.get("review_due_at") and datetime.fromisoformat(a["review_due_at"]) <= datetime.now(UTC)]
-    return {"attempts": [metadata(a) for a in attempts] if compact else attempts, "due_reviews": due,
-            "weak_topics": sorted((v for v in topics.values() if v["needs_review"]), key=lambda v: -v["needs_review"])[:10],
+    return {"attempts": [metadata(a) for a in attempts] if compact else attempts, "due_reviews": sorted(due, key=lambda v: (v["due_at"], v["question_id"])),
+            "weak_topics": sorted((v for v in topics.values() if v["needs_review"]), key=lambda v: (-v["needs_review"], v["topic"]))[:10],
             "goals": store.records("goals"), "summary": {"attempts": len(attempts),
             "passed_attempts": sum((a.get("result") or {}).get("status") == "passed" for a in attempts),
             "completed_questions": len({a["question_id"] for a in attempts if completed(a)}),

@@ -63,7 +63,7 @@
       {
         "id": "maximum",
         "name": "Maximum payload and checksum wrap",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "4:ff00a5fe\nframes=1 untouched=1\n",
@@ -72,7 +72,7 @@
       {
         "id": "rollover",
         "name": "Hardware tick rollover",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "2:0102\nframes=1 untouched=1\n",
@@ -81,7 +81,7 @@
       {
         "id": "exact-gap",
         "name": "Ten ticks is within the timeout",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1:07\nframes=1 untouched=1\n",
@@ -90,7 +90,7 @@
       {
         "id": "timeout",
         "name": "Truncated frame times out; current byte is a sync",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1:09\nframes=1 untouched=1\n",
@@ -99,7 +99,7 @@
       {
         "id": "zero",
         "name": "Zero length is invalid",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "negative",
         "stdin": "",
         "expected_stdout": "1:ff\nframes=1 untouched=1\n",
@@ -108,7 +108,7 @@
       {
         "id": "null",
         "name": "Null arguments preserve parser state",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "negative",
         "stdin": "",
         "expected_stdout": "0 0 0 0\n",

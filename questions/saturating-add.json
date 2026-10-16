@@ -48,7 +48,7 @@
       {
         "id": "t3",
         "name": "Negative saturation",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "-32768\n",
@@ -57,7 +57,7 @@
       {
         "id": "t4",
         "name": "Opposite extremes",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "normal",
         "stdin": "",
         "expected_stdout": "-1\n",
@@ -66,7 +66,7 @@
       {
         "id": "t5",
         "name": "Two minima",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "-32768\n",

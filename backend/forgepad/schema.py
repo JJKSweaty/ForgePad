@@ -111,6 +111,13 @@ class Question(StrictModel):
         return self
 
 
+def visible_test_package(question: dict) -> dict:
+    result = dict(question)
+    if result.get("test_config"):
+        result["test_config"] = {**result["test_config"], "tests": [{**test, "visibility": "public"} for test in result["test_config"]["tests"]]}
+    return result
+
+
 def practice_question(question: dict) -> dict:
     result = {key: value for key, value in question.items() if key not in {
         "reference_solution", "solution_notes", "time_complexity", "space_complexity"
@@ -119,7 +126,7 @@ def practice_question(question: dict) -> dict:
         result["test_config"] = {
             **result["test_config"],
             "tests": [
-                dict(test) for test in result["test_config"]["tests"] if test["visibility"] == "public"
+                {**test, "visibility": "public"} for test in result["test_config"]["tests"]
             ],
         }
     return result
@@ -134,10 +141,15 @@ def authoring_errors(question: dict) -> list[str]:
         errors.append("Provide exactly three technical interview follow-ups")
     if question.get("test_config"):
         tests = question["test_config"]["tests"]
-        if sum(t["visibility"] == "public" for t in tests) < 3:
-            errors.append("Executable packages require at least three public tests")
-        if sum(t["visibility"] == "hidden" for t in tests) < 5:
-            errors.append("Executable packages require at least five additional hidden tests")
+        if not 8 <= len(tests) <= 30:
+            errors.append("Executable packages require 8–30 distinct visible tests")
+        if any(t["visibility"] != "public" for t in tests):
+            errors.append('Every test must be visible: use visibility="public"')
+        if sum(t["category"] == "normal" for t in tests) < 2 or sum(t["category"] == "boundary" for t in tests) < 3:
+            errors.append("Provide at least two normal and three boundary tests")
+        stimuli = [(t.get("stdin", ""), t.get("fixture") or "") for t in tests]
+        if len(set(stimuli)) != len(stimuli):
+            errors.append("Duplicate test stimuli do not add coverage; provide distinct cases")
         for field in ("solution_notes", "time_complexity", "space_complexity"):
             if not question.get(field, "").strip():
                 errors.append(f"Executable packages require {field}")

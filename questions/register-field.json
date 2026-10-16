@@ -48,7 +48,7 @@
       {
         "id": "t3",
         "name": "Full mask",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "4294967295\n",
@@ -57,7 +57,7 @@
       {
         "id": "t4",
         "name": "Ignore value outside mask",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "normal",
         "stdin": "",
         "expected_stdout": "131\n",

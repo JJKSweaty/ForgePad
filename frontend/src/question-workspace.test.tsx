@@ -114,7 +114,7 @@ it("keeps coding in the editor with run controls", async () => {
     test_config: { tests: [] },
   });
   await screen.findByTestId("code-editor");
-  expect(screen.getByRole("button", { name: "Run public tests" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Run all tests" })).toBeTruthy();
   expect(screen.queryByLabelText("Written response")).toBeNull();
 });
 it("uses theory and investigation prompts for written questions", async () => {
@@ -170,9 +170,7 @@ it("autosaves edits separately from checkpoints and restores or resets the draft
   const source = await screen.findByRole("textbox", { name: "Code editor" });
   await user.clear(source);
   await user.type(source, "int checkpoint_value;");
-  await user.click(
-    screen.getByRole("button", { name: "Save checkpoint" }),
-  );
+  await user.click(screen.getByRole("button", { name: "Save checkpoint" }));
   await screen.findByText(/^Checkpoint saved:/);
   await user.clear(source);
   await user.type(source, "int later_value;");
@@ -216,7 +214,7 @@ it("autosaves edits separately from checkpoints and restores or resets the draft
   ).toBe(false);
 });
 
-it("runs public tests, links diagnostics across files, and marks results stale after edits", async () => {
+it("runs every visible test, links diagnostics across files, and marks results stale after edits", async () => {
   const user = userEvent.setup();
   open(coding);
   await screen.findByTestId("code-editor");
@@ -239,7 +237,7 @@ it("runs public tests, links diagnostics across files, and marks results stale a
       ],
     },
   });
-  await user.click(screen.getByRole("button", { name: "Run public tests" }));
+  await user.click(screen.getByRole("button", { name: "Run all tests" }));
   const diagnostic = await screen.findByRole("button", {
     name: /buffer.h:1:5.*expected semicolon/,
   });
@@ -247,7 +245,7 @@ it("runs public tests, links diagnostics across files, and marks results stale a
     "/runs",
     expect.objectContaining({ mode: "run", files: coding.starter_files }),
   );
-  expect(screen.queryByText("secret diagnostic")).toBeNull();
+  expect(screen.getByText("secret diagnostic")).toBeTruthy();
   await user.click(diagnostic);
   expect(
     screen.getByRole("tab", { name: "buffer.h" }).getAttribute("aria-selected"),
@@ -275,7 +273,7 @@ it("shows queued progress, sends submit mode, and cancels the active execution",
   );
   expect(
     screen
-      .getByRole("button", { name: "Run public tests" })
+      .getByRole("button", { name: "Run all tests" })
       .hasAttribute("disabled"),
   ).toBe(true);
   await user.click(screen.getByRole("button", { name: "Cancel execution" }));
@@ -288,7 +286,7 @@ it("keeps code editable and displays execution failures beside the editor", asyn
   open(coding);
   const source = await screen.findByRole("textbox", { name: "Code editor" });
   post.mockRejectedValueOnce(new Error("Runner unavailable"));
-  await user.click(screen.getByRole("button", { name: "Run public tests" }));
+  await user.click(screen.getByRole("button", { name: "Run all tests" }));
   const output = screen.getByRole("region", { name: "Execution output" });
   expect(await within(output).findByRole("alert")).toHaveProperty(
     "textContent",
@@ -329,7 +327,7 @@ it("describes a runner failure without reporting a misleading zero-test pass cou
       compiler_output: "Start the runner.",
     },
   });
-  await user.click(screen.getByRole("button", { name: "Run public tests" }));
+  await user.click(screen.getByRole("button", { name: "Run all tests" }));
   await screen.findByText("Runner unavailable · no tests ran");
   expect(screen.queryByText("0 / 0 tests passed")).toBeNull();
 });

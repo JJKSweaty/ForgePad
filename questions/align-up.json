@@ -63,7 +63,7 @@
       {
         "id": "case-4",
         "name": "unit alignment",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1 4294967295\n",
@@ -72,7 +72,7 @@
       {
         "id": "case-5",
         "name": "overflow",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "0 123\n",
@@ -81,7 +81,7 @@
       {
         "id": "case-6",
         "name": "zero alignment",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "negative",
         "stdin": "",
         "expected_stdout": "0 123\n",
@@ -90,7 +90,7 @@
       {
         "id": "case-7",
         "name": "non power of two",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "negative",
         "stdin": "",
         "expected_stdout": "0 123\n",
@@ -99,7 +99,7 @@
       {
         "id": "case-8",
         "name": "largest alignment",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1 2147483648\n",

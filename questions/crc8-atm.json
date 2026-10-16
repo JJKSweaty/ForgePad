@@ -49,7 +49,7 @@
       {
         "id": "t3",
         "name": "Single high byte",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "243\n",
@@ -58,7 +58,7 @@
       {
         "id": "t4",
         "name": "Short binary frame",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "normal",
         "stdin": "",
         "expected_stdout": "72\n",

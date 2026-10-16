@@ -49,7 +49,7 @@
       {
         "id": "t3",
         "name": "Rollover",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",
@@ -58,7 +58,7 @@
       {
         "id": "t4",
         "name": "Zero interval",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",
@@ -67,7 +67,7 @@
       {
         "id": "t5",
         "name": "Before wrapped deadline",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "normal",
         "stdin": "",
         "expected_stdout": "0\n",

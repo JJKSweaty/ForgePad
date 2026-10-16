@@ -51,7 +51,7 @@
       {
         "id": "t3",
         "name": "Full rejects new byte",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "negative",
         "stdin": "",
         "expected_stdout": "11110\n1 2 3 4 \n",
@@ -60,7 +60,7 @@
       {
         "id": "t4",
         "name": "Repeated wrap",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1 0\n",

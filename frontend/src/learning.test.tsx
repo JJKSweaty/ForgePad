@@ -228,7 +228,7 @@ it("handles detail loading errors without discarding saved history", async () =>
     screen.getByRole("heading", { name: /Attempt history/, hidden: true }),
   ).toBeTruthy();
 });
-it("edits sample and hidden tests using a single test schema", async () => {
+it("edits edge-case coverage while keeping every test visible", async () => {
   const change = vi.fn();
   render(
     <TestCasesEditor
@@ -245,12 +245,12 @@ it("edits sample and hidden tests using a single test schema", async () => {
       onChange={change}
     />,
   );
-  await userEvent.selectOptions(screen.getByLabelText("Visibility"), "public");
+  await userEvent.selectOptions(screen.getByLabelText("Coverage"), "negative");
   expect(change).toHaveBeenCalledWith([
     expect.objectContaining({
       id: "test",
       visibility: "public",
-      category: "boundary",
+      category: "negative",
     }),
   ]);
 });

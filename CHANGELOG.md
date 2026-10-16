@@ -1,5 +1,15 @@
 # ForgePad release notes
 
+## 0.3.4 — 2026-10-16
+
+### Improved
+- Restore colorful C/C++ syntax and make every test visible, with a shared authoring contract for complete reference/starter code and justified edge-case coverage.
+
+### Fixed
+- Run and Submit execute the same complete suite; Submit records an attempt. Legacy test labels no longer hide cases or diagnostics.
+- New executable questions require 8–30 distinct visible cases, at least two normal and three boundary cases; duplicate stimuli and hidden cases are rejected.
+- HeyClicky can retrieve the shared schema and full authoring contract through `forgepad_get_authoring_prompt`.
+
 ## 0.3.3 — 2026-10-16
 
 ### Improved

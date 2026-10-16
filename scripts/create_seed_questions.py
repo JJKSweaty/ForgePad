@@ -12,7 +12,7 @@ def question(slug, title, topics, prompt, constraints, starter, reference, cases
     tests = []
     for index, (name, category, body, expected) in enumerate(cases):
         tests.append({"id": f"t{index + 1}", "name": name,
-                      "visibility": "public" if index < 2 else "hidden",
+                      "visibility": "public",
                       "category": category, "stdin": "", "expected_stdout": expected,
                       "fixture": body})
     package = {

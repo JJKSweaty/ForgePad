@@ -45,8 +45,7 @@
         },
         "visibility": {
           "enum": [
-            "public",
-            "hidden"
+            "public"
           ],
           "title": "Visibility",
           "type": "string"
@@ -139,28 +138,28 @@
             {
               "contains": {
                 "properties": {
-                  "visibility": {
-                    "const": "public"
+                  "category": {
+                    "const": "normal"
                   }
                 },
                 "required": [
-                  "visibility"
+                  "category"
                 ]
               },
-              "minContains": 3
+              "minContains": 2
             },
             {
               "contains": {
                 "properties": {
-                  "visibility": {
-                    "const": "hidden"
+                  "category": {
+                    "const": "boundary"
                   }
                 },
                 "required": [
-                  "visibility"
+                  "category"
                 ]
               },
-              "minContains": 5
+              "minContains": 3
             }
           ]
         }

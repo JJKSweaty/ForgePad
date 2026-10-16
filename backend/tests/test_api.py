@@ -47,7 +47,7 @@ def package():
                 {
                     "id": "hidden",
                     "name": "private",
-                    "visibility": "hidden",
+                    "visibility": "public",
                     "stdin": "INPUT_SECRET",
                     "expected_stdout": "OUTPUT_SECRET",
                     "category": "boundary",
@@ -63,6 +63,8 @@ def package():
         result["test_config"]["tests"].append({**result["test_config"]["tests"][0], "id": f"public-{i}"})
     for i in range(4):
         result["test_config"]["tests"].append({**result["test_config"]["tests"][1], "id": f"hidden-{i}"})
+    for index, test in enumerate(result["test_config"]["tests"]):
+        test["stdin"] = f"{index}\n"  # Distinct API-test stimuli; FakeRunner is explicit.
     result["follow_ups"].append("Which counter access is atomic on this target?")
     result.update(solution_notes="Print the constant one.", time_complexity="O(1)", space_complexity="O(1)")
     return result
@@ -173,8 +175,10 @@ def test_practice_privacy_and_authoring_export(tmp_path, package):
     with client_for(tmp_path, package) as client:
         result = client.get("/api/questions/test-counter")
         assert result.status_code == 200
-        for secret in ("REFERENCE_SECRET", "INPUT_SECRET", "OUTPUT_SECRET"):
-            assert secret not in result.text
+        assert "REFERENCE_SECRET" not in result.text
+        assert len(result.json()["test_config"]["tests"]) == 8
+        assert all(t["visibility"] == "public" for t in result.json()["test_config"]["tests"])
+        assert "OUTPUT_SECRET" in result.text  # Test expectations are intentionally visible.
         exported = client.get("/api/questions/test-counter/export").json()
         assert exported == Question.model_validate(package).model_dump()
         assert len(client.get("/api/questions/export/all").json()) == 1
@@ -200,13 +204,14 @@ def test_generator_uses_options_and_live_authoring_contract(tmp_path, package):
     with client_for(tmp_path, package) as client:
         prompt = client.post("/api/generator-prompt", json={"idea":"Timer wraparound", "difficulty":"advanced",
             "duration_minutes":45, "language":"cpp", "type":"coding"}).json()["prompt"]
-        assert "C++17" in prompt and "45 minutes" in prompt and "advanced" in prompt
-        assert "THREE public" in prompt and "FIVE additional hidden" in prompt
+        assert "C++17" in prompt and "duration_minutes=45" in prompt and "advanced" in prompt
+        assert "EIGHT and THIRTY" in prompt and 'visibility="public"' in prompt
+        assert "coverage matrix" in prompt and "starter_files" in prompt and "reference_solution" in prompt
         schema = client.get("/api/schema").json()
         assert schema["$defs"]["TestConfig"]["properties"]["tests"]["minItems"] == 8
 
 
-def test_replay_preserves_code_messages_and_redacts_hidden_outputs(tmp_path, package):
+def test_replay_preserves_code_messages_and_visible_test_outputs(tmp_path, package):
     with client_for(tmp_path, package) as client:
         session = client.post("/api/interviews", json={"question_id":package["id"]}).json()
         sid = session["id"]
@@ -223,7 +228,7 @@ def test_replay_preserves_code_messages_and_redacts_hidden_outputs(tmp_path, pac
         assert [e["kind"] for e in replay["events"]].count("interviewer") == 1
         assert any(e.get("content") == "Bound the counter." for e in replay["events"])
         assert any(e.get("result", {}).get("status") == "passed" for e in replay["events"])
-        assert "OUTPUT_SECRET" not in json.dumps(replay) and "REFERENCE_SECRET" not in json.dumps(replay)
+        assert "OUTPUT_SECRET" in json.dumps(replay) and "REFERENCE_SECRET" not in json.dumps(replay)
     with client_for(tmp_path, package) as client:
         assert len(client.get(f"/api/interviews/{sid}/replay").json()["events"]) == len(replay["events"])
 
@@ -296,8 +301,10 @@ def test_run_submit_scope_privacy_and_theory_cannot_bypass(tmp_path, package):
                 "/api/runs", json={"question_id": "test-counter", "files": {"main.c": "code"}, "mode": mode}
             ).json()
             result = wait_run(client, run["id"])
-            assert runner.calls[-1][2] is (mode == "submit")
-            assert "OUTPUT_SECRET" not in json.dumps(result)
+            assert runner.calls[-1][2] is True
+            assert result["result"]["total"] == len(package["test_config"]["tests"])
+            assert "OUTPUT_SECRET" in json.dumps(result)
+            assert "REFERENCE_SECRET" not in json.dumps(result)
         assert len(client.get("/api/progress").json()["attempts"]) == 1
         assert (
             client.post(
@@ -491,3 +498,21 @@ def test_pinned_drafts_and_retries_remain_on_the_original_version(tmp_path, pack
         client.put('/api/drafts/' + package['id'], json={'files': {'main.c': '// old retry'}, 'question_version': 1}).raise_for_status()
         assert store.draft(package['id'])['version'] == 2
         assert store.draft(package['id'], 1)['files']['main.c'] == '// old retry'
+
+
+def test_authoring_rejects_hidden_duplicate_and_inadequate_edge_cases(tmp_path, package):
+    with client_for(tmp_path, package) as client:
+        for defect in ('hidden', 'duplicate', 'boundary'):
+            broken = deepcopy(package)
+            broken['id'] = 'new-authoring-' + defect
+            tests = broken['test_config']['tests']
+            if defect == 'hidden':
+                tests[-1]['visibility'] = 'hidden'
+            elif defect == 'duplicate':
+                tests[-1]['stdin'] = tests[0]['stdin']
+            else:
+                for test in tests:
+                    test['category'] = 'normal'
+            result = client.post('/api/imports/validate', json={'question': broken}).json()
+            assert result['valid'] is False and result['errors']
+            assert 'token' not in result

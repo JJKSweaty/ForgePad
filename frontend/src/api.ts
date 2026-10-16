@@ -19,10 +19,7 @@ export type Question = {
   archived?: boolean;
   completion_status?: string;
   progress_status?:
-    | "not_started"
-    | "in_progress"
-    | "completed"
-    | "needs_review";
+    "not_started" | "in_progress" | "completed" | "needs_review";
   has_completed?: boolean;
   attempt_count?: number;
   last_activity_at?: string;
@@ -77,7 +74,7 @@ export type Attempt = {
   title?: string;
   created_at: string;
   status?: string;
-  result?: { status?: string; passed?: number; total?: number };
+  result?: Partial<NonNullable<Run["result"]>>;
   confidence?: string;
   answer?: string;
   files?: Record<string, string>;

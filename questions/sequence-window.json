@@ -48,7 +48,7 @@
       {
         "id": "t3",
         "name": "Wrap forward",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "1\n",
@@ -57,7 +57,7 @@
       {
         "id": "t4",
         "name": "Old packet",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "normal",
         "stdin": "",
         "expected_stdout": "0\n",
@@ -66,7 +66,7 @@
       {
         "id": "t5",
         "name": "Ambiguous half range",
-        "visibility": "hidden",
+        "visibility": "public",
         "category": "boundary",
         "stdin": "",
         "expected_stdout": "0\n",
