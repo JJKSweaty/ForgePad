@@ -70,6 +70,18 @@ impl Worker {
                 ready: Arc::new(tokio::sync::Mutex::new(None)),
             };
         }
+        // Browser QA may use setup-python rather than a repository-local venv.
+        // Keep this development override out of packaged release applications.
+        #[cfg(debug_assertions)]
+        if let Some(python) = std::env::var_os("FORGEPAD_PYTHON") {
+            return Self {
+                executable: python.into(),
+                python_module: true,
+                directory: directory.into(),
+                config: Arc::new(Mutex::new(RunnerConfig::default())),
+                ready: Arc::new(tokio::sync::Mutex::new(None)),
+            };
+        }
         let installed = std::env::current_exe()
             .unwrap()
             .parent()

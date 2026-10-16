@@ -3,6 +3,7 @@
 import asyncio
 import os
 import signal
+import sys
 import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,7 +20,12 @@ ROOT = Path(__file__).resolve().parents[1]
 async def lifespan(app):
     (ROOT / "data").mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="browser-qa-", dir=ROOT / "data") as directory:
-        env = {**os.environ, "FORGEPAD_DATA_DIR": directory, "FORGEPAD_QUESTIONS": str(ROOT / "questions")}
+        env = {
+            **os.environ,
+            "FORGEPAD_DATA_DIR": directory,
+            "FORGEPAD_QUESTIONS": str(ROOT / "questions"),
+            "FORGEPAD_PYTHON": sys.executable,
+        }
         process = await asyncio.create_subprocess_exec(
             str(ROOT / "src-tauri/target/debug/forgepad-service"),
             env=env,
