@@ -3,7 +3,12 @@
 ## 0.3.5 — 2026-10-17
 
 ### Improved
-- Keep Progress date filters and timestamps in the profile timezone, preserve Question Library filters during navigation, clarify recorded metrics, and prioritize next actions above an accessible compact activity calendar.
+- Prioritize next actions and learning-path progress above a compact activity calendar, with keyboard guidance and a numerical daily-count view.
+- Clarify all-time attempt and completion totals, current reviews due, and unavailable duration metrics.
+
+### Fixed
+- Make inactive date filtering explicit with All dates, and keep inclusive Since dates and displayed timestamps in the profile timezone.
+- Preserve Question Library filters during navigation and keep active filters visible when no questions match.
 
 ## 0.3.4 — 2026-10-16
 
