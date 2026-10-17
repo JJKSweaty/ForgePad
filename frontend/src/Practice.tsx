@@ -1,3 +1,6 @@
+import { useElementSize } from "./useElementSize";
+import { ResultsDivider } from "./ResultsDivider";
+import * as Popover from "@radix-ui/react-popover";
 import { PaneDivider } from "./PaneDivider";
 import { usePracticeActivity } from "./usePracticeActivity";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -64,6 +67,21 @@ export default function Practice({
   sessionId?: string;
 }) {
   usePracticeActivity(questionId, sessionId);
+  const root = useRef<HTMLDivElement>(null);
+  const workPane = useRef<HTMLElement>(null);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [mobilePane, setMobilePane] = useState("workspace");
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [resultsHeight, setResultsHeight] = useState(() =>
+    Math.max(
+      120,
+      Math.min(
+        400,
+        Number(localStorage.getItem("forgepad.results.height")) || 180,
+      ),
+    ),
+  );
   const layout = useRef<HTMLDivElement>(null);
   const dialogTrigger = useRef<HTMLButtonElement | null>(null);
   const [paneWidth, setPaneWidth] = useState(() =>
@@ -114,6 +132,13 @@ export default function Practice({
         return null;
       }
     });
+  const size = useElementSize(root, !!question);
+  const workSize = useElementSize(workPane, !!question);
+  const narrow = size.width < 900;
+  const short = workSize.height < 450;
+  useEffect(() => {
+    if (executionError) setResultsOpen(true);
+  }, [executionError]);
   const ready = useRef(false),
     draft = useRef<Draft>({ files: {}, answer: "" }),
     editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null),
@@ -354,6 +379,7 @@ export default function Practice({
     if (running || !Object.keys(draft.current.files).length) return;
     setError("");
     setExecutionError("");
+    setResultsOpen(true);
     setRunMode(mode);
     setRun(null);
     const snapshot = draft.current;
@@ -431,7 +457,9 @@ export default function Practice({
     );
   return (
     <div
-      className={`practice-page ${problemCollapsed ? "problem-collapsed" : ""}`}
+      ref={root}
+      className={`practice-page ${problemCollapsed ? "problem-collapsed" : ""} ${narrow ? "practice-narrow" : ""} ${short ? "practice-short" : ""} ${resultsOpen ? "results-open" : ""}`}
+      data-pane={mobilePane}
     >
       <div className="practice-heading">
         <button
@@ -455,7 +483,7 @@ export default function Practice({
         </div>
         <div className="practice-actions">
           <button
-            className="secondary"
+            className="secondary problem-visibility"
             aria-expanded={!problemCollapsed}
             aria-controls="problem-panel"
             onClick={() => {
@@ -485,22 +513,122 @@ export default function Practice({
               {checkpointSaving ? "Saving checkpoint…" : "Save checkpoint"}
             </span>
           </button>
+          <Popover.Root open={moreOpen} onOpenChange={setMoreOpen}>
+            <Popover.Trigger
+              ref={moreButton}
+              className="secondary"
+              aria-label="More workspace actions"
+            >
+              More
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                className="workspace-more"
+                sideOffset={8}
+                align="end"
+              >
+                <h2>Workspace actions</h2>
+                <div className="workspace-more-actions">
+                  {coding && (
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        setFiles((previous) =>
+                          Object.fromEntries(
+                            Object.entries(previous).map(([name, code]) => [
+                              name,
+                              code
+                                .split("\n")
+                                .map((line) => line.trimEnd())
+                                .join("\n")
+                                .replace(/\n*$/, "\n"),
+                            ]),
+                          ),
+                        );
+                      }}
+                    >
+                      Format whitespace
+                    </button>
+                  )}
+                  <button
+                    className="text-button"
+                    onClick={(event) => {
+                      dialogTrigger.current = moreButton.current;
+                      setMoreOpen(false);
+                      setResetConfirm(true);
+                    }}
+                  >
+                    <RotateCcw size={12} />
+                    Reset to starter files
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={!checkpoint}
+                    title={
+                      checkpoint
+                        ? `Replace draft with checkpoint from ${new Date(checkpoint.at).toLocaleString()}`
+                        : "Save a checkpoint first"
+                    }
+                    onClick={(event) => {
+                      dialogTrigger.current = moreButton.current;
+                      setMoreOpen(false);
+                      setShowCheckpoint(true);
+                    }}
+                  >
+                    Restore saved checkpoint
+                  </button>
+                </div>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    download(`${questionId}-draft.json`, draft.current)
+                  }
+                >
+                  <Download size={14} />
+                  Export draft
+                </button>
+                <p className="muted-text">
+                  Drafts autosave. A checkpoint keeps a manual restore point on
+                  this device.
+                </p>
+                <p className="checkpoint-status">
+                  {checkpoint
+                    ? `Checkpoint saved: ${new Date(checkpoint.at).toLocaleString()}`
+                    : "No checkpoint saved yet."}
+                </p>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         </div>
       </div>
-      <div className="draft-saving-info">
+      <div className="workspace-status">
         <span className="save-status" role="status">
           {saveStatus}
         </span>
-        <span>
-          Drafts autosave as you type. Checkpoints keep a manual restore point
-          on this device.
-        </span>
-        <span className="checkpoint-status" role="status">
-          {checkpoint
-            ? `Checkpoint saved: ${new Date(checkpoint.at).toLocaleString()}`
-            : "No checkpoint saved yet."}
-        </span>
       </div>
+      {narrow && (
+        <div
+          className="workspace-pane-tabs"
+          role="tablist"
+          aria-label="Practice panes"
+          onKeyDown={navigateTabs}
+        >
+          {["problem", "workspace"].map((pane) => (
+            <button
+              key={pane}
+              role="tab"
+              aria-selected={mobilePane === pane}
+              tabIndex={mobilePane === pane ? 0 : -1}
+              aria-controls={
+                pane === "problem" ? "problem-panel" : "work-panel"
+              }
+              onClick={() => setMobilePane(pane)}
+            >
+              {pane === "problem" ? "Problem" : "Workspace"}
+            </button>
+          ))}
+        </div>
+      )}
       {error && (
         <div className="error-banner" role="alert">
           {error}
@@ -560,16 +688,17 @@ export default function Practice({
         className="practice-layout"
         ref={layout}
         style={{
-          gridTemplateColumns: problemCollapsed
-            ? "minmax(0, 1fr)"
-            : `minmax(220px, ${paneWidth}%) 12px minmax(0, 1fr)`,
+          gridTemplateColumns:
+            problemCollapsed || narrow
+              ? "minmax(0, 1fr)"
+              : `minmax(220px, ${paneWidth}%) 12px minmax(0, 1fr)`,
         }}
       >
         <section
           className="problem-pane"
           id="problem-panel"
           aria-label="Problem panel"
-          hidden={problemCollapsed}
+          hidden={narrow ? mobilePane !== "problem" : problemCollapsed}
         >
           <div
             className="tabs"
@@ -710,14 +839,20 @@ export default function Practice({
             )}
           </div>
         </section>
-        {!problemCollapsed && (
+        {!problemCollapsed && !narrow && (
           <PaneDivider
             container={layout}
             value={paneWidth}
             onChange={resizePane}
           />
         )}
-        <section className="work-pane">
+        <section
+          className="work-pane"
+          id="work-panel"
+          ref={workPane}
+          hidden={narrow && mobilePane !== "workspace"}
+          aria-label="Question workspace"
+        >
           {coding ? (
             <>
               <div className="editor-toolbar">
@@ -872,52 +1007,6 @@ export default function Practice({
                 <span className="autocomplete-status">
                   Suggestions on · type to complete
                 </span>
-                <div className="button-row">
-                  <button
-                    className="text-button"
-                    onClick={() => {
-                      setFiles((previous) =>
-                        Object.fromEntries(
-                          Object.entries(previous).map(([name, code]) => [
-                            name,
-                            code
-                              .split("\n")
-                              .map((line) => line.trimEnd())
-                              .join("\n")
-                              .replace(/\n*$/, "\n"),
-                          ]),
-                        ),
-                      );
-                    }}
-                  >
-                    Format whitespace
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={(event) => {
-                      dialogTrigger.current = event.currentTarget;
-                      setResetConfirm(true);
-                    }}
-                  >
-                    <RotateCcw size={12} />
-                    Reset to starter files
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={!checkpoint}
-                    title={
-                      checkpoint
-                        ? `Replace draft with checkpoint from ${new Date(checkpoint.at).toLocaleString()}`
-                        : "Save a checkpoint first"
-                    }
-                    onClick={(event) => {
-                      dialogTrigger.current = event.currentTarget;
-                      setShowCheckpoint(true);
-                    }}
-                  >
-                    Restore saved checkpoint
-                  </button>
-                </div>
               </div>
             </>
           ) : (
@@ -1049,13 +1138,41 @@ export default function Practice({
               )}
             </div>
           </div>
+          {coding && resultsOpen && !short && (
+            <ResultsDivider
+              container={workPane}
+              height={resultsHeight}
+              onChange={(height) => {
+                setResultsHeight(height);
+                localStorage.setItem("forgepad.results.height", String(height));
+              }}
+            />
+          )}
           {coding && (
             <section
+              id="execution-output"
+              style={
+                {
+                  "--results-height": `${resultsHeight}px`,
+                } as React.CSSProperties
+              }
               className="output-panel"
               aria-label="Execution output"
               aria-busy={running}
             >
               <div className="section-header">
+                <button
+                  className="text-button results-toggle"
+                  aria-expanded={resultsOpen}
+                  aria-controls="results-body"
+                  onClick={() => setResultsOpen(!resultsOpen)}
+                >
+                  {resultsOpen
+                    ? short
+                      ? "Back to editor"
+                      : "Hide results"
+                    : "Show results"}
+                </button>
                 <h2>Output &amp; test results</h2>
                 {run && (
                   <span
@@ -1066,162 +1183,168 @@ export default function Practice({
                   </span>
                 )}
               </div>
-              {executionError && (
-                <p className="execution-error" role="alert">
-                  {executionError}
-                </p>
-              )}
-              {running ? (
-                <div className="execution-progress">
-                  <p role="status">
-                    <LoaderCircle size={16} className="spinning" />
-                    {executionStatus}
+              <div
+                className="results-body"
+                id="results-body"
+                hidden={!resultsOpen}
+              >
+                {executionError && (
+                  <p className="execution-error" role="alert">
+                    {executionError}
                   </p>
-                  <div
-                    className="execution-progress-track"
-                    role="progressbar"
-                    aria-label="Test execution in progress"
-                  >
-                    <span />
-                  </div>
-                </div>
-              ) : !run ? (
-                <div className="output-empty">
-                  <span className="terminal-prompt">›_</span>
-                  <p>
-                    {executionError
-                      ? "Execution could not start. Your code is still in the editor."
-                      : "Run all tests to see output and compiler diagnostics here."}
-                  </p>
-                  <small>
-                    Ctrl / ⌘ + Enter: all tests · Shift + Ctrl / ⌘ + Enter:
-                    submit all tests
-                  </small>
-                </div>
-              ) : run.result ? (
-                <>
-                  <p className="result-context" role="status">
-                    {runMode === "run"
-                      ? "Complete test run"
-                      : "Full test submission"}
-                    {run.attempt_id ? " · Attempt recorded" : ""}
-                    {resultsStale
-                      ? " · Code changed since these results. Run again to update."
-                      : ""}
-                  </p>
-                  <div className="result-summary">
-                    <strong role="status">
-                      {run.result.total > 0
-                        ? `${run.result.passed} / ${run.result.total} tests passed`
-                        : ["compilation_error", "compile_error"].includes(
-                              run.result.status,
-                            )
-                          ? "Compilation failed · no tests ran"
-                          : run.result.status === "unavailable"
-                            ? "Runner unavailable · no tests ran"
-                            : run.result.status === "unsupported"
-                              ? "No executable tests for this question"
-                              : run.result.status === "cancelled"
-                                ? "Execution cancelled"
-                                : "No test results returned"}
-                    </strong>
-                    {run.result.elapsed_ms !== undefined && (
-                      <span>{run.result.elapsed_ms} ms</span>
-                    )}
-                  </div>
-                  {diagnostics.length > 0 && (
+                )}
+                {running ? (
+                  <div className="execution-progress">
+                    <p role="status">
+                      <LoaderCircle size={16} className="spinning" />
+                      {executionStatus}
+                    </p>
                     <div
-                      className="editor-diagnostics"
-                      aria-label="Source diagnostics"
+                      className="execution-progress-track"
+                      role="progressbar"
+                      aria-label="Test execution in progress"
                     >
-                      <h3>Source diagnostics</h3>
-                      <ul>
-                        {diagnostics.map((item, index) => (
-                          <li key={index}>
-                            <button
-                              disabled={resultsStale}
-                              title={
-                                resultsStale
-                                  ? "Run tests again to update source locations"
-                                  : `Go to ${item.file}, line ${item.line}, column ${item.column}`
-                              }
-                              onClick={() => {
-                                setActiveFile(item.file);
-                                setEditorLocation({
-                                  file: item.file,
-                                  lineNumber: item.line,
-                                  column: item.column,
-                                });
-                              }}
-                            >
-                              <span
-                                className={`diagnostic-severity ${item.severity}`}
-                              >
-                                {item.severity}
-                              </span>
-                              <code>
-                                {item.file}:{item.line}:{item.column}
-                              </code>
-                              <span>{item.message}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
+                      <span />
                     </div>
-                  )}
-                  {run.result.compiler_output && (
-                    <pre
-                      className="compiler-output"
-                      tabIndex={0}
-                      aria-label="Compiler output"
-                    >
-                      {run.result.compiler_output}
-                    </pre>
-                  )}
-                  {run.result.tests?.map((test) => (
-                    <details
-                      className="test-result"
-                      key={test.id}
-                      open={test.status !== "passed"}
-                    >
-                      <summary>
-                        <span
-                          className={`test-dot ${test.status === "passed" ? "passed" : "failed"}`}
-                        />
-                        <strong>{test.name || test.id}</strong>
-                        <span className="muted-text">Visible</span>
-                        <span className="badge">{readable(test.status)}</span>
-                      </summary>
-                      {
-                        <>
-                          <h4>Output</h4>
-                          <pre tabIndex={0}>{test.stdout || "(empty)"}</pre>
-                        </>
-                      }
-                      {test.expected_stdout !== undefined && (
-                        <>
-                          <h4>Expected output</h4>
-                          <pre tabIndex={0}>
-                            {test.expected_stdout || "(empty)"}
-                          </pre>
-                        </>
+                  </div>
+                ) : !run ? (
+                  <div className="output-empty">
+                    <span className="terminal-prompt">›_</span>
+                    <p>
+                      {executionError
+                        ? "Execution could not start. Your code is still in the editor."
+                        : "Run all tests to see output and compiler diagnostics here."}
+                    </p>
+                    <small>
+                      Ctrl / ⌘ + Enter: all tests · Shift + Ctrl / ⌘ + Enter:
+                      submit all tests
+                    </small>
+                  </div>
+                ) : run.result ? (
+                  <>
+                    <p className="result-context" role="status">
+                      {runMode === "run"
+                        ? "Complete test run"
+                        : "Full test submission"}
+                      {run.attempt_id ? " · Attempt recorded" : ""}
+                      {resultsStale
+                        ? " · Code changed since these results. Run again to update."
+                        : ""}
+                    </p>
+                    <div className="result-summary">
+                      <strong role="status">
+                        {run.result.total > 0
+                          ? `${run.result.passed} / ${run.result.total} tests passed`
+                          : ["compilation_error", "compile_error"].includes(
+                                run.result.status,
+                              )
+                            ? "Compilation failed · no tests ran"
+                            : run.result.status === "unavailable"
+                              ? "Runner unavailable · no tests ran"
+                              : run.result.status === "unsupported"
+                                ? "No executable tests for this question"
+                                : run.result.status === "cancelled"
+                                  ? "Execution cancelled"
+                                  : "No test results returned"}
+                      </strong>
+                      {run.result.elapsed_ms !== undefined && (
+                        <span>{run.result.elapsed_ms} ms</span>
                       )}
-                      {test.stderr && (
-                        <>
-                          <h4>Diagnostics</h4>
-                          <pre tabIndex={0}>{test.stderr}</pre>
-                        </>
-                      )}
-                    </details>
-                  ))}
-                </>
-              ) : (
-                <div className="empty">
-                  {run.status === "cancelled"
-                    ? "Run cancelled."
-                    : "Waiting for the isolated runner…"}
-                </div>
-              )}
+                    </div>
+                    {diagnostics.length > 0 && (
+                      <div
+                        className="editor-diagnostics"
+                        aria-label="Source diagnostics"
+                      >
+                        <h3>Source diagnostics</h3>
+                        <ul>
+                          {diagnostics.map((item, index) => (
+                            <li key={index}>
+                              <button
+                                disabled={resultsStale}
+                                title={
+                                  resultsStale
+                                    ? "Run tests again to update source locations"
+                                    : `Go to ${item.file}, line ${item.line}, column ${item.column}`
+                                }
+                                onClick={() => {
+                                  setActiveFile(item.file);
+                                  setEditorLocation({
+                                    file: item.file,
+                                    lineNumber: item.line,
+                                    column: item.column,
+                                  });
+                                }}
+                              >
+                                <span
+                                  className={`diagnostic-severity ${item.severity}`}
+                                >
+                                  {item.severity}
+                                </span>
+                                <code>
+                                  {item.file}:{item.line}:{item.column}
+                                </code>
+                                <span>{item.message}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {run.result.compiler_output && (
+                      <pre
+                        className="compiler-output"
+                        tabIndex={0}
+                        aria-label="Compiler output"
+                      >
+                        {run.result.compiler_output}
+                      </pre>
+                    )}
+                    {run.result.tests?.map((test) => (
+                      <details
+                        className="test-result"
+                        key={test.id}
+                        open={test.status !== "passed"}
+                      >
+                        <summary>
+                          <span
+                            className={`test-dot ${test.status === "passed" ? "passed" : "failed"}`}
+                          />
+                          <strong>{test.name || test.id}</strong>
+                          <span className="muted-text">Visible</span>
+                          <span className="badge">{readable(test.status)}</span>
+                        </summary>
+                        {
+                          <>
+                            <h4>Output</h4>
+                            <pre tabIndex={0}>{test.stdout || "(empty)"}</pre>
+                          </>
+                        }
+                        {test.expected_stdout !== undefined && (
+                          <>
+                            <h4>Expected output</h4>
+                            <pre tabIndex={0}>
+                              {test.expected_stdout || "(empty)"}
+                            </pre>
+                          </>
+                        )}
+                        {test.stderr && (
+                          <>
+                            <h4>Diagnostics</h4>
+                            <pre tabIndex={0}>{test.stderr}</pre>
+                          </>
+                        )}
+                      </details>
+                    ))}
+                  </>
+                ) : (
+                  <div className="empty">
+                    {run.status === "cancelled"
+                      ? "Run cancelled."
+                      : "Waiting for the isolated runner…"}
+                  </div>
+                )}
+              </div>
             </section>
           )}
         </section>
@@ -1286,15 +1409,6 @@ export default function Practice({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-      <div className="practice-footer">
-        <button
-          className="text-button"
-          onClick={() => download(`${questionId}-draft.json`, draft.current)}
-        >
-          <Download size={13} />
-          Export draft
-        </button>
-      </div>
     </div>
   );
 }

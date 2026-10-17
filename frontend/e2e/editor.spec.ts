@@ -216,7 +216,9 @@ test("autosaved drafts reopen and checkpoints restore independently with keyboar
   await page
     .getByRole("button", { name: "Save checkpoint", exact: true })
     .click();
+  await page.getByRole("button", { name: "More workspace actions" }).click();
   await expect(page.getByText(/^Checkpoint saved:/)).toBeVisible();
+  await page.keyboard.press("Escape");
   await replaceCode(page, "int autosaved_value;\n");
   await expect
     .poll(
@@ -231,17 +233,22 @@ test("autosaved drafts reopen and checkpoints restore independently with keyboar
   const restore = page.getByRole("button", {
     name: "Restore saved checkpoint",
   });
+  await page.getByRole("button", { name: "More workspace actions" }).click();
   await restore.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(restore).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "More workspace actions" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "More workspace actions" }).click();
   await restore.click();
   await dialog
     .getByRole("button", { name: "Restore checkpoint to draft" })
     .click();
   await expect(page.locator(".view-lines")).toContainText("checkpoint_value");
+  await page.getByRole("button", { name: "More workspace actions" }).click();
   await page.getByRole("button", { name: "Reset to starter files" }).click();
   await dialog
     .getByRole("button", { name: "Reset draft to starter files" })

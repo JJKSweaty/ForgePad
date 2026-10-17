@@ -171,7 +171,11 @@ it("autosaves edits separately from checkpoints and restores or resets the draft
   await user.clear(source);
   await user.type(source, "int checkpoint_value;");
   await user.click(screen.getByRole("button", { name: "Save checkpoint" }));
+  await user.click(
+    screen.getByRole("button", { name: "More workspace actions" }),
+  );
   await screen.findByText(/^Checkpoint saved:/);
+  await user.keyboard("{Escape}");
   await user.clear(source);
   await user.type(source, "int later_value;");
   await screen.findByText("Draft autosaved");
@@ -180,12 +184,18 @@ it("autosaves edits separately from checkpoints and restores or resets the draft
     expect.objectContaining({ body: expect.stringContaining("later_value") }),
   );
   await user.click(
+    screen.getByRole("button", { name: "More workspace actions" }),
+  );
+  await user.click(
     screen.getByRole("button", { name: "Restore saved checkpoint" }),
   );
   await user.keyboard("{Escape}");
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(document.activeElement).toBe(
-    screen.getByRole("button", { name: "Restore saved checkpoint" }),
+    screen.getByRole("button", { name: "More workspace actions" }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "More workspace actions" }),
   );
   await user.click(
     screen.getByRole("button", { name: "Restore saved checkpoint" }),
@@ -197,6 +207,9 @@ it("autosaves edits separately from checkpoints and restores or resets the draft
   );
   expect((source as HTMLTextAreaElement).value).toBe("int checkpoint_value;");
   await user.click(
+    screen.getByRole("button", { name: "More workspace actions" }),
+  );
+  await user.click(
     screen.getByRole("button", { name: "Reset to starter files" }),
   );
   await user.click(
@@ -206,6 +219,9 @@ it("autosaves edits separately from checkpoints and restores or resets the draft
   );
   expect((source as HTMLTextAreaElement).value).toBe(
     coding.starter_files["main.c"],
+  );
+  await user.click(
+    screen.getByRole("button", { name: "More workspace actions" }),
   );
   expect(
     screen

@@ -14,3 +14,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 import "./learning-workspace.css";
+
+import "./practice-studio.css";

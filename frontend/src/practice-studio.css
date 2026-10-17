@@ -1,0 +1,392 @@
+/* Practice owns the viewport. Reading/editing regions, rather than the document, scroll. */
+.app:has(.practice-page) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.app:has(.practice-page) .main-shell {
+  height: 100%;
+  min-height: 0;
+}
+.app:has(.practice-page) .topbar {
+  flex: 0 0 62px;
+  height: 62px;
+  min-height: 62px;
+}
+.app:has(.practice-page) main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.app:has(.practice-page) .practice-hub-header {
+  flex: none;
+  padding: 0 20px;
+}
+.app:has(.practice-page) .hub-heading {
+  display: none;
+}
+.app:has(.practice-page) .hub-tabs {
+  margin: 0;
+  min-height: 38px;
+}
+.app:has(.practice-page) .hub-tabs button {
+  padding: 8px 12px;
+  min-height: 38px;
+}
+.app:has(.practice-page) .practice-hub-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.practice-hub-content > .practice-page,
+.practice-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 14px 20px 16px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+.practice-page .practice-heading {
+  flex: none;
+  display: flex;
+  flex-wrap: nowrap;
+  margin: 0;
+  gap: 12px;
+  align-items: center;
+}
+.practice-page .practice-heading > div:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.practice-page .practice-heading h1 {
+  font-size: 18px;
+  margin: 0 0 4px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.practice-page .practice-actions {
+  width: auto;
+  margin: 0 0 0 auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.practice-page .practice-actions button {
+  flex: none;
+  font-size: 12px;
+}
+.workspace-status {
+  flex: none;
+  display: flex;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 11px;
+  min-height: 23px;
+  padding: 4px 0;
+}
+.practice-page .practice-layout {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  gap: 0;
+  align-items: stretch;
+}
+.practice-page .practice-layout > .problem-pane {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  min-height: 0;
+  max-height: none;
+  width: auto;
+  resize: none;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.practice-page .problem-pane > .tabs {
+  flex: none;
+}
+.practice-page .problem-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+}
+.practice-page .practice-layout > .work-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.practice-page .pane-divider {
+  display: block;
+  min-height: 0;
+}
+.practice-page .editor-toolbar {
+  flex: none;
+  flex-wrap: nowrap;
+  min-height: 40px;
+}
+.practice-page .file-tabs {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+.practice-page .editor-toolbar > .button-row {
+  width: auto;
+  flex-shrink: 0;
+}
+.practice-page .file-tabs button {
+  padding: 8px 10px;
+}
+.practice-page .editor-container {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  resize: none;
+  overflow: hidden;
+}
+.practice-page .editor-bottom {
+  flex: none;
+  min-height: 26px;
+  padding: 4px 10px;
+  font-size: 10px;
+}
+.practice-page .run-toolbar {
+  flex: none;
+  order: 10;
+  min-height: 52px;
+  margin: 0;
+  padding: 8px 12px;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.practice-page .run-toolbar .execution-help {
+  font-size: 11px;
+  flex: 1 1 160px;
+  max-width: 330px;
+}
+.practice-page .run-toolbar > .button-row {
+  width: auto;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.practice-page .run-toolbar button {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.practice-page .output-panel {
+  flex: none;
+  order: 8;
+  min-height: 0;
+  height: 37px;
+  max-height: 50%;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+}
+.practice-page.results-open .output-panel {
+  height: var(--results-height);
+}
+.practice-page .output-panel > .section-header {
+  flex: none;
+  padding: 5px 12px;
+  min-height: 36px;
+  justify-content: flex-start;
+  gap: 12px;
+}
+.practice-page .output-panel h2 {
+  font-size: 12px;
+  margin: 0;
+}
+.results-toggle {
+  min-height: 26px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.results-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.results-body[hidden],
+.practice-page [hidden] {
+  display: none !important;
+}
+.practice-page .output-panel pre {
+  max-height: none;
+}
+.results-divider {
+  order: 7;
+  flex: 0 0 8px;
+  cursor: row-resize;
+  background: var(--bg);
+  touch-action: none;
+  position: relative;
+}
+.results-divider::after {
+  content: "";
+  position: absolute;
+  inset: 3px 0;
+  background: var(--border);
+}
+.results-divider:hover::after,
+.results-divider:focus-visible::after {
+  background: var(--accent);
+}
+.practice-short.results-open .editor-container,
+.practice-short.results-open .editor-toolbar,
+.practice-short.results-open .editor-bottom {
+  display: none;
+}
+.practice-short.results-open .output-panel {
+  flex: 1;
+  height: auto;
+  max-height: none;
+}
+.practice-page .written-response {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.workspace-pane-tabs {
+  display: flex;
+  gap: 4px;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.workspace-pane-tabs button {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.workspace-pane-tabs [aria-selected="true"] {
+  color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.practice-narrow .practice-layout {
+  display: flex;
+  flex-direction: column;
+}
+.practice-narrow .practice-layout > .problem-pane,
+.practice-narrow .practice-layout > .work-pane {
+  flex: 1;
+  width: 100%;
+}
+.practice-narrow .problem-visibility {
+  display: none;
+}
+.workspace-more {
+  z-index: 80;
+  width: min(340px, calc(100vw - 32px));
+  max-height: min(550px, 75dvh);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.workspace-more-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.workspace-more .text-button {
+  min-height: 36px;
+  text-align: left;
+  justify-content: flex-start;
+  font-size: 13px;
+}
+.workspace-more > p {
+  font-size: 12px;
+  margin: 12px 0 0;
+  line-height: 1.6;
+}
+.interview-page:has(.practice-page) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  max-width: none;
+  padding: 8px 16px;
+  overflow: hidden;
+}
+.interview-page:has(.practice-page) > .page-heading {
+  display: none;
+}
+.interview-page:has(.practice-page) > .session-bar,
+.interview-page:has(.practice-page) > .session-stages,
+.interview-page:has(.practice-page) > .interview-tabs {
+  flex: none;
+  margin: 0 0 6px;
+}
+.interview-page:has(.practice-page) .session-stages {
+  padding: 4px 0;
+}
+.interview-page:has(.practice-page) > .practice-page {
+  padding: 4px 0 0;
+}
+@media (max-width: 600px) {
+  .practice-hub-content > .practice-page,
+  .practice-page {
+    padding: 10px 10px 12px;
+  }
+  .app:has(.practice-page) .practice-hub-header {
+    padding: 0 8px;
+  }
+  .app:has(.practice-page) .hub-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .app:has(.practice-page) .hub-tabs button {
+    white-space: nowrap;
+  }
+  .practice-page .practice-heading {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .practice-page .practice-heading h1 {
+    font-size: 16px;
+  }
+  .practice-page .practice-heading > div:first-of-type {
+    flex-basis: calc(100% - 44px);
+  }
+  .practice-page .practice-actions {
+    margin-left: auto;
+  }
+  .practice-page .practice-heading .muted-text {
+    font-size: 10px;
+  }
+  .practice-page .run-toolbar {
+    flex-wrap: wrap;
+    padding: 6px 8px;
+  }
+  .practice-page .execution-help {
+    display: none;
+  }
+  .practice-page .editor-toolbar .autocomplete-trigger kbd,
+  .practice-page .editor-bottom .autocomplete-status {
+    display: none;
+  }
+  .practice-page .problem-content {
+    padding: 14px;
+  }
+  .practice-page .output-panel h2 {
+    font-size: 11px;
+  }
+}

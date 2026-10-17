@@ -1,5 +1,13 @@
 # ForgePad release notes
 
+## 0.3.9 — 2026-10-17
+
+### Improved
+- Redesign Practice as a viewport-filling studio with persistent actions, structured written sections, and saved architecture diagrams.
+
+### Fixed
+- Keep the problem, editor, and primary controls reachable in laptop and narrow windows without scrolling the whole document.
+
 ## 0.3.8 — 2026-10-17
 
 ### Fixed
