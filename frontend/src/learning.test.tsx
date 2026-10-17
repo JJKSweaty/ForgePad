@@ -354,3 +354,66 @@ it.each([
 ])("keeps daylight-saving calendar dates for %s", (timestamp, expected) => {
   expect(calendarDate(timestamp, "America/Toronto")).toBe(expected);
 });
+
+it("keeps current progress and historical completion distinct when filtering and opening questions", async () => {
+  const onPractice = vi.fn();
+  render(
+    <QuestionBank
+      questions={[
+        {
+          ...question,
+          id: "done",
+          title: "Completed exercise",
+          progress_status: "completed",
+          has_completed: true,
+        },
+        {
+          ...question,
+          id: "review",
+          title: "Review exercise",
+          progress_status: "needs_review",
+          has_completed: true,
+        },
+        {
+          ...question,
+          id: "draft",
+          title: "Draft exercise",
+          progress_status: "in_progress",
+          draft_version: 1,
+        },
+        {
+          ...question,
+          id: "new",
+          title: "Untouched exercise",
+          progress_status: "not_started",
+        },
+      ]}
+      onPractice={onPractice}
+      refresh={async () => {}}
+    />,
+  );
+  const done = screen.getByRole("button", { name: "Open Completed exercise" });
+  expect(
+    document.getElementById(done.getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toBe("Completed");
+  const review = screen.getByRole("button", { name: "Open Review exercise" });
+  expect(
+    document.getElementById(review.getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toContain("Needs review");
+  expect(
+    document.getElementById(review.getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toContain("Previously completed");
+  await userEvent.selectOptions(
+    screen.getByLabelText("Progress status"),
+    "completed",
+  );
+  expect(screen.getByRole("status").textContent).toBe("1 questions");
+  expect(
+    screen.queryByRole("button", { name: "Open Review exercise" }),
+  ).toBeNull();
+  await userEvent.click(done);
+  expect(onPractice).toHaveBeenCalledWith("done", undefined);
+});

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Check, Clock, Play, Route } from "lucide-react";
-import { api, message, post, readable } from "./api";
+import { ArrowRight, Clock, Play, Route } from "lucide-react";
+import { api, message, post } from "./api";
 import { native } from "./native";
+import { QuestionStatus } from "./QuestionStatus";
 import { ProgressMeter } from "./ui";
 import type { DashboardData } from "./dashboardData";
 type Roadmap = {
@@ -197,20 +198,19 @@ export function RoadmapsPage({
                       onClick={() => onPractice(step.question_id)}
                     >
                       <span className="step-number">
-                        {["solved", "mastered"].includes(step.status) ? (
-                          <Check size={15} />
-                        ) : (
-                          <span className="unstarted-dot" />
-                        )}
+                        <QuestionStatus
+                          status={step.available ? step.status : "unavailable"}
+                          marker
+                        />
                       </span>
                       <span className="row-main">
                         <strong>{step.title ?? step.question_id}</strong>
                         <small>{step.topics?.join(" · ")}</small>
                       </span>
                       <span className="step-status">
-                        {step.available
-                          ? readable(step.status)
-                          : "Not yet available"}
+                        <QuestionStatus
+                          status={step.available ? step.status : "unavailable"}
+                        />
                       </span>
                       <ArrowRight size={14} />
                     </button>

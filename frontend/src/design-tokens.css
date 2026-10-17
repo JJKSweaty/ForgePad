@@ -16,6 +16,8 @@
   --danger: #f0a09a;
   --success: #9ed1af;
   --success-bg: #1c2a20;
+  --review: #e1bc79;
+  --review-bg: #30271b;
   --on-accent: #181328;
   --shadow: 0 16px 48px #0006;
   --activity-0: #252525;
@@ -64,6 +66,8 @@
   --danger: #a2352c;
   --success: #216a40;
   --success-bg: #edf6ef;
+  --review: #81520d;
+  --review-bg: #fbf2df;
   --on-accent: #ffffff;
   --activity-0: #e8e8e8;
   --activity-1: #ddd7f1;

@@ -1,5 +1,14 @@
 # ForgePad release notes
 
+## 0.3.7 — 2026-10-17
+
+### Improved
+- Make question progress unmistakable with status icons, badges, and row accents; improve spacing across Library, Dashboard, Progress, and Roadmaps.
+
+### Fixed
+- Stop daily activity dates inheriting column-header formatting; align counts and keep the table at a readable width.
+- Contain narrow-screen attempt history scrolling and keep question titles, status cues, and actions readable as layouts resize.
+
 ## 0.3.6 — 2026-10-17
 
 ### Improved

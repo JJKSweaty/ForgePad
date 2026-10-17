@@ -151,8 +151,8 @@ export function ProgressPage({
       <p className="muted-text compact-note">
         Attempts, passes and completed questions are all-time totals. Completed
         questions are unique questions with passing tests or a confident self
-        assessment. Reviews due counts questions whose latest scheduled review is
-        due now; viewing an old attempt is separate.
+        assessment. Reviews due counts questions whose latest scheduled review
+        is due now; viewing an old attempt is separate.
       </p>
       {!progress.attempts.length && (
         <div className="compact-empty">
@@ -417,7 +417,15 @@ export function ProgressPage({
           {history.length} of {progress.attempts.length} attempts ·{" "}
           {after ? `Since ${after} (inclusive)` : "All dates"} · {timezone}
         </p>
-        <div className="table-scroll">
+        <p className="history-scroll-hint">
+          Scroll horizontally for all attempt details.
+        </p>
+        <div
+          className="table-scroll"
+          role="region"
+          aria-label="Attempt history details"
+          tabIndex={0}
+        >
           <table className="history-table">
             <thead>
               <tr>

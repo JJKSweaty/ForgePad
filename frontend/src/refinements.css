@@ -1966,22 +1966,95 @@ label {
   font-size: 11px;
   margin: 8px 0;
 }
+.activity-counts {
+  max-width: 640px;
+  margin: 20px 0 0;
+  padding: 0;
+  overflow: hidden;
+}
 .activity-counts summary {
   cursor: pointer;
+  padding: 14px 16px;
+  font-size: 13px;
+  margin: 0;
+}
+.activity-counts[open] summary {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
 }
 .activity-counts-scroll {
-  max-height: 240px;
+  max-height: 300px;
   overflow: auto;
-  margin-top: 10px;
+  margin: 0;
+  padding: 0 16px 8px;
+}
+.activity-counts-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .activity-counts table {
   width: 100%;
-  font-size: 12px;
+  table-layout: fixed;
   text-align: left;
+}
+.activity-counts caption {
+  text-align: left;
+  padding: 14px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.activity-counts thead th {
+  background: var(--panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.activity-counts tbody th {
+  background: transparent;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 .activity-counts th,
 .activity-counts td {
-  padding: 6px 10px;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+.activity-counts th:first-child {
+  width: 65%;
+}
+.activity-counts tr > :last-child {
+  text-align: right;
+}
+.activity-counts tbody td {
+  font-size: 13px;
+  color: var(--muted);
+}
+.activity-counts tr[data-active] td {
+  color: var(--accent);
+  font-weight: 650;
+}
+.activity-counts tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.calendar-instructions {
+  font-size: 12px;
+  line-height: 1.65;
+  max-width: 75ch;
+}
+.activity-controls select {
+  font-size: 12px;
+  min-height: 34px;
 }
 .dashboard-metric > .metric-note {
   display: block;

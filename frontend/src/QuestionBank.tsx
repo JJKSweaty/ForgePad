@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { LibraryFilters } from "./libraryFilters";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Check,
   Bookmark,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { api, download, message, post, readable } from "./api";
+import { QuestionStatus } from "./QuestionStatus";
 import { RecordDialog } from "./RecordDialog";
 import type { Question } from "./api";
 import { questionAction, questionState, stateLabels } from "./learning";
@@ -55,6 +56,7 @@ export function QuestionBank({
     [error, setError] = useState(""),
     [page, setPage] = useState(0);
   const input = useRef<HTMLInputElement>(null);
+  const statusPrefix = useId();
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim().toLowerCase()), 180);
     return () => clearTimeout(timer);
@@ -337,7 +339,7 @@ export function QuestionBank({
       )}
       <div className="list-caption">
         <span role="status">{filtered.length} questions</span>
-        <span>TYPE · DIFFICULTY · TIME · STATE</span>
+        <span>Progress is saved automatically from your work</span>
       </div>
       <section
         className="question-list dense-list"
@@ -345,15 +347,45 @@ export function QuestionBank({
       >
         {filtered.slice(current * 40, current * 40 + 40).map((q) => (
           <article
-            className={`library-row ${q.archived ? "archived" : ""}`}
+            className={`library-row progress-${questionState(q)} ${q.archived ? "archived" : ""}`}
             key={q.id}
+            data-progress={questionState(q)}
           >
             <button
               className="row-open-target"
               onClick={() => open(q)}
               aria-label={`Open ${q.title}`}
+              aria-describedby={`${statusPrefix}-${q.id}`}
               title={`${questionAction(q)} ${q.title}`}
             />
+            <QuestionStatus status={questionState(q)} marker />
+            <div className="library-row-title">
+              <h3>{q.title}</h3>
+              <div className="library-row-meta">
+                <span>{readable(q.type)}</span>
+                <span>{q.difficulty}</span>
+                <span>{q.duration_minutes} min</span>
+              </div>
+              <span className="library-row-topics" title={q.description}>
+                {q.topics.join(" · ")}
+              </span>
+            </div>
+            <div
+              className="question-status-stack"
+              id={`${statusPrefix}-${q.id}`}
+            >
+              <QuestionStatus status={questionState(q)} />
+              {q.has_completed && questionState(q) !== "completed" && (
+                <small className="completion-history">
+                  <Check size={12} aria-hidden="true" />
+                  Previously completed
+                </small>
+              )}
+            </div>
+            <span className="row-action-label">
+              {questionAction(q)}
+              <ChevronRight size={15} />
+            </span>
             <button
               className={`bookmark-button row-control ${q.bookmarked ? "selected" : ""}`}
               aria-label={`${q.bookmarked ? "Remove bookmark from" : "Bookmark"} ${q.title}`}
@@ -361,24 +393,10 @@ export function QuestionBank({
               onClick={() => void patch(q, { bookmarked: !q.bookmarked })}
             >
               <Bookmark
-                size={16}
+                size={17}
                 fill={q.bookmarked ? "currentColor" : "none"}
               />
             </button>
-            <div className="library-row-title">
-              <h3>{q.title}</h3>
-              <span title={q.description}>{q.topics.join(" · ")}</span>
-            </div>
-            <span className="row-type">{readable(q.type)}</span>
-            <span className="row-difficulty">{q.difficulty}</span>
-            <span className="row-duration">{q.duration_minutes} min</span>
-            <span className={`question-state state-${questionState(q)}`}>
-              {stateLabels[questionState(q)]}
-            </span>
-            <span className="row-action-label">
-              {questionAction(q)}
-              <ChevronRight size={13} />
-            </span>
             <Popover.Root>
               <Popover.Trigger
                 className="icon-button row-control"

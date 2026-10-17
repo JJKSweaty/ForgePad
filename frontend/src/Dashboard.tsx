@@ -253,110 +253,119 @@ export function Dashboard({
           note="Recorded practice consistency"
         />
       </section>
-      <section
-        className="learning-section recommendations"
-        aria-label="Recommended next actions"
-      >
-        <div className="section-header">
-          <h2>Next actions</h2>
-        </div>
-        <div className="recommendation-list">
-          {(c.kind === "draft" || c.kind === "session") && (
-            <button onClick={() => navigate(c)}>
-              Resume {q?.title}
-              <ArrowRight size={14} />
-            </button>
-          )}
-          {data.due_reviews.slice(0, 2).map((r) => (
-            <button
-              key={r.question_id}
-              onClick={() => onPractice(r.question_id)}
-            >
-              Review {r.title}
-              <ArrowRight size={14} />
-            </button>
-          ))}
-          {data.recommendations?.weak_topics.slice(0, 2).map((t) => (
-            <button key={t.topic} onClick={() => onBrowse(t.topic)}>
-              Revisit {t.topic}
-              <small>{t.needs_review} recorded assessments to revisit</small>
-              <ArrowRight size={14} />
-            </button>
-          ))}
-          {data.recommendations?.goals
-            .filter((g) => g.status !== "complete")
-            .slice(0, 2)
-            .map((g) => (
+      <div className="dashboard-priorities">
+        <section
+          className="learning-section recommendations"
+          aria-label="Recommended next actions"
+        >
+          <div className="section-header">
+            <h2>Next actions</h2>
+          </div>
+          <div className="recommendation-list">
+            {(c.kind === "draft" || c.kind === "session") && (
+              <button onClick={() => navigate(c)}>
+                <span className="action-copy">Resume {q?.title}</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
+            {data.due_reviews.slice(0, 2).map((r) => (
               <button
-                key={g.id}
-                onClick={() =>
-                  g.question_id
-                    ? onPractice(g.question_id)
-                    : g.topic
-                      ? onBrowse(g.topic)
-                      : onProgress()
-                }
+                key={r.question_id}
+                onClick={() => onPractice(r.question_id)}
               >
-                Goal: {g.title}
+                <span className="action-copy">Review {r.title}</span>
                 <ArrowRight size={14} />
               </button>
             ))}
-          <button className="text-button" onClick={() => onBrowse()}>
-            Browse Question Library
-            <ArrowRight size={14} />
-          </button>
-        </div>
-      </section>
-      <section className="dashboard-roadmaps" aria-labelledby="roadmaps-title">
-        <div className="section-header">
-          <div>
-            <h2 id="roadmaps-title">Your learning path</h2>
-            <p>Continue your path or explore others in Practice.</p>
-          </div>
-          <button
-            className="text-button"
-            onClick={() => onRoadmap(c.roadmap_id)}
-          >
-            All roadmaps <ArrowRight size={14} />
-          </button>
-        </div>
-        <div className="dashboard-roadmap-grid">
-          {data.roadmaps
-            .filter(
-              (r) =>
-                r.id ===
-                (data.roadmaps.find((path) => path.id === c.roadmap_id)?.id ??
-                  data.roadmaps[0]?.id),
-            )
-            .map((r) => (
-              <article key={r.id} className="roadmap-summary">
-                <div className="roadmap-summary-heading">
-                  <BookOpen size={17} />
-                  <h3>{r.title}</h3>
-                </div>
-                <div className="roadmap-count">
-                  <strong>{r.solved}</strong>
-                  <span>/ {r.total} solved</span>
-                  <small>{r.mastered} mastered</small>
-                </div>
-                <ProgressMeter
-                  value={r.completion_percent}
-                  label={`${r.title} completion`}
-                />
-                <div className="roadmap-summary-footer">
-                  <span>{Math.round(r.completion_percent)}% complete</span>
-                  <button
-                    className="text-button"
-                    disabled={continuing}
-                    onClick={() => void continueRoadmap(r.id)}
-                  >
-                    Continue <ArrowRight size={14} />
-                  </button>
-                </div>
-              </article>
+            {data.recommendations?.weak_topics.slice(0, 2).map((t) => (
+              <button key={t.topic} onClick={() => onBrowse(t.topic)}>
+                <span className="action-copy">
+                  Revisit {t.topic}
+                  <small>
+                    {t.needs_review} recorded assessments to revisit
+                  </small>
+                </span>
+                <ArrowRight size={14} />
+              </button>
             ))}
-        </div>
-      </section>
+            {data.recommendations?.goals
+              .filter((g) => g.status !== "complete")
+              .slice(0, 2)
+              .map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() =>
+                    g.question_id
+                      ? onPractice(g.question_id)
+                      : g.topic
+                        ? onBrowse(g.topic)
+                        : onProgress()
+                  }
+                >
+                  <span className="action-copy">Goal: {g.title}</span>
+                  <ArrowRight size={14} />
+                </button>
+              ))}
+            <button className="text-button" onClick={() => onBrowse()}>
+              <span className="action-copy">Browse Question Library</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </section>
+        <section
+          className="dashboard-roadmaps"
+          aria-labelledby="roadmaps-title"
+        >
+          <div className="section-header">
+            <div>
+              <h2 id="roadmaps-title">Your learning path</h2>
+              <p>Continue your path or explore others in Practice.</p>
+            </div>
+            <button
+              className="text-button"
+              onClick={() => onRoadmap(c.roadmap_id)}
+            >
+              All roadmaps <ArrowRight size={14} />
+            </button>
+          </div>
+          <div className="dashboard-roadmap-grid">
+            {data.roadmaps
+              .filter(
+                (r) =>
+                  r.id ===
+                  (data.roadmaps.find((path) => path.id === c.roadmap_id)?.id ??
+                    data.roadmaps[0]?.id),
+              )
+              .map((r) => (
+                <article key={r.id} className="roadmap-summary">
+                  <div className="roadmap-summary-heading">
+                    <BookOpen size={17} />
+                    <h3>{r.title}</h3>
+                  </div>
+                  <div className="roadmap-count">
+                    <strong>{r.solved}</strong>
+                    <span>/ {r.total} solved</span>
+                    <small>{r.mastered} mastered</small>
+                  </div>
+                  <ProgressMeter
+                    value={r.completion_percent}
+                    label={`${r.title} completion`}
+                  />
+                  <div className="roadmap-summary-footer">
+                    <span>{Math.round(r.completion_percent)}% complete</span>
+                    <button
+                      className="text-button"
+                      disabled={continuing}
+                      onClick={() => void continueRoadmap(r.id)}
+                    >
+                      Continue <ArrowRight size={14} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+          </div>
+        </section>
+      </div>
       <Heatmap
         days={data.days}
         timezone={timezone}

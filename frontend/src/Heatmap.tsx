@@ -329,8 +329,13 @@ export function Heatmap({
                     .map(
                       (d, i) =>
                         !d.future && (
-                          <tr key={d.date}>
-                            <th scope="row">{dayLabel(d.date)}</th>
+                          <tr
+                            key={d.date}
+                            data-active={values[i] > 0 || undefined}
+                          >
+                            <th scope="row">
+                              <time dateTime={d.date}>{dayLabel(d.date)}</time>
+                            </th>
                             <td>{values[i]}</td>
                           </tr>
                         ),
