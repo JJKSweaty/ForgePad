@@ -58,6 +58,7 @@ type Callbacks = {
   onPartial: (text: string) => void;
   onFinal: (text: string) => void;
   onActivity: (active: boolean) => void;
+  onLevel?: (level: number) => void;
   onError: (error: unknown) => void;
   onStopped: () => void;
 };
@@ -70,7 +71,12 @@ export async function startDictation(callbacks: Callbacks) {
       "Live dictation is unavailable in this browser. Open ForgePad desktop or use a browser with microphone and AudioWorklet support.",
     );
   const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
   });
   let context: AudioContext;
   try {
@@ -88,6 +94,8 @@ export async function startDictation(callbacks: Callbacks) {
   let stopped = false,
     disposed = false,
     inFlight = false;
+  let pendingPreview: { samples: Float32Array; sequence: number } | undefined;
+  let leadIn: Float32Array[] = [];
   let frames: Float32Array[] = [],
     length = 0,
     voiced = 0,
@@ -114,6 +122,7 @@ export async function startDictation(callbacks: Callbacks) {
     voiced = 0;
     silence = 0;
     previewAt = 0;
+    pendingPreview = undefined;
     sequence++;
   };
   const release = () => {
@@ -131,13 +140,11 @@ export async function startDictation(callbacks: Callbacks) {
       callbacks.onStopped();
     }
   };
-  const pump = async (preview?: {
-    samples: Float32Array;
-    sequence: number;
-  }) => {
+  const pump = async () => {
     if (disposed || inFlight) return;
     const final = finals.shift();
-    const item = final ?? preview;
+    const item = final ?? pendingPreview;
+    if (!final) pendingPreview = undefined;
     if (!item) {
       settle();
       return;
@@ -175,7 +182,7 @@ export async function startDictation(callbacks: Callbacks) {
       }
     } finally {
       inFlight = false;
-      if (finals.length) void pump();
+      if (finals.length || pendingPreview) void pump();
       else settle();
     }
   };
@@ -206,7 +213,12 @@ export async function startDictation(callbacks: Callbacks) {
     stopped = true;
     release();
     callbacks.onActivity(false);
+    callbacks.onLevel?.(0);
     if (flush) finish();
+    else {
+      pendingPreview = undefined;
+      leadIn = [];
+    }
     settle();
   }
   try {
@@ -216,30 +228,40 @@ export async function startDictation(callbacks: Callbacks) {
     node.port.onmessage = (event: MessageEvent<Float32Array>) => {
       if (stopped || disposed) return;
       const samples = event.data;
-      const active =
-        Math.sqrt(
-          samples.reduce((sum, value) => sum + value * value, 0) /
-            samples.length,
-        ) > 0.012;
+      const level = Math.sqrt(
+        samples.reduce((sum, value) => sum + value * value, 0) / samples.length,
+      );
+      // A lower onset threshold admits quieter voices. Hysteresis retains soft
+      // consonants within an utterance instead of repeatedly closing the gate.
+      const active = level > (voiced > 0 && silence < 0.3 ? 0.003 : 0.005);
+      callbacks.onLevel?.(Math.min(1, level / 0.1));
       callbacks.onActivity(active);
       const seconds = samples.length / 16000;
+      if (!frames.length) {
+        if (!active) {
+          leadIn.push(samples);
+          if (leadIn.length > 3) leadIn.shift();
+          return;
+        }
+        // Preserve up to 300 ms before detection, including quiet word onsets.
+        frames = leadIn;
+        length = frames.reduce((sum, frame) => sum + frame.length, 0);
+        leadIn = [];
+      }
       if (active) {
         voiced += seconds;
         silence = 0;
       } else silence += seconds;
-      if (!frames.length && !active) return;
       frames.push(samples);
       length += samples.length;
-      if ((silence >= 0.7 && voiced >= 0.2) || length >= 16000 * 12)
+      if ((silence >= 0.9 && voiced >= 0.2) || length >= 16000 * 12)
         finish(length >= 16000 * 12);
-      else if (
-        voiced >= 0.4 &&
-        length - previewAt >= 16000 * 2.5 &&
-        !inFlight &&
-        !finals.length
-      ) {
+      else if (voiced >= 0.3 && length - previewAt >= 16000 * 0.8) {
         previewAt = length;
-        void pump({ samples: snapshot(), sequence });
+        // Keep only the newest preview while the local engine is busy.
+        // Completed phrases have priority and are never replaced by previews.
+        pendingPreview = { samples: snapshot(), sequence };
+        void pump();
       }
     };
     source.connect(node);
@@ -255,6 +277,8 @@ export async function startDictation(callbacks: Callbacks) {
         disposed = true;
         stop(false);
         finals.length = 0;
+        pendingPreview = undefined;
+        leadIn = [];
       },
     };
   } catch (error) {

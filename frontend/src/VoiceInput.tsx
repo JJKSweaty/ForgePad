@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Mic, Square } from "lucide-react";
 import { api, message, post } from "./api";
 import { native } from "./native";
@@ -22,6 +22,11 @@ export default function VoiceInput({
   >("idle");
   const [partial, setPartial] = useState("");
   const [active, setActive] = useState(false);
+  const [level, setLevel] = useState(0);
+  const transcriptId = useId();
+  const preview = useRef<HTMLElement>(null);
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(false);
   const controller = useRef<Awaited<ReturnType<typeof startDictation>> | null>(
@@ -36,6 +41,8 @@ export default function VoiceInput({
   onBusyChangeRef.current = onBusyChange;
   useEffect(() => {
     onBusyChangeRef.current?.(status !== "idle");
+    if (status === "listening")
+      preview.current?.scrollIntoView({ block: "nearest" });
   }, [status]);
   useEffect(() => {
     mounted.current = true;
@@ -69,6 +76,8 @@ export default function VoiceInput({
     starting.current = true;
     setStatus("starting");
     setError("");
+    setPartial("");
+    setLevel(0);
     setBlocked(false);
     try {
       if (native) {
@@ -95,12 +104,18 @@ export default function VoiceInput({
               "Configure a local speech model before using dictation.",
           );
       }
-      if (!mounted.current) return;
+      if (!mounted.current || disabledRef.current) {
+        if (mounted.current) setStatus("idle");
+        return;
+      }
       const capture = await startDictation({
         questionId,
         sessionId,
         onPartial: (text) => {
           if (mounted.current) setPartial(text);
+        },
+        onLevel: (value) => {
+          if (mounted.current) setLevel(value);
         },
         onActivity: (value) => {
           if (mounted.current) setActive(value);
@@ -116,8 +131,9 @@ export default function VoiceInput({
           if (mounted.current) setStatus("idle");
         },
       });
-      if (!mounted.current) {
+      if (!mounted.current || disabledRef.current) {
         capture.dispose();
+        if (mounted.current) setStatus("idle");
         return;
       }
       controller.current = capture;
@@ -165,15 +181,36 @@ export default function VoiceInput({
           {status === "listening"
             ? active
               ? "Listening · voice detected"
-              : "Listening · pause to finish a thought"
+              : "Listening · speak naturally"
             : "Live text · processed locally"}
         </span>
       </div>
-      {partial && (
-        <p className="dictation-preview" aria-live="polite">
-          {partial}
-          <span> Still listening…</span>
-        </p>
+      {(status === "listening" || status === "finishing" || partial) && (
+        <section
+          ref={preview}
+          className="dictation-preview"
+          aria-labelledby={transcriptId}
+        >
+          <div className="dictation-preview-heading">
+            <strong id={transcriptId}>Live transcript</strong>
+            <meter
+              min={0}
+              max={1}
+              value={level}
+              aria-label="Microphone level"
+            />
+          </div>
+          <p aria-live="polite" aria-atomic="true">
+            {partial ||
+              (status === "finishing"
+                ? "Finishing your last words…"
+                : "Your words will appear here as you speak…")}
+          </p>
+          <small>
+            Live wording may change. Completed phrases are added to your answer;
+            review before submitting.
+          </small>
+        </section>
       )}
       {error && (
         <p className="inline-error" role="alert">

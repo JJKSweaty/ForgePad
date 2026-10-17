@@ -1,5 +1,13 @@
 # ForgePad release notes
 
+## 0.3.6 — 2026-10-17
+
+### Improved
+- Show live transcripts while speaking and capture quieter voice answers with a short lead-in, faster previews, and microphone level feedback.
+
+### Fixed
+- Preserve quiet word onsets and short pauses during dictation, and keep the newest live preview when the local model is busy.
+
 ## 0.3.5 — 2026-10-17
 
 ### Improved

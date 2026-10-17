@@ -598,3 +598,24 @@
     animation: none;
   }
 }
+.dictation-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dictation-preview-heading strong {
+  font-size: 12px;
+}
+.dictation-preview meter {
+  width: 90px;
+  max-width: 35%;
+}
+.dictation-preview p {
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+.dictation-preview small {
+  color: var(--muted);
+  font-size: 11px;
+}
