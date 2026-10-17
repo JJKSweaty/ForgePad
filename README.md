@@ -23,7 +23,7 @@ Release notes state whether a download is Apple notarized. Until a Developer ID 
 - **Editor layout:** drag the problem/editor divider, or focus it and use arrow keys, `Home`, or `End`. Hide the problem panel or sidebar when you want more editing space; ForgePad remembers these choices. Narrow windows stack the problem above the editor.
 - **Drafts and checkpoints:** drafts autosave as you type. **Save checkpoint** (`⌘/Ctrl + S`) keeps a manual restore point on this device. **Reset to starter files** and **Restore saved checkpoint** confirm before replacing the draft; the replacement autosaves. Compiler diagnostics appear below the editor and link to their source line.
 - **Design, theory, debugging:** use the question's writing workspace and thinking prompts. Submit a response for self-review.
-- **Hints:** view progressive hints or use your optional local model as a reasoning coach.
+- **Hints:** view progressive hints or use OpenRouter or an optional local model as a reasoning coach.
 - **Mock Interview:** start a guided rehearsal, pause when needed, then finish and review its replay. Guided interviews work without an AI provider.
 - **Voice:** in **Settings → Interview & AI**, enable built-in speech and download Parakeet Ultra. Dictation stays editable. Optional local cleanup suggests changes for you to review before applying.
 

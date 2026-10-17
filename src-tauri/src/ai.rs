@@ -105,7 +105,7 @@ impl Models {
             .filter(|m| selected.as_ref().is_none_or(|id| id == &m.id))
             .collect::<Vec<_>>();
         if models.is_empty() {
-            bail!("Local AI is off. Choose a model in Settings → Interview & AI → Local reasoning coach. Prepared hints and practice work without AI.");
+            bail!("Local AI is off. Choose a model in Settings → Interview & AI → Local model (optional). Prepared hints and practice work without AI.");
         }
         let _priority = if interactive {
             self.foreground.fetch_add(1, Ordering::SeqCst);

@@ -903,6 +903,14 @@ impl Service {
                 )?;
                 let mut out = schema::candidate(&q);
                 out["coaching_available"] = json!(self.active_session()?["strict"] != true);
+                out["coach_provider"] = json!(if self.openrouter_enabled() {
+                    "openrouter"
+                } else {
+                    "local"
+                });
+                if self.openrouter_enabled() {
+                    out["coach_model"] = self.store.get("settings", "openrouter")?["model"].clone();
+                }
                 // Strict sessions never expose prepared hints or follow-up answers to assistants or candidates.
                 if self.active_session()?.get("strict") == Some(&json!(true)) {
                     out["hints"] = json!([]);

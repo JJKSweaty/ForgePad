@@ -170,7 +170,7 @@ describe("calendar semantics", () => {
   });
 });
 
-it("starts with 13 weeks and provides daily numbers without relying on color", () => {
+it("starts with 52 weeks and provides daily numbers without relying on color", () => {
   render(
     <Heatmap
       days={days}
@@ -182,9 +182,9 @@ it("starts with 13 weeks and provides daily numbers without relying on color", (
       onSync={vi.fn()}
     />,
   );
-  expect(document.querySelectorAll(".calendar-cell")).toHaveLength(91);
+  expect(document.querySelectorAll(".calendar-cell")).toHaveLength(364);
   expect(
-    screen.getByText("4 practice actions in the last 13 weeks"),
+    screen.getByText("4 practice actions in the last 52 weeks"),
   ).toBeTruthy();
   fireEvent.click(screen.getByText("Daily activity counts"));
   expect(
@@ -196,7 +196,7 @@ it("starts with 13 weeks and provides daily numbers without relying on color", (
   expect(row?.textContent).toContain("Dec 31, 2025");
   expect(
     screen
-      .getByRole("group", { name: "13-week practice actions calendar" })
+      .getByRole("group", { name: "52-week practice actions calendar" })
       .getAttribute("aria-describedby"),
   ).toBeTruthy();
 });

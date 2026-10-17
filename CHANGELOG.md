@@ -1,5 +1,13 @@
 # ForgePad release notes
 
+## 0.3.8 — 2026-10-17
+
+### Fixed
+- Practice coaching now honors the enabled OpenRouter key and model used by interviews, with accurate provider labels and no silent local fallback after cloud errors.
+
+### Improved
+- Use the full Dashboard width for activity, keep the sidebar toggle in a stable upper-left location, and share OpenRouter settings with the practice reasoning coach.
+
 ## 0.3.7 — 2026-10-17
 
 ### Improved

@@ -90,7 +90,7 @@ export default function LocalCoachSettings() {
       setNotice(
         disconnect
           ? "Local coach turned off."
-          : "Local coach is ready. Open Hints on a question to start.",
+          : "Local model saved. Coaching uses OpenRouter while it is enabled above.",
       );
     } catch (e) {
       setError(message(e));
@@ -102,9 +102,10 @@ export default function LocalCoachSettings() {
     <section className="settings-section local-coach-settings">
       <div className="settings-title-row">
         <div>
-          <h3>Local reasoning coach</h3>
+          <h3>Local model (optional)</h3>
           <p className="settings-description">
-            Talk through hints and answers with a model running on your Mac.
+            Used for coaching and interviews when OpenRouter replies are off.
+            Transcript cleanup always uses your local model.
           </p>
         </div>
         <span className="badge">{saved.length ? "Enabled" : "Optional"}</span>
@@ -160,7 +161,7 @@ export default function LocalCoachSettings() {
           disabled={busy || !ready || !selected}
           onClick={() => void save()}
         >
-          Use local coach
+          Save local model
         </button>
         {saved.length > 0 && (
           <button disabled={busy} onClick={() => void save(true)}>

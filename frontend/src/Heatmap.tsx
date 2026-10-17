@@ -35,7 +35,8 @@ export function Heatmap({
   onPractice: (id: string) => void;
   onSession: (id: string) => void;
 }) {
-  const [weeks, setWeeks] = useState(13);
+  const [weeks, setWeeks] = useState(52);
+  const [scrollable, setScrollable] = useState(false);
   const days = useMemo(() => allDays.slice(-weeks * 7), [allDays, weeks]);
   const [dataset, setDataset] = useState<Dataset>("activity"),
     [selected, setSelected] = useState<ActivityDay | null>(null),
@@ -51,6 +52,20 @@ export function Heatmap({
     [focus, setFocus] = useState(
       days.reduce((last, d, i) => (d.future ? last : i), 0),
     );
+  const calendarScroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const viewport = calendarScroll.current;
+    if (!viewport) return;
+    const showRecent = () => {
+      viewport.scrollLeft = viewport.scrollWidth - viewport.clientWidth;
+      setScrollable(viewport.scrollWidth > viewport.clientWidth);
+    };
+    showRecent();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(showRecent);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [weeks, dataset, github?.connected, github?.calendar]);
   const instructions = useId();
   const tooltip = useId(),
     buttons = useRef<(HTMLButtonElement | null)[]>([]),
@@ -234,7 +249,12 @@ export function Heatmap({
             Use arrow keys to move between days, Home / End within a week, and
             Enter or Space for details. Daily counts are also available below.
           </p>
-          <div className="calendar-scroll">
+          {scrollable && (
+            <p className="calendar-scroll-hint muted-text">
+              Scroll horizontally to see earlier weeks.
+            </p>
+          )}
+          <div className="calendar-scroll" ref={calendarScroll}>
             <div
               className="calendar"
               role="group"
@@ -243,7 +263,8 @@ export function Heatmap({
               style={
                 {
                   "--calendar-weeks": weeks,
-                  "--calendar-width": weeks === 52 ? "740px" : "240px",
+                  "--calendar-width": weeks === 52 ? "568px" : "0px",
+                  "--calendar-cell-height": weeks === 52 ? "18px" : "24px",
                 } as React.CSSProperties
               }
             >

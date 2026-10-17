@@ -331,3 +331,23 @@ it("describes a runner failure without reporting a misleading zero-test pass cou
   await screen.findByText("Runner unavailable · no tests ran");
   expect(screen.queryByText("0 / 0 tests passed")).toBeNull();
 });
+
+it("identifies OpenRouter coaching and its data flow before asking", async () => {
+  const user = userEvent.setup();
+  open({ ...base, coach_provider: "openrouter", coach_model: "test/model" });
+  await screen.findByRole("heading", { name: "Build your approach" });
+  await user.click(screen.getByRole("tab", { name: "Hints" }));
+  const coach = screen.getByRole("region", { name: "Reasoning coach" });
+  expect(within(coach).getByText("OpenRouter")).toBeTruthy();
+  expect(within(coach).getByText(/Model: test\/model/)).toBeTruthy();
+  expect(
+    within(coach).getByText(
+      /answer, code and recent coach messages are sent to OpenRouter/,
+    ),
+  ).toBeTruthy();
+  expect(within(coach).queryByText("On device")).toBeNull();
+  await user.click(
+    within(coach).getByRole("button", { name: "Help me reason" }),
+  );
+  await within(coach).findByText("How will you handle a full queue?");
+});

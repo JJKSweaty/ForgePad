@@ -86,12 +86,11 @@ export default function App() {
     ),
     [search, setSearch] = useState(false),
     [libraryFilters, setLibraryFilters] = useState(defaultLibraryFilters);
-  const hideSidebarButton = useRef<HTMLButtonElement>(null);
-  const showSidebarButton = useRef<HTMLButtonElement>(null);
+  const sidebarButton = useRef<HTMLButtonElement>(null);
   const sidebarInteraction = useRef(false);
   useEffect(() => {
     if (!sidebarInteraction.current) return;
-    (sidebarHidden ? showSidebarButton : hideSidebarButton).current?.focus();
+    sidebarButton.current?.focus();
     sidebarInteraction.current = false;
   }, [sidebarHidden]);
   const refresh = useCallback(async () => {
@@ -274,19 +273,23 @@ export default function App() {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
+      <button
+        className="icon-button sidebar-toggle"
+        ref={sidebarButton}
+        aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+        aria-controls="workspace-sidebar"
+        aria-expanded={!sidebarHidden}
+        title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+        onClick={toggleSidebar}
+      >
+        {sidebarHidden ? (
+          <PanelLeftOpen size={19} />
+        ) : (
+          <PanelLeftClose size={19} />
+        )}
+      </button>
       <aside className="sidebar" id="workspace-sidebar" hidden={sidebarHidden}>
         <div className="sidebar-heading">
-          <button
-            className="icon-button"
-            ref={hideSidebarButton}
-            aria-label="Hide sidebar"
-            aria-controls="workspace-sidebar"
-            aria-expanded={true}
-            title="Hide sidebar"
-            onClick={toggleSidebar}
-          >
-            <PanelLeftClose size={18} />
-          </button>
           <button
             className="brand"
             onClick={() => navigate("dashboard")}
@@ -359,23 +362,6 @@ export default function App() {
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          {sidebarHidden && (
-            <button
-              className="icon-button sidebar-toggle"
-              ref={showSidebarButton}
-              aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-              aria-controls="workspace-sidebar"
-              aria-expanded={!sidebarHidden}
-              title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-              onClick={toggleSidebar}
-            >
-              {sidebarHidden ? (
-                <PanelLeftOpen size={18} />
-              ) : (
-                <PanelLeftClose size={18} />
-              )}
-            </button>
-          )}
           <div className="breadcrumbs">
             <span>Workspace</span>
             <ChevronRight size={13} />

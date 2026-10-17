@@ -27,6 +27,8 @@ export type Question = {
   session_id?: string;
   latest_result?: string;
   coaching_available?: boolean;
+  coach_provider?: "openrouter" | "local";
+  coach_model?: string;
   has_tests?: boolean;
   test_config?: {
     mode?: string;

@@ -630,7 +630,7 @@ label {
   column-gap: 9px;
   row-gap: 6px;
   min-width: calc(var(--calendar-width) + 37px);
-  max-width: calc(var(--calendar-weeks) * 22px + 37px);
+  width: 100%;
 }
 .calendar-months {
   grid-column: 2;
@@ -655,7 +655,7 @@ label {
   grid-row: 2;
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(7, 1fr);
+  grid-template-rows: repeat(7, var(--calendar-cell-height));
   grid-template-columns: repeat(var(--calendar-weeks), minmax(0, 1fr));
   gap: 4px;
 }
@@ -664,7 +664,7 @@ label {
   min-height: 0;
   width: 100%;
   height: auto;
-  aspect-ratio: 1;
+  aspect-ratio: auto;
   border: 0;
   border-radius: 2px;
   background: var(--activity-0);

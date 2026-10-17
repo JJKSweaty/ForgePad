@@ -108,6 +108,7 @@ test("daily activity uses normal row headers, aligned counts, and bounded readab
     });
   });
   await page.goto("/");
+  await page.getByLabel("Activity range").selectOption("13");
   await page.getByText("Daily activity counts", { exact: true }).click();
   const counts = page.locator(".activity-counts");
   for (const theme of ["light", "dark"]) {
@@ -262,5 +263,66 @@ test("Progress and Roadmaps retain clear spacing and status cues without page ov
       .locator(".topic-node")
       .first()
       .screenshot({ path: testInfo.outputPath(`roadmap-dark-${width}.png`) });
+  }
+});
+
+test("activity fills the workspace and the sidebar control stays in one place", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await expect(page.getByLabel("Activity range")).toHaveValue("52");
+  for (const width of [2400, 1440, 760, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const weeks of ["52", "13"]) {
+      await page.getByLabel("Activity range").selectOption(weeks);
+      const control = page.locator(".app > .sidebar-toggle");
+      for (const hidden of [false, true]) {
+        const before = (await control.boundingBox())!;
+        await expect(control).toHaveAttribute("aria-expanded", String(!hidden));
+        expect(before.x).toBeLessThan(24);
+        expect(before.y).toBeLessThan(24);
+        const calendar = (await page.locator(".calendar").boundingBox())!;
+        const scroll = (await page.locator(".calendar-scroll").boundingBox())!;
+        expect(calendar.width).toBeGreaterThanOrEqual(scroll.width - 5);
+        if (width >= 760)
+          expect(calendar.width).toBeLessThanOrEqual(scroll.width + 5);
+        expect(calendar.height).toBeLessThan(225);
+        await expect
+          .poll(() =>
+            page
+              .locator(".calendar-cell")
+              .last()
+              .evaluate((cell) => {
+                const day = cell.getBoundingClientRect();
+                const viewport = cell
+                  .closest(".calendar-scroll")!
+                  .getBoundingClientRect();
+                return (
+                  day.right <= viewport.right + 1 &&
+                  day.left >= viewport.left - 1
+                );
+              }),
+          )
+          .toBe(true);
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        if (weeks === "52")
+          await page.screenshot({
+            path: testInfo.outputPath(
+              `activity-width-${width}-${hidden ? "hidden" : "open"}.png`,
+            ),
+            fullPage: true,
+            animations: "disabled",
+          });
+        await control.click();
+        const after = (await control.boundingBox())!;
+        expect(after.x).toBe(before.x);
+        expect(after.y).toBe(before.y);
+        await expect(control).toBeFocused();
+      }
+    }
   }
 });

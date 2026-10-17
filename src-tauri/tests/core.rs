@@ -547,3 +547,52 @@ async fn external_authoring_uses_the_same_visible_edge_case_contract() {
         .iter()
         .any(|e| e.contains("Duplicate test stimuli")));
 }
+
+#[tokio::test]
+async fn practice_coach_uses_shared_openrouter_selection_without_local_fallback() {
+    let (_dir, s) = workspace();
+    s.store
+        .save(
+            "settings",
+            &json!({"id":"openrouter","enabled":true,"model":"test/model"}),
+        )
+        .unwrap();
+    let question = s
+        .route("GET", "/questions/uart-frame-recovery", Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(question["coach_provider"], "openrouter");
+    assert_eq!(question["coach_model"], "test/model");
+    // No test credential exists: cloud selection must surface that error, not call local inference.
+    let error = s
+        .route(
+            "POST",
+            "/questions/uart-frame-recovery/coach",
+            json!({"message":"Help me reason"}),
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Reconnect OpenRouter"), "{error}");
+    s.store
+        .save(
+            "settings",
+            &json!({"id":"openrouter","enabled":false,"model":"test/model"}),
+        )
+        .unwrap();
+    let question = s
+        .route("GET", "/questions/uart-frame-recovery", Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(question["coach_provider"], "local");
+    let error = s
+        .route(
+            "POST",
+            "/questions/uart-frame-recovery/coach",
+            json!({"message":"Help me reason"}),
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Local AI is off"), "{error}");
+}

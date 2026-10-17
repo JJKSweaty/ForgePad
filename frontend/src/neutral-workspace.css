@@ -249,3 +249,46 @@
     align-self: flex-start;
   }
 }
+
+/* A stable upper-left chrome control, independent of sidebar visibility. */
+.app > .sidebar-toggle {
+  position: fixed;
+  top: 13px;
+  left: 12px;
+  z-index: 30;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  color: var(--text-secondary);
+  border-radius: 8px;
+}
+.app > .sidebar-toggle:hover {
+  background: var(--panel-hover);
+}
+.sidebar-heading {
+  margin-left: 44px;
+  min-height: 36px;
+}
+.sidebar-heading .brand small {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.sidebar-hidden .topbar {
+  padding-left: 64px;
+}
+.dashboard-page {
+  max-width: none;
+}
+@media (max-width: 850px) {
+  .sidebar-heading {
+    display: none;
+  }
+  .sidebar nav {
+    margin-top: 52px;
+  }
+}
+
+.calendar-scroll-hint {
+  font-size: 12px;
+  margin: 0 0 8px;
+}

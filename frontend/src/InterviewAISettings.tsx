@@ -42,9 +42,7 @@ export function InterviewAISettings() {
         ),
       );
       setKey("");
-      setNotice(
-        disconnect ? "OpenRouter disconnected." : "Interview AI saved.",
-      );
+      setNotice(disconnect ? "OpenRouter disconnected." : "AI settings saved.");
     } catch (e) {
       setError(message(e));
     } finally {
@@ -55,9 +53,10 @@ export function InterviewAISettings() {
     <section className="settings-section interview-ai-settings">
       <div className="settings-title-row">
         <div>
-          <h3>Interviewer</h3>
+          <h3>Reasoning coach &amp; interviewer</h3>
           <p className="settings-description">
-            Use OpenRouter for conversational replies and follow-up questions.
+            Use the same OpenRouter key and model for practice coaching and
+            interview replies.
           </p>
         </div>
         <span className="badge">
@@ -74,8 +73,10 @@ export function InterviewAISettings() {
           <span>
             <strong>AI replies</strong>
             <p>
-              Send your transcript, problem statement, and recent test results
-              to OpenRouter. Audio stays on this Mac.
+              When you ask the coach, send your question, answer, code and
+              recent coach messages to OpenRouter. Interviews send your
+              transcript, problem statement and recent test results. Audio stays
+              on this Mac.
             </p>
           </span>
           <input
@@ -140,7 +141,7 @@ export function InterviewAISettings() {
         )}
         <div className="button-row">
           <button className="primary" disabled={busy}>
-            {busy ? "Saving…" : "Save interviewer"}
+            {busy ? "Saving…" : "Save AI settings"}
           </button>
           {config.connected && (
             <button

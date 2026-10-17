@@ -18,6 +18,7 @@ export default function QuestionCoach({
   files: Record<string, string>;
   voice?: React.ReactNode;
 }) {
+  const cloud = question.coach_provider === "openrouter";
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,15 +61,26 @@ export default function QuestionCoach({
     }
   }
   return (
-    <section className="question-coach" aria-label="Local reasoning coach">
+    <section className="question-coach" aria-label="Reasoning coach">
       <div className="coach-heading">
         <Sparkles size={18} />
         <div>
           <h3>Think it through</h3>
-          <p>Your local model helps you find the next step.</p>
+          <p>
+            {cloud
+              ? "Your OpenRouter model helps you find the next step."
+              : "Your local model helps you find the next step."}
+          </p>
         </div>
-        <span className="badge">On device</span>
+        <span className="badge">{cloud ? "OpenRouter" : "On device"}</span>
       </div>
+      {cloud && (
+        <p className="coach-provider-note muted-text">
+          {question.coach_model && <span>Model: {question.coach_model}. </span>}
+          When you ask, your question, answer, code and recent coach messages
+          are sent to OpenRouter.
+        </p>
+      )}
       {!turns.length && (
         <button
           type="button"
@@ -85,7 +97,7 @@ export default function QuestionCoach({
       <div className="coach-turns" aria-live="polite">
         {turns.map((turn, i) => (
           <article className={`coach-turn ${turn.role}`} key={i}>
-            <strong>{turn.role === "user" ? "You" : "Local coach"}</strong>
+            <strong>{turn.role === "user" ? "You" : "Coach"}</strong>
             <p className="prose">{turn.content}</p>
           </article>
         ))}
@@ -103,7 +115,7 @@ export default function QuestionCoach({
         }}
       >
         <label className="sr-only" htmlFor={`coach-${question.id}`}>
-          Ask the local coach
+          Ask the reasoning coach
         </label>
         <textarea
           id={`coach-${question.id}`}
