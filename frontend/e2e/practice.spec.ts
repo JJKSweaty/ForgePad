@@ -439,6 +439,9 @@ test("since date and rendered attempts agree when profile and browser timezones 
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("button", { name: "Progress", exact: true })
     .click();
+  await expect(page.getByLabel("Attempt date range")).toHaveValue("all");
+  await expect(page.getByLabel("Attempts since")).toHaveCount(0);
+  await page.getByLabel("Attempt date range").selectOption("since");
   await page.getByLabel("Attempts since").fill("2026-10-17");
   await expect(page.locator(".history-table tbody tr")).toHaveCount(1);
   await expect(page.locator(".history-table tbody")).toContainText(

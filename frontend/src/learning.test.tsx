@@ -308,6 +308,14 @@ it("filters since a calendar day in the displayed profile timezone, including mi
       onDashboard={vi.fn()}
     />,
   );
+  expect(screen.queryByLabelText("Attempts since")).toBeNull();
+  expect(screen.getByLabelText("Attempt date range")).toHaveProperty(
+    "value",
+    "all",
+  );
+  fireEvent.change(screen.getByLabelText("Attempt date range"), {
+    target: { value: "since" },
+  });
   fireEvent.change(screen.getByLabelText("Attempts since"), {
     target: { value: "2026-10-17" },
   });
@@ -328,6 +336,7 @@ it("filters since a calendar day in the displayed profile timezone, including mi
   expect(screen.getByText("No attempts match these filters.")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
   expect(document.querySelectorAll(".history-table tbody tr")).toHaveLength(8);
+  expect(screen.queryByLabelText("Attempts since")).toBeNull();
   localStorage.removeItem("forgepad.v2.timezone");
 });
 

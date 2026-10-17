@@ -149,9 +149,10 @@ export function ProgressPage({
         ))}
       </section>
       <p className="muted-text compact-note">
-        All-time totals · completed questions are unique questions with passing
-        tests or a confident self assessment. Reviews due are scheduled from
-        each question’s latest attempt; viewing an old attempt is separate.
+        Attempts, passes and completed questions are all-time totals. Completed
+        questions are unique questions with passing tests or a confident self
+        assessment. Reviews due counts questions whose latest scheduled review is
+        due now; viewing an old attempt is separate.
       </p>
       {!progress.attempts.length && (
         <div className="compact-empty">
@@ -368,18 +369,35 @@ export function ProgressPage({
                   </option>
                 ))}
             </select>
-            <label>
-              Since{" "}
-              <input
-                type="date"
-                aria-label="Attempts since"
-                value={after}
-                onChange={(e) => {
-                  setAfter(e.target.value);
-                  setPage(0);
-                }}
-              />
-            </label>
+            <select
+              aria-label="Attempt date range"
+              value={after ? "since" : "all"}
+              onChange={(e) => {
+                setAfter(
+                  e.target.value === "since"
+                    ? calendarDate(new Date().toISOString(), timezone)
+                    : "",
+                );
+                setPage(0);
+              }}
+            >
+              <option value="all">All dates</option>
+              <option value="since">Since date</option>
+            </select>
+            {after && (
+              <label>
+                Since{" "}
+                <input
+                  type="date"
+                  aria-label="Attempts since"
+                  value={after}
+                  onChange={(e) => {
+                    setAfter(e.target.value);
+                    setPage(0);
+                  }}
+                />
+              </label>
+            )}
             {(query || result || type || after) && (
               <button
                 onClick={() => {
