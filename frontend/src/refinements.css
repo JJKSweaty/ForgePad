@@ -625,16 +625,17 @@ label {
 }
 .calendar {
   display: grid;
-  grid-template-columns: 28px minmax(740px, 1fr);
+  grid-template-columns: 28px minmax(var(--calendar-width), 1fr);
   grid-template-rows: 18px auto;
   column-gap: 9px;
   row-gap: 6px;
-  min-width: 780px;
+  min-width: calc(var(--calendar-width) + 37px);
+  max-width: calc(var(--calendar-weeks) * 22px + 37px);
 }
 .calendar-months {
   grid-column: 2;
   display: grid;
-  grid-template-columns: repeat(52, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--calendar-weeks), minmax(0, 1fr));
   gap: 4px;
   font-size: 10px;
   color: var(--muted);
@@ -655,7 +656,7 @@ label {
   display: grid;
   grid-auto-flow: column;
   grid-template-rows: repeat(7, 1fr);
-  grid-template-columns: repeat(52, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--calendar-weeks), minmax(0, 1fr));
   gap: 4px;
 }
 .calendar-cell {
@@ -1949,4 +1950,63 @@ label {
 }
 .session-stages li {
   font-size: 11px;
+}
+
+/* Keep the existing neutral surfaces and make the compact calendar readable. */
+.calendar-cell:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.activity-section .section-header,
+.activity-controls {
+  flex-wrap: wrap;
+}
+.calendar-instructions,
+.activity-counts {
+  font-size: 11px;
+  margin: 8px 0;
+}
+.activity-counts summary {
+  cursor: pointer;
+}
+.activity-counts-scroll {
+  max-height: 240px;
+  overflow: auto;
+  margin-top: 10px;
+}
+.activity-counts table {
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+}
+.activity-counts th,
+.activity-counts td {
+  padding: 6px 10px;
+}
+.dashboard-metric > .metric-note {
+  display: block;
+  max-width: none;
+}
+@media (max-width: 600px) {
+  .dashboard-page .metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 0;
+  }
+  .dashboard-metric:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .calendar-footer {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .continue-copy {
+    flex-basis: 100%;
+  }
+  .continue-practice > .primary {
+    margin-left: 0;
+  }
+  .dashboard-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

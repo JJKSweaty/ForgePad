@@ -45,6 +45,9 @@ function mount() {
       onSync={vi.fn()}
     />,
   );
+  fireEvent.change(screen.getByLabelText("Activity range"), {
+    target: { value: "52" },
+  });
   return { onPractice };
 }
 describe("calendar semantics", () => {
@@ -165,4 +168,35 @@ describe("calendar semantics", () => {
     fireEvent.keyDown(divider, { key: "End" });
     expect(change.mock.calls).toEqual([[38], [60]]);
   });
+});
+
+it("starts with 13 weeks and provides daily numbers without relying on color", () => {
+  render(
+    <Heatmap
+      days={days}
+      timezone="America/Toronto"
+      github={disconnected}
+      onPractice={vi.fn()}
+      onSession={vi.fn()}
+      onSettings={vi.fn()}
+      onSync={vi.fn()}
+    />,
+  );
+  expect(document.querySelectorAll(".calendar-cell")).toHaveLength(91);
+  expect(
+    screen.getByText("4 practice actions in the last 13 weeks"),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByText("Daily activity counts"));
+  expect(
+    screen.getByRole("region", { name: "Daily activity counts" }),
+  ).toBeTruthy();
+  const row = [...document.querySelectorAll(".activity-counts tbody tr")].find(
+    (r) => r.textContent?.endsWith("4"),
+  );
+  expect(row?.textContent).toContain("Dec 31, 2025");
+  expect(
+    screen
+      .getByRole("group", { name: "13-week practice actions calendar" })
+      .getAttribute("aria-describedby"),
+  ).toBeTruthy();
 });

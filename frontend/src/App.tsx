@@ -1,3 +1,4 @@
+import { defaultLibraryFilters } from "./libraryFilters";
 import { version as appVersion } from "../package.json";
 import { flushDrafts } from "./drafts";
 import {
@@ -84,7 +85,7 @@ export default function App() {
       () => localStorage.getItem("forgepad.sidebar.hidden") === "true",
     ),
     [search, setSearch] = useState(false),
-    [libraryTopic, setLibraryTopic] = useState("");
+    [libraryFilters, setLibraryFilters] = useState(defaultLibraryFilters);
   const hideSidebarButton = useRef<HTMLButtonElement>(null);
   const showSidebarButton = useRef<HTMLButtonElement>(null);
   const sidebarInteraction = useRef(false);
@@ -462,7 +463,9 @@ export default function App() {
                     onRoadmap={openRoadmap}
                     onSettings={() => settings("github")}
                     onBrowse={(topic = "") =>
-                      navigate("questions", () => setLibraryTopic(topic))
+                      navigate("questions", () =>
+                        setLibraryFilters((current) => ({ ...current, topic })),
+                      )
                     }
                   />
                 )}
@@ -475,7 +478,8 @@ export default function App() {
                 {page === "questions" && (
                   <QuestionBank
                     questions={questions}
-                    initialTopic={libraryTopic}
+                    filters={libraryFilters}
+                    onFiltersChange={setLibraryFilters}
                     onSession={openSession}
                     onPractice={practice}
                     refresh={refresh}
@@ -521,7 +525,9 @@ export default function App() {
                 {page === "progress" && (
                   <ProgressPage
                     onBrowse={(topic = "") =>
-                      navigate("questions", () => setLibraryTopic(topic))
+                      navigate("questions", () =>
+                        setLibraryFilters((current) => ({ ...current, topic })),
+                      )
                     }
                     onDashboard={() => navigate("dashboard")}
                     progress={progress}

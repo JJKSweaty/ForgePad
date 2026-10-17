@@ -19,7 +19,7 @@ import type {
 } from "./dashboardData";
 import { EmptyState } from "./ui";
 export function Heatmap({
-  days,
+  days: allDays,
   timezone,
   github,
   onSettings,
@@ -35,6 +35,8 @@ export function Heatmap({
   onPractice: (id: string) => void;
   onSession: (id: string) => void;
 }) {
+  const [weeks, setWeeks] = useState(13);
+  const days = useMemo(() => allDays.slice(-weeks * 7), [allDays, weeks]);
   const [dataset, setDataset] = useState<Dataset>("activity"),
     [selected, setSelected] = useState<ActivityDay | null>(null),
     [details, setDetails] = useState<ActivityEvent[] | null>(null),
@@ -49,6 +51,7 @@ export function Heatmap({
     [focus, setFocus] = useState(
       days.reduce((last, d, i) => (d.future ? last : i), 0),
     );
+  const instructions = useId();
   const tooltip = useId(),
     buttons = useRef<(HTMLButtonElement | null)[]>([]),
     lastAnchor = useRef<HTMLButtonElement | null>(null),
@@ -135,11 +138,32 @@ export function Heatmap({
           <h2 id="activity-title">Activity</h2>
           <p>
             {dataset === "github"
-              ? "GitHub contributions in the last 52 weeks"
-              : `${total.toLocaleString()} ${unit} in the last 52 weeks`}
+              ? `GitHub contributions in the last ${weeks} weeks`
+              : `${total.toLocaleString()} ${unit} in the last ${weeks} weeks`}
           </p>
         </div>
         <div className="activity-controls">
+          <label className="sr-only" htmlFor="activity-range">
+            Activity range
+          </label>
+          <select
+            id="activity-range"
+            value={weeks}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              setWeeks(next);
+              setFocus(
+                allDays
+                  .slice(-next * 7)
+                  .reduce((last, d, i) => (d.future ? last : i), 0),
+              );
+              setSelected(null);
+              setHover(null);
+            }}
+          >
+            <option value={13}>Last 13 weeks</option>
+            <option value={52}>Last 52 weeks</option>
+          </select>
           <label className="sr-only" htmlFor="activity-dataset">
             Activity dataset
           </label>
@@ -206,11 +230,22 @@ export function Heatmap({
           }}
         >
           <Popover.Anchor virtualRef={anchor} />
+          <p id={instructions} className="muted-text calendar-instructions">
+            Use arrow keys to move between days, Home / End within a week, and
+            Enter or Space for details. Daily counts are also available below.
+          </p>
           <div className="calendar-scroll">
             <div
               className="calendar"
               role="group"
-              aria-label={`52-week ${unit} calendar`}
+              aria-label={`${weeks}-week ${unit} calendar`}
+              aria-describedby={instructions}
+              style={
+                {
+                  "--calendar-weeks": weeks,
+                  "--calendar-width": weeks === 52 ? "740px" : "240px",
+                } as React.CSSProperties
+              }
             >
               <div className="calendar-months">
                 {months.map((m) => (
@@ -236,7 +271,8 @@ export function Heatmap({
                     className={`calendar-cell ${selected?.date === d.date ? "selected" : ""}`}
                     disabled={d.future}
                     tabIndex={i === focus ? 0 : -1}
-                    aria-label={`${dayLabel(d.date)}: ${values[i]} ${unit}`}
+                    aria-label={`${dayLabel(d.date)}: ${values[i]} ${unit}${d.future ? "; future date" : ""}`}
+                    aria-pressed={selected?.date === d.date}
                     aria-describedby={
                       hover?.date === d.date ? tooltip : undefined
                     }
@@ -270,6 +306,40 @@ export function Heatmap({
               <span>More</span>
             </div>
           </div>
+          <details className="activity-counts">
+            <summary>Daily activity counts</summary>
+            <div
+              className="activity-counts-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Daily activity counts"
+            >
+              <table>
+                <caption>
+                  {unit} · {timezone} · last {weeks} weeks
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">{unit}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {days
+                    .map(
+                      (d, i) =>
+                        !d.future && (
+                          <tr key={d.date}>
+                            <th scope="row">{dayLabel(d.date)}</th>
+                            <td>{values[i]}</td>
+                          </tr>
+                        ),
+                    )
+                    .reverse()}
+                </tbody>
+              </table>
+            </div>
+          </details>
           {!total && (
             <p className="calendar-empty">
               {dataset === "time"

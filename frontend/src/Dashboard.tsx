@@ -7,6 +7,7 @@ import {
   Play,
   RotateCcw,
 } from "lucide-react";
+import { useLearningTimezone } from "./useLearningTimezone";
 import { shortDate } from "./learning";
 import { api, message, post } from "./api";
 import { native, nativeEvents } from "./native";
@@ -36,12 +37,8 @@ export function Dashboard({
   const [data, setData] = useState<DashboardData | null>(null),
     [github, setGithub] = useState<GitHubStatus | null>(null),
     [error, setError] = useState(""),
-    [continuing, setContinuing] = useState(false),
-    [timezone, setTimezone] = useState(
-      () =>
-        localStorage.getItem("forgepad.v2.timezone") ??
-        Intl.DateTimeFormat().resolvedOptions().timeZone,
-    );
+    [continuing, setContinuing] = useState(false);
+  const timezone = useLearningTimezone();
   const load = useCallback(async () => {
     const d = await api<DashboardData>(
       `/dashboard?timezone=${encodeURIComponent(timezone)}`,
@@ -84,17 +81,6 @@ export function Dashboard({
       dispose?.();
     };
   }, [load]);
-  useEffect(() => {
-    if (!native) return;
-    void api<{ timezone: string | null }>("/settings/profile")
-      .then((p) => {
-        if (p.timezone) {
-          localStorage.setItem("forgepad.v2.timezone", p.timezone);
-          setTimezone(p.timezone);
-        }
-      })
-      .catch(() => {});
-  }, []);
   const navigate = (next: Continuation) => {
     if (next.kind === "session" && next.session) onSession(next.session.id);
     else if (next.question)
@@ -240,22 +226,26 @@ export function Dashboard({
       <section className="metric-strip" aria-label="Preparation overview">
         <Metric
           label="Questions completed"
-          value={(m.completed_questions ?? m.questions_solved).toLocaleString()}
-          note="Unique questions with passing tests or a confident self assessment"
+          value={m.completed_questions?.toLocaleString() ?? "Not available"}
+          note="All time · unique questions with passing tests or a confident self assessment"
         />
         <Metric
           label="Practice time"
-          value={duration(m.practice_seconds)}
+          value={
+            data.tracking.available === false
+              ? "Not available"
+              : duration(m.practice_seconds)
+          }
           note={
             data.tracking.available === false
               ? "Available in the desktop app"
-              : "Focused time · idle gaps excluded"
+              : "All time · focused practice; idle gaps excluded"
           }
         />
         <Metric
           label="Submitted attempts"
-          value={(m.attempts ?? 0).toLocaleString()}
-          note="Saved assessments; repeated submissions are separate attempts"
+          value={m.attempts?.toLocaleString() ?? "Not available"}
+          note="All time · saved assessments; repeat submissions count separately"
         />
         <Metric
           label="Current streak"
@@ -263,15 +253,6 @@ export function Dashboard({
           note="Recorded practice consistency"
         />
       </section>
-      <Heatmap
-        days={data.days}
-        timezone={timezone}
-        github={github}
-        onSettings={onSettings}
-        onSync={syncGithub}
-        onPractice={onPractice}
-        onSession={onSession}
-      />
       <section
         className="learning-section recommendations"
         aria-label="Recommended next actions"
@@ -376,6 +357,15 @@ export function Dashboard({
             ))}
         </div>
       </section>
+      <Heatmap
+        days={data.days}
+        timezone={timezone}
+        github={github}
+        onSettings={onSettings}
+        onSync={syncGithub}
+        onPractice={onPractice}
+        onSession={onSession}
+      />
       <div className="dashboard-bottom">
         <section aria-labelledby="recent-title">
           <div className="section-header">
@@ -420,7 +410,7 @@ export function Dashboard({
         </section>
         <section aria-labelledby="reviews-title">
           <div className="section-header">
-            <h2 id="reviews-title">Upcoming reviews</h2>
+            <h2 id="reviews-title">Reviews due</h2>
             <span className="subtle-count">{data.due_reviews.length} due</span>
           </div>
           {data.due_reviews.length ? (
@@ -467,7 +457,7 @@ function Metric({
     <div className="dashboard-metric">
       <span>{label}</span>
       <strong>{value}</strong>
-      <span className="sr-only">{note}</span>
+      <small className="metric-note">{note}</small>
     </div>
   );
 }

@@ -1,16 +1,19 @@
+import { useState } from "react";
+import { defaultLibraryFilters } from "./libraryFilters";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QuestionBank } from "./QuestionBank";
+import { QuestionBank as ControlledQuestionBank } from "./QuestionBank";
 import { ProgressPage } from "./ProgressPage";
 import { TestCasesEditor } from "./TestCasesEditor";
-import { questionAction } from "./learning";
+import { calendarDate, questionAction } from "./learning";
 import type { Progress, Question } from "./api";
 const { api, post } = vi.hoisted(() => ({ api: vi.fn(), post: vi.fn() }));
 vi.mock("./api", async (original) => ({
@@ -18,6 +21,21 @@ vi.mock("./api", async (original) => ({
   api,
   post,
 }));
+function QuestionBank(
+  props: Omit<
+    React.ComponentProps<typeof ControlledQuestionBank>,
+    "filters" | "onFiltersChange"
+  >,
+) {
+  const [filters, onFiltersChange] = useState(defaultLibraryFilters);
+  return (
+    <ControlledQuestionBank
+      {...props}
+      filters={filters}
+      onFiltersChange={onFiltersChange}
+    />
+  );
+}
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -173,7 +191,7 @@ it("fetches exact attempt evidence on demand and supports targeted practice and 
     screen.getByRole("button", { name: /memory.*1 unsuccessful/ }),
   );
   expect(browse).toHaveBeenCalledWith("memory");
-  await user.click(screen.getAllByRole("button", { name: "Review" })[0]);
+  await user.click(screen.getAllByRole("button", { name: "View attempt" })[0]);
   const dialog = await screen.findByRole("dialog");
   await within(dialog).findByText("// immutable submitted code");
   expect(api).toHaveBeenCalledWith("/attempts/a1");
@@ -220,7 +238,9 @@ it("handles detail loading errors without discarding saved history", async () =>
       onDashboard={vi.fn()}
     />,
   );
-  await userEvent.click(screen.getAllByRole("button", { name: "Review" })[0]);
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "View attempt" })[0],
+  );
   expect((await screen.findByRole("alert")).textContent).toContain(
     "Storage unavailable",
   );
@@ -253,4 +273,75 @@ it("edits edge-case coverage while keeping every test visible", async () => {
       category: "negative",
     }),
   ]);
+});
+
+it("filters since a calendar day in the displayed profile timezone, including midnight", () => {
+  localStorage.setItem("forgepad.v2.timezone", "America/Toronto");
+  const attempts = [
+    ...Array.from({ length: 6 }, (_, i) => ({
+      ...progress.attempts[0],
+      id: `previous-${i}`,
+      title: `October 16 attempt ${i}`,
+      created_at: `2026-10-17T03:59:${String(54 + i).padStart(2, "0")}Z`,
+    })),
+    {
+      ...progress.attempts[0],
+      id: "midnight",
+      title: "At midnight",
+      created_at: "2026-10-17T04:00:00Z",
+      duration_seconds: 0,
+    },
+    {
+      ...progress.attempts[0],
+      id: "after",
+      title: "After midnight",
+      created_at: "2026-10-17T04:00:01Z",
+    },
+  ];
+  render(
+    <ProgressPage
+      progress={{ ...progress, attempts }}
+      questions={[question]}
+      refresh={async () => {}}
+      onPractice={vi.fn()}
+      onBrowse={vi.fn()}
+      onDashboard={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("Attempts since"), {
+    target: { value: "2026-10-17" },
+  });
+  expect(document.querySelectorAll(".history-table tbody tr")).toHaveLength(2);
+  expect(screen.queryByText("October 16 attempt 0")).toBeNull();
+  expect(screen.getByText("At midnight")).toBeTruthy();
+  expect(
+    screen.getByText(/Since 2026-10-17 \(inclusive\).*America\/Toronto/),
+  ).toBeTruthy();
+  expect(screen.getByText("Not recorded")).toBeTruthy();
+  expect(screen.getByText("0 min")).toBeTruthy();
+  expect(document.querySelector(".history-table time")?.textContent).toContain(
+    "Oct 17, 2026",
+  );
+  fireEvent.change(screen.getByLabelText("Attempts since"), {
+    target: { value: "2026-10-18" },
+  });
+  expect(screen.getByText("No attempts match these filters.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(document.querySelectorAll(".history-table tbody tr")).toHaveLength(8);
+  localStorage.removeItem("forgepad.v2.timezone");
+});
+
+it.each([
+  ["2026-03-08T04:59:59Z", "2026-03-07"],
+  ["2026-03-08T05:00:00Z", "2026-03-08"],
+  ["2026-03-09T03:59:59Z", "2026-03-08"],
+  ["2026-03-09T04:00:00Z", "2026-03-09"],
+  ["2026-11-01T03:59:59Z", "2026-10-31"],
+  ["2026-11-01T04:00:00Z", "2026-11-01"],
+  ["2026-11-01T05:30:00Z", "2026-11-01"],
+  ["2026-11-01T06:30:00Z", "2026-11-01"],
+  ["2026-11-02T04:59:59Z", "2026-11-01"],
+  ["2026-11-02T05:00:00Z", "2026-11-02"],
+])("keeps daylight-saving calendar dates for %s", (timestamp, expected) => {
+  expect(calendarDate(timestamp, "America/Toronto")).toBe(expected);
 });

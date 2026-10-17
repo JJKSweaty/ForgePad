@@ -1,5 +1,10 @@
 # ForgePad release notes
 
+## 0.3.5 — 2026-10-17
+
+### Improved
+- Keep Progress date filters and timestamps in the profile timezone, preserve Question Library filters during navigation, clarify recorded metrics, and prioritize next actions above an accessible compact activity calendar.
+
 ## 0.3.4 — 2026-10-16
 
 ### Improved

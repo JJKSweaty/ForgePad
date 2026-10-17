@@ -1,0 +1,22 @@
+# Dashboard, Progress and Question Library review
+
+## Data trace and focused changes
+
+- `App.refresh` requests `/progress?compact=true`; the native handler uses `Service::compact_progress` and the Python implementation uses `learning.progress`. Neither accepts a date filter. Progress filters the returned attempts in the client. The old comparison and `shortDate` both used browser time, so the exact reported six-row mismatch was not independently reproduced from that code. Dashboard separately honored the profile timezone. Both pages now use `useLearningTimezone`, and Progress compares and formats calendar dates in that timezone. “Since” includes the entire selected calendar date and all later dates; the visible status states the timezone, boundary, and matching/total count. No server query or timestamp records were changed.
+- Dashboard's completed-question and attempt totals come from the Progress summary. Completion means a unique question with passing tests or a confident written self assessment. Repeated saved assessments are separate attempts. Progress's passed-attempt count counts passing deterministic test submissions. These totals are all time; history filters only affect the table. Missing summary fields now read “Not available” rather than zero or a differently defined solve count.
+- Native `activity::dashboard_totals` sums recorded focused practice seconds across activity events. The Python dashboard explicitly reports tracking unavailable, which now reads “Not available.” No per-attempt duration is created in the current submission paths (`Service::attempt` / backend attempt creation). Missing `duration_seconds` reads “Not recorded”; a stored zero remains a real zero. Question estimates and compiler runtime are not used as substitutes.
+- Due reviews remain the latest attempt per question with a saved `review_due_at` at or before now, as computed by the existing services. Historical “Review” buttons now say “View attempt.” No scheduling, completion, streak, or mastery rules changed.
+- The primary continuation remains first. Next actions and learning-path progress precede Activity. Activity initially shows 13 weeks, with a 52-week selector; calendar cell size is capped so fewer weeks actually occupy less space. Narrow layouts stack the primary card and recent/review columns, retaining existing tokens and surfaces.
+- Question Library previously lost every local filter when navigation unmounted it; `initialTopic` could also restore an outdated topic. App now owns search, type, difficulty, topic, progress state, bookmarks, archives, and sort. Plain navigation retains them. A targeted Browse action updates only the topic; other active chips remain visible and removable. Clear filters is explicit, including in empty results. Persistence lasts for the running App session, not a reload or restart.
+- Heatmap retains its existing one-tab-stop arrow navigation, date/count names, Enter/Space activation, and Radix day details. Added visible instructions, a visible focus outline, selected state, future-date labels, and an expandable, scrollable daily-count table including zero days. Dataset and range selection apply to both representations.
+
+## Validation
+
+- Frontend: 46 Vitest tests passed, including an inclusive-midnight UI regression, ten Toronto DST boundary cases, unknown versus zero duration, and numerical heatmap access.
+- Four focused Playwright tests passed against the disposable native QA service: goal-to-filter navigation, filter retention and explicit clearing, responsive hierarchy/keyboard activity access, and a six-prior-day-attempt timezone regression. Checked 1280, 760 and 390px widths with both activity ranges; screenshots visually inspected. No page-level horizontal overflow.
+- TypeScript/Vite production build, release metadata check, publication guard and whitespace check passed. Existing Monaco bundle-size warning remains.
+- Compiler execution is outside this change; the local QA runner reported setup required. The focused browser tests do not require compilation.
+
+## Product decisions left open
+
+Per-attempt duration has no recording definition in the current model. Choosing elapsed time versus focused time, and how to attribute multiple visits, requires product input before adding capture. No duration is inferred here. Persisting Library preferences across app restarts would also need an explicit lifetime/account scope; this change only retains filters during navigation.

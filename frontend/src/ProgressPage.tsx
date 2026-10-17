@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { Download, Plus, Pencil, Trash2, ArrowRight } from "lucide-react";
 import { api, download, message, post, readable } from "./api";
 import type { Attempt, Goal, Progress, Question } from "./api";
-import { attemptOutcome, shortDate } from "./learning";
+import { attemptOutcome, calendarDate, shortDate } from "./learning";
+import { useLearningTimezone } from "./useLearningTimezone";
 import { RecordDialog } from "./RecordDialog";
 
 export function ProgressPage({
@@ -33,6 +34,7 @@ export function ProgressPage({
     [type, setType] = useState(""),
     [after, setAfter] = useState(""),
     [page, setPage] = useState(0);
+  const timezone = useLearningTimezone();
   const detailRequest = useRef(0);
   const title = (id: string) => questions.find((q) => q.id === id)?.title ?? id;
   const attemptType = (a: Attempt) =>
@@ -52,9 +54,7 @@ export function ProgressPage({
             ? !!a.confidence
             : !!a.result && a.result.status !== "passed")) &&
       (!type || attemptType(a) === type) &&
-      (!after ||
-        new Date(a.created_at).getTime() >=
-          new Date(`${after}T00:00:00`).getTime()),
+      (!after || calendarDate(a.created_at, timezone) >= after),
   );
   const pages = Math.max(1, Math.ceil(history.length / 30)),
     current = Math.min(page, pages - 1);
@@ -134,9 +134,12 @@ export function ProgressPage({
         aria-label="Learning summary"
       >
         {[
-          ["Attempts", summary.attempts ?? progress.attempts.length],
-          ["Passed attempts", summary.passed_attempts ?? 0],
-          ["Questions completed", summary.completed_questions ?? 0],
+          ["Submitted attempts", summary.attempts ?? progress.attempts.length],
+          ["Passed attempts", summary.passed_attempts ?? "Not available"],
+          [
+            "Questions completed",
+            summary.completed_questions ?? "Not available",
+          ],
           ["Reviews due", summary.due_reviews ?? progress.due_reviews.length],
         ].map(([label, value]) => (
           <div className="metric" key={label}>
@@ -145,6 +148,11 @@ export function ProgressPage({
           </div>
         ))}
       </section>
+      <p className="muted-text compact-note">
+        All-time totals · completed questions are unique questions with passing
+        tests or a confident self assessment. Reviews due are scheduled from
+        each question’s latest attempt; viewing an old attempt is separate.
+      </p>
       {!progress.attempts.length && (
         <div className="compact-empty">
           <strong>Build your learning record</strong>
@@ -181,7 +189,7 @@ export function ProgressPage({
                     <>
                       {r.topics?.join(" · ")} ·{" "}
                       {readable(r.previous_result ?? "Recorded")} ·{" "}
-                      {shortDate(r.last_attempted_at)}
+                      {shortDate(r.last_attempted_at, timezone)}
                     </>
                   )}
                 </small>
@@ -387,6 +395,10 @@ export function ProgressPage({
             )}
           </div>
         )}
+        <p className="muted-text compact-note" role="status">
+          {history.length} of {progress.attempts.length} attempts ·{" "}
+          {after ? `Since ${after} (inclusive)` : "All dates"} · {timezone}
+        </p>
         <div className="table-scroll">
           <table className="history-table">
             <thead>
@@ -397,7 +409,7 @@ export function ProgressPage({
                 <th>Duration</th>
                 <th>Submitted</th>
                 <th>
-                  <span className="sr-only">Review</span>
+                  <span className="sr-only">Attempt details</span>
                 </th>
               </tr>
             </thead>
@@ -419,13 +431,13 @@ export function ProgressPage({
                     )}
                   </td>
                   <td>
-                    {a.duration_seconds
+                    {a.duration_seconds != null
                       ? `${Math.round(a.duration_seconds / 60)} min`
-                      : "—"}
+                      : "Not recorded"}
                   </td>
                   <td>
                     <time dateTime={a.created_at}>
-                      {shortDate(a.created_at)}
+                      {shortDate(a.created_at, timezone)}
                     </time>
                   </td>
                   <td>
@@ -433,7 +445,7 @@ export function ProgressPage({
                       className="text-button"
                       onClick={() => void inspect(a)}
                     >
-                      Review
+                      View attempt
                     </button>
                   </td>
                 </tr>
@@ -483,7 +495,7 @@ export function ProgressPage({
         >
           <p>
             Version {selected.question_version} ·{" "}
-            {shortDate(selected.created_at)}
+            {shortDate(selected.created_at, timezone)}
           </p>
           {loading ? (
             <p role="status">Loading submitted work…</p>
@@ -547,7 +559,8 @@ export function ProgressPage({
                   )
                   .map((a) => (
                     <button key={a.id} onClick={() => void inspect(a)}>
-                      v{a.question_version} · {shortDate(a.created_at)} ·{" "}
+                      v{a.question_version} ·{" "}
+                      {shortDate(a.created_at, timezone)} ·{" "}
                       {readable(attemptOutcome(a))}
                     </button>
                   ))}

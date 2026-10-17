@@ -1,3 +1,5 @@
+import type { Dispatch, SetStateAction } from "react";
+import type { LibraryFilters } from "./libraryFilters";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
@@ -23,24 +25,32 @@ export function QuestionBank({
   refresh,
   onAuthor,
   onSession,
-  initialTopic = "",
+  filters,
+  onFiltersChange,
 }: {
   questions: Question[];
   onPractice: (id: string, version?: number) => void;
   refresh: () => Promise<void>;
   onAuthor?: () => void;
   onSession?: (id: string) => void;
-  initialTopic?: string;
+  filters: LibraryFilters;
+  onFiltersChange: Dispatch<SetStateAction<LibraryFilters>>;
 }) {
-  const [query, setQuery] = useState(""),
-    [search, setSearch] = useState(""),
-    [type, setType] = useState(""),
-    [difficulty, setDifficulty] = useState(""),
-    [topic, setTopic] = useState(initialTopic),
-    [status, setStatus] = useState(""),
-    [bookmarked, setBookmarked] = useState(false),
-    [archived, setArchived] = useState(false),
-    [sort, setSort] = useState("recent"),
+  const { query, type, difficulty, topic, status, bookmarked, archived, sort } =
+    filters;
+  const update = <K extends keyof LibraryFilters>(
+    key: K,
+    value: LibraryFilters[K],
+  ) => onFiltersChange((current) => ({ ...current, [key]: value }));
+  const setQuery = (value: string) => update("query", value);
+  const setType = (value: string) => update("type", value);
+  const setDifficulty = (value: string) => update("difficulty", value);
+  const setTopic = (value: string) => update("topic", value);
+  const setStatus = (value: string) => update("status", value);
+  const setBookmarked = (value: boolean) => update("bookmarked", value);
+  const setArchived = (value: boolean) => update("archived", value);
+  const setSort = (value: string) => update("sort", value);
+  const [search, setSearch] = useState(() => query.trim().toLowerCase()),
     [importing, setImporting] = useState(false),
     [error, setError] = useState(""),
     [page, setPage] = useState(0);
@@ -305,7 +315,11 @@ export function QuestionBank({
         </div>
       </div>
       {chips.length > 0 && (
-        <div className="filter-chips">
+        <div
+          className="filter-chips"
+          role="group"
+          aria-label="Active library filters"
+        >
           {chips.map(([label, remove]) => (
             <button
               key={label}
@@ -391,8 +405,12 @@ export function QuestionBank({
         {!filtered.length && (
           <div className="compact-empty">
             <strong>No matching questions</strong>
-            <p>Change a filter or add your own question.</p>
-            <button onClick={clear}>Clear filters</button>
+            <p>
+              {chips.length
+                ? "Your active filters returned no questions. Remove a filter or clear filters to see more."
+                : "Add or import a question to start practicing."}
+            </p>
+            {chips.length > 0 && <button onClick={clear}>Clear filters</button>}
           </div>
         )}
       </section>

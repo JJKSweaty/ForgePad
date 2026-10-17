@@ -62,7 +62,7 @@ test("code edits survive navigation, execute in Docker, and update progress", as
     fullPage: true,
   });
   await page
-    .getByRole("button", { name: "Review", exact: true })
+    .getByRole("button", { name: "View attempt", exact: true })
     .first()
     .click();
   const detail = page.getByRole("dialog");
@@ -290,4 +290,167 @@ test("goals link to filtered practice, library controls stay independent, and re
     page.getByRole("button", { name: "Delete practice data", exact: true }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+});
+
+test("library filters survive navigation and an empty bookmarked result stays explicit", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Practice", exact: true }).click();
+  await page
+    .getByLabel("Search questions")
+    .fill("no matching fixture question");
+  await page.getByLabel("Question type").selectOption("coding");
+  await page.getByLabel("Sort questions").selectOption("title");
+  await page.getByLabel("Bookmarked", { exact: true }).check();
+  await expect(
+    page.getByText("No matching questions", { exact: true }),
+  ).toBeVisible();
+  await nav.getByRole("button", { name: "Dashboard", exact: true }).click();
+  await nav.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.getByLabel("Bookmarked", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("Question type")).toHaveValue("coding");
+  await expect(page.getByLabel("Sort questions")).toHaveValue("title");
+  await expect(page.getByLabel("Search questions")).toHaveValue(
+    "no matching fixture question",
+  );
+  await expect(
+    page.getByRole("group", { name: "Active library filters" }),
+  ).toContainText("Bookmarked");
+  await expect(
+    page.getByText("No matching questions", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Clear filters", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByLabel("Bookmarked", { exact: true }),
+  ).not.toBeChecked();
+  await expect(page.locator(".library-row").first()).toBeVisible();
+  await nav.getByRole("button", { name: "Progress", exact: true }).click();
+  await nav.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(
+    page.getByLabel("Bookmarked", { exact: true }),
+  ).not.toBeChecked();
+  await expect(page.getByLabel("Search questions")).toHaveValue("");
+});
+
+test("dashboard keeps next actions and path above a responsive accessible activity calendar", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Your learning path" }),
+  ).toBeVisible();
+  for (const width of [1280, 760, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      (await page.locator(".calendar").boundingBox())!.height,
+    ).toBeLessThan(220);
+    const actions = await page
+      .getByRole("region", { name: "Recommended next actions" })
+      .boundingBox();
+    const path = await page
+      .getByRole("heading", { name: "Your learning path" })
+      .boundingBox();
+    const activity = await page
+      .getByRole("heading", { name: "Activity", exact: true })
+      .boundingBox();
+    expect(actions!.y + actions!.height).toBeLessThan(activity!.y);
+    expect(path!.y).toBeLessThan(activity!.y);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.getByLabel("Activity range").selectOption("52");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.getByLabel("Activity range").selectOption("13");
+    await page.screenshot({
+      path: testInfo.outputPath(`dashboard-${width}.png`),
+      fullPage: true,
+    });
+  }
+  const current = page.locator('.calendar-cell[tabindex="0"]');
+  await current.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(".calendar-cell:focus")).toHaveAttribute(
+    "aria-label",
+    /\d{4}: \d+ practice actions/,
+  );
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Close day details" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".calendar-cell:focus")).toHaveCount(1);
+  await page.getByText("Daily activity counts", { exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Daily activity counts" }),
+  ).toBeVisible();
+});
+
+test("since date and rendered attempts agree when profile and browser timezones differ", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("forgepad.v2.timezone", "America/Toronto"),
+  );
+  const attempts = [
+    ...Array.from({ length: 6 }, (_, i) => ({
+      id: `before-${i}`,
+      question_id: "align-up",
+      title: `Previous day ${i}`,
+      created_at: "2026-10-17T03:59:59Z",
+      question_version: 1,
+    })),
+    {
+      id: "boundary",
+      question_id: "align-up",
+      title: "Midnight submission",
+      created_at: "2026-10-17T04:00:00Z",
+      question_version: 1,
+    },
+  ];
+  await page.route("**/api/progress?compact=true", (route) =>
+    route.fulfill({
+      json: {
+        attempts,
+        due_reviews: [],
+        weak_topics: [],
+        goals: [],
+        summary: {
+          attempts: 7,
+          passed_attempts: 0,
+          completed_questions: 0,
+          due_reviews: 0,
+        },
+      },
+    }),
+  );
+  await page.goto("/");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: "Progress", exact: true })
+    .click();
+  await page.getByLabel("Attempts since").fill("2026-10-17");
+  await expect(page.locator(".history-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".history-table tbody")).toContainText(
+    "Midnight submission",
+  );
+  await expect(page.locator(".history-table tbody time")).toContainText(
+    "Oct 17, 2026",
+  );
+  await expect(page.getByRole("status")).toContainText(
+    "Since 2026-10-17 (inclusive) · America/Toronto",
+  );
+  await expect(page.locator(".history-table tbody")).toContainText(
+    "Not recorded",
+  );
 });
