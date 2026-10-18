@@ -2,11 +2,19 @@
 
 ## 0.3.9 — 2026-10-17
 
+### Added
+- Separately saved Theory, Design and Investigation sections, including confidence and optional reflection.
+- An architecture diagram editor with labeled components and connections, keyboard/list editing, pan/zoom, undo/redo, and immutable submitted snapshots in Progress and interview replay.
+
 ### Improved
-- Redesign Practice as a viewport-filling studio with persistent actions, structured written sections, and saved architecture diagrams.
+- Make Practice fill the available viewport with independently scrolling problem and work panes, persistent primary actions, compact checkpoint/More controls and Problem / Workspace tabs in narrow windows.
+- Make coding results collapsible and resizable, preserving editor space and switching to an editor/results view in short windows.
+- Include sections and diagrams in autosave, revision-aware checkpoints, local recovery and export. Share the existing OpenRouter coaching configuration and include bounded diagram context.
 
 ### Fixed
-- Keep the problem, editor, and primary controls reachable in laptop and narrow windows without scrolling the whole document.
+- Keep primary controls reachable in laptop and phone windows without scrolling the whole document, including embedded interview workspaces.
+- Preserve old written answers unchanged, prevent legacy clients from silently discarding structured work, and keep database migrations monotonic.
+- Keep dictation and transcript cleanup tied to the active answer section; wait for speech finalization before changing sections or submitting.
 
 ## 0.3.8 — 2026-10-17
 

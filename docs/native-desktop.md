@@ -64,3 +64,11 @@ For an isolated debug UI preview, compile with `FORGEPAD_QA_DATA_DIR=/tmp/forgep
 [Design review, measurements and remaining acceptance](design/dashboard-review.md).
 
 For question authoring, call `forgepad_get_authoring_prompt` before creating JSON. It returns the shared schema and coverage contract used by the native authoring UI. Reconnect HeyClicky after updating to discover the new read-only tool.
+
+## Practice studio storage and compatibility
+
+Schema version 6 adds a companion `written_workspaces` table keyed by question and revision, saved in the same transaction as draft files and readable answer text. Existing answers load unchanged into the first section. Native and Python migrations preserve prior data and never reset a newer schema version. Submitted attempts contain independent snapshots; compact progress responses omit workspace payloads. Supabase stores the same optional object inside its existing JSON records.
+
+Draft and MCP saves accept optional `written_workspace` schema version 1. A legacy save with the same answer preserves structured work; replacing its readable answer without the full workspace is rejected. Clients should round-trip the complete draft and concurrency timestamp. The workspace contains ordered note sections, user confidence/reflection and, for design, up to 100 labeled components and 200 connections. It never replaces C/C++ source files. Keys and provider settings are unchanged.
+
+Checkpoints and recovery include structured work and question revision. Unknown future workspace formats open read-only with export available. Canvas pan/zoom and editing run locally; asking the configured coach sends a bounded candidate-visible text representation of notes and graph connections under the existing OpenRouter/local provider selection. Diagram submissions remain self-assessed rather than deterministically graded.

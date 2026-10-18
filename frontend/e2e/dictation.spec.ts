@@ -91,6 +91,12 @@ for (const type of ["theory", "design"]) {
     await expect(
       page.getByRole("button", { name: "Stop dictation" }),
     ).toBeVisible();
+    await expect(
+      page
+        .getByRole("group", { name: "Answer sections" })
+        .getByRole("button")
+        .first(),
+    ).toBeDisabled();
     const feed = (count: number) =>
       page.evaluate((count) => {
         (
@@ -115,6 +121,14 @@ for (const type of ["theory", "design"]) {
     await expect(answer).toHaveValue(
       "My existing notes. Use a ring buffer for samples. Do not drop 32-bit values.",
     );
+    const sections = page
+      .getByRole("group", { name: "Answer sections" })
+      .getByRole("button");
+    await expect(sections.first()).toBeEnabled();
+    await sections.nth(1).click();
+    await expect(answer).toHaveValue("");
+    await sections.first().click();
+    await expect(answer).toHaveValue(/Do not drop 32-bit values/);
     expect(finals).toBe(1);
     await expect(live).toHaveCount(0);
     await expect(
