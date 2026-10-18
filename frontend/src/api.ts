@@ -1,3 +1,4 @@
+import type { WrittenWorkspace } from "./writtenWorkspace";
 import { native, nativeRequest } from "./native";
 export type Question = {
   id: string;
@@ -43,6 +44,8 @@ export type Question = {
   source?: { name: string; url: string; license: string };
 };
 export type Draft = {
+  question_version?: number;
+  written_workspace?: WrittenWorkspace | null;
   files: Record<string, string>;
   answer: string;
   updated_at?: string;
@@ -70,6 +73,7 @@ export type Run = {
   };
 };
 export type Attempt = {
+  written_workspace?: WrittenWorkspace | null;
   id: string;
   question_id: string;
   question_title?: string;

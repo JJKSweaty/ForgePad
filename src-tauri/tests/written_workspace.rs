@@ -85,7 +85,7 @@ async fn written_submissions_snapshot_graphs_without_changing_assessment_rules()
     assert_eq!(attempt["assessment_basis"], "self_report");
     assert_eq!(attempt["completion_status"], "needs_review");
     let mut changed = fixture();
-    changed["diagram"]["nodes"][0]["label"] = json!("Changed after submit");
+    changed["diagram"]["nodes"][0]["x"] = json!(90);
     service
         .route(
             "PUT",
@@ -94,6 +94,12 @@ async fn written_submissions_snapshot_graphs_without_changing_assessment_rules()
         )
         .await
         .unwrap();
+    assert!(service
+        .store
+        .unfinished_drafts()
+        .unwrap()
+        .iter()
+        .any(|d| d["question_id"] == "sensor-pipeline"));
     let stored = service
         .route(
             "GET",

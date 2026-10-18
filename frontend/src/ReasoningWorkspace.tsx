@@ -1,114 +1,133 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { Question } from "./api";
-import { modeNames, questionMode } from "./questionMode";
-
-const outlines = {
-  design: [
-    [
-      "Requirements",
-      "What must the system do? State your assumptions and constraints.",
-    ],
-    [
-      "Architecture",
-      "Sketch components and connections in text. Describe the data flow.",
-    ],
-    ["Tradeoffs", "Compare alternatives, bottlenecks, and failure modes."],
-    [
-      "Validation",
-      "How would you test reliability, performance, and recovery?",
-    ],
-  ],
-  theory: [
-    ["Explanation", "Explain the idea in your own words."],
-    ["Example", "Use a concrete example to work through the behavior."],
-    ["Edge cases", "Where does this break down? What assumptions matter?"],
-  ],
-  investigation: [
-    ["Observations", "What do you know from the symptoms or source?"],
-    [
-      "Hypotheses",
-      "What could explain the behavior? Prioritize likely causes.",
-    ],
-    ["Experiments", "Which checks would distinguish those causes?"],
-    ["Resolution", "Describe a fix and how you would verify it."],
-  ],
-};
-
+import { outlines } from "./writtenWorkspace";
+import type { WrittenWorkspace } from "./writtenWorkspace";
+const DesignCanvas = lazy(() => import("./DesignCanvas"));
 export default function ReasoningWorkspace({
   question,
-  answer,
+  workspace,
   onChange,
+  section,
+  onSectionChange,
+  dictating,
   voice,
 }: {
   question: Question;
-  answer: string;
-  onChange: (answer: string) => void;
+  workspace: WrittenWorkspace;
+  onChange: (workspace: WrittenWorkspace) => void;
+  section: string;
+  onSectionChange: (section: string) => void;
+  dictating: boolean;
   voice?: React.ReactNode;
 }) {
-  const mode = questionMode(question);
-  const outline = outlines[mode === "coding" ? "theory" : mode];
-  const [section, setSection] = useState(0);
+  const [view, setView] = useState<"notes" | "diagram">("notes");
+  const outline = outlines[workspace.mode];
+  const current = outline.find(([id]) => id === section) ?? outline[0];
+  const text = workspace.sections[current[0]] ?? "";
+  const diagram = workspace.mode === "design" && current[0] === "architecture";
   return (
-    <div className={`reasoning-workspace reasoning-${mode}`}>
-      <header className="reasoning-header">
-        <div>
-          <span className="eyebrow">{modeNames[mode]}</span>
-          <h2>
-            {mode === "design"
-              ? "Build your approach"
-              : mode === "investigation"
-                ? "Follow the evidence"
-                : "Work through the idea"}
-          </h2>
-          <p>
-            Write or speak your thinking. Open Hints to reason with your local
-            coach.
-          </p>
-        </div>
-      </header>
+    <div className={`reasoning-workspace reasoning-${workspace.mode}`}>
+      <h2 className="sr-only">
+        {workspace.mode === "design"
+          ? "Build your approach"
+          : workspace.mode === "investigation"
+            ? "Follow the evidence"
+            : "Work through the idea"}
+      </h2>
       <div
         className="reasoning-prompts"
         role="group"
-        aria-label="Thinking prompts"
+        aria-label="Answer sections"
       >
-        {outline.map(([title], i) => (
+        {outline.map(([id, title], i) => (
           <button
-            key={title}
+            key={id}
             type="button"
-            aria-pressed={section === i}
-            onClick={() => setSection(i)}
+            aria-pressed={current[0] === id}
+            disabled={dictating}
+            onClick={() => onSectionChange(id)}
           >
             {i + 1}. {title}
+            {workspace.sections[id]?.trim() ? (
+              <span className="section-filled" aria-label="has text">
+                {" "}
+                •
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
-      <p className="reasoning-prompt">{outline[section][1]}</p>
-      {Object.entries(question.starter_files ?? {}).map(([name, code]) => (
-        <details className="reference-source" key={name}>
-          <summary>Reference: {name}</summary>
-          <pre>{code}</pre>
+      <p id="section-guidance" className="reasoning-prompt">
+        {current[2]}
+      </p>
+      <div className="writing-toolbar">
+        {diagram && (
+          <div
+            className="design-view-tabs"
+            role="group"
+            aria-label="Architecture view"
+          >
+            {(["notes", "diagram"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                aria-pressed={view === tab}
+                disabled={dictating}
+                onClick={() => setView(tab)}
+              >
+                {tab === "notes" ? "Notes" : "Diagram"}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="writing-tools" hidden={diagram && view === "diagram"}>
+          {voice}
+        </div>
+      </div>
+      {Object.entries(question.starter_files ?? {}).length > 0 && (
+        <details className="reference-source">
+          <summary>Provided source</summary>
+          {Object.entries(question.starter_files).map(([name, code]) => (
+            <div key={name}>
+              <strong>{name}</strong>
+              <pre>{code}</pre>
+            </div>
+          ))}
         </details>
-      ))}
-      <label className="reasoning-answer">
-        <span>Your {mode === "design" ? "design" : "reasoning"}</span>
-        <textarea
-          aria-label="Written response"
-          value={answer}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={
-            mode === "design"
-              ? "Requirements → components → data flow → tradeoffs…"
-              : "Start with your explanation, then add examples and edge cases…"
-          }
-          rows={14}
-        />
-      </label>
-      {voice}
+      )}
+      {diagram && view === "diagram" ? (
+        <Suspense fallback={<p role="status">Opening diagram editor…</p>}>
+          <DesignCanvas
+            diagram={workspace.diagram ?? { nodes: [], edges: [] }}
+            onChange={(next) => onChange({ ...workspace, diagram: next })}
+          />
+        </Suspense>
+      ) : (
+        <label className="reasoning-answer">
+          <span className="sr-only">Your {current[1].toLowerCase()}</span>
+          <textarea
+            aria-label="Written response"
+            aria-describedby="section-guidance"
+            value={text}
+            onChange={(event) =>
+              onChange({
+                ...workspace,
+                sections: {
+                  ...workspace.sections,
+                  [current[0]]: event.target.value,
+                },
+              })
+            }
+            placeholder={`Write your ${current[1].toLowerCase()}…`}
+          />
+        </label>
+      )}
       <div className="reasoning-footer">
         <span>
-          {answer.trim() ? answer.trim().split(/\s+/).length : 0} words
+          {text.trim() ? text.trim().split(/\s+/).length : 0} words in{" "}
+          {current[1].toLowerCase()}
         </span>
-        <span>Saved with this question</span>
+        <span>Sections save together</span>
       </div>
     </div>
   );

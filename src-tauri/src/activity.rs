@@ -239,16 +239,17 @@ impl Store {
     /// Content comparison prevents an autosave after Submit from inventing unfinished work.
     pub fn unfinished_drafts(&self) -> Result<Vec<Value>> {
         self.with_db(|db| {
-            let mut st = db.prepare("SELECT d.question_id,d.version,d.files,d.answer,d.updated_at,q.package,(SELECT payload FROM attempts a WHERE a.question_id=d.question_id AND a.version=d.version ORDER BY created_at DESC LIMIT 1) FROM draft_versions d JOIN questions q ON q.id=d.question_id AND q.version=d.version LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC")?;
-            let rows = st.query_map([], |r| Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,Option<String>>(6)?)))?.collect::<std::result::Result<Vec<_>,_>>()?;
+            let mut st = db.prepare("SELECT d.question_id,d.version,d.files,d.answer,d.updated_at,q.package,(SELECT payload FROM attempts a WHERE a.question_id=d.question_id AND a.version=d.version ORDER BY created_at DESC LIMIT 1),w.payload FROM draft_versions d JOIN questions q ON q.id=d.question_id AND q.version=d.version LEFT JOIN written_workspaces w ON w.question_id=d.question_id AND w.version=d.version LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC")?;
+            let rows = st.query_map([], |r| Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,Option<String>>(6)?,r.get::<_,Option<String>>(7)?)))?.collect::<std::result::Result<Vec<_>,_>>()?;
             let mut drafts = vec![];
-            for (id,version,files,answer,updated,package,last) in rows {
+            for (id,version,files,answer,updated,package,last,workspace) in rows {
                 let files:Value=serde_json::from_str(&files)?;
                 let q:Value=serde_json::from_str(&package)?;
                 if files == q["starter_files"] && answer.trim().is_empty() { continue; }
+                let workspace:Value=workspace.map(|s|serde_json::from_str(&s)).transpose()?.unwrap_or(Value::Null);
                 if let Some(last)=last {
                     let a:Value=serde_json::from_str(&last)?;
-                    if a["files"] == files && a["answer"].as_str().unwrap_or("") == answer { continue; }
+                    if a["files"] == files && a["answer"].as_str().unwrap_or("") == answer && a["written_workspace"] == workspace { continue; }
                     if a["created_at"].as_str().is_some_and(|at|at >= updated.as_str()) { continue; }
                 }
                 drafts.push(json!({"question_id":id,"question_version":version,"updated_at":updated}));

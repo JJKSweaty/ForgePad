@@ -106,7 +106,7 @@ class SupabaseStore:
             if not q or self.flags(qid).get("archived") or (d["files"] == q["starter_files"] and not d["answer"].strip()):
                 continue
             a = next((a for a in attempts if a["question_id"] == qid and a["question_version"] == d["version"]), None)
-            if a and ((a.get("files", {}) == d["files"] and a.get("answer", "") == d["answer"]) or a["created_at"] >= d["updated_at"]):
+            if a and ((a.get("files", {}) == d["files"] and a.get("answer", "") == d["answer"] and a.get("written_workspace") == d.get("written_workspace")) or a["created_at"] >= d["updated_at"]):
                 continue
             out.append({"question_id": qid, "question_version": d["version"], "updated_at": d["updated_at"]})
         return out

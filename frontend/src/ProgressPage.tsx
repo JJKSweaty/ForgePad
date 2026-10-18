@@ -1,3 +1,4 @@
+import { WrittenReview } from "./WrittenReview";
 import { useRef, useState } from "react";
 import { Download, Plus, Pencil, Trash2, ArrowRight } from "lucide-react";
 import { api, download, message, post, readable } from "./api";
@@ -534,18 +535,21 @@ export function ProgressPage({
             </div>
           ) : (
             <>
-              {selected.confidence && (
+              {!selected.written_workspace && selected.confidence && (
                 <p>
                   <strong>Self assessment:</strong> {selected.confidence}
                 </p>
               )}
-              {selected.answer && (
+              {selected.written_workspace && (
+                <WrittenReview workspace={selected.written_workspace} />
+              )}
+              {!selected.written_workspace && selected.answer && (
                 <>
                   <h3>Submitted answer</h3>
                   <div className="prose">{selected.answer}</div>
                 </>
               )}
-              {selected.reflection && (
+              {!selected.written_workspace && selected.reflection && (
                 <>
                   <h3>Your reflection</h3>
                   <p>{selected.reflection}</p>

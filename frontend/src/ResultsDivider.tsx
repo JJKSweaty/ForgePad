@@ -9,10 +9,8 @@ export function ResultsDivider({
   onChange: (height: number) => void;
 }) {
   function change(next: number) {
-    const maximum = Math.max(
-      120,
-      (container.current?.clientHeight ?? 600) * 0.5,
-    );
+    const available = container.current?.clientHeight || 600;
+    const maximum = Math.max(120, Math.min(available * 0.5, available - 330));
     onChange(Math.round(Math.max(120, Math.min(maximum, next))));
   }
   return (
@@ -26,7 +24,12 @@ export function ResultsDivider({
       aria-valuemin={120}
       aria-valuemax={Math.max(
         120,
-        Math.round((container.current?.clientHeight ?? 600) * 0.5),
+        Math.round(
+          Math.min(
+            (container.current?.clientHeight || 600) * 0.5,
+            (container.current?.clientHeight || 600) - 330,
+          ),
+        ),
       )}
       aria-valuenow={height}
       title="Drag or use Up/Down arrows to resize test results"

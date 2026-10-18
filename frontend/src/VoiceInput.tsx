@@ -159,13 +159,14 @@ export default function VoiceInput({
     }
   }
   return (
-    <div className="voice-input">
+    <div className={`voice-input voice-${status}`}>
       <div className="voice-controls">
         <button
           type="button"
           className={status === "listening" ? "recording-button" : "secondary"}
           disabled={disabled || status === "starting" || status === "finishing"}
           onClick={() => void toggle()}
+          title="Dictation is processed locally. Review your transcript before submitting."
           aria-pressed={status === "listening"}
         >
           {status === "listening" ? <Square size={14} /> : <Mic size={15} />}

@@ -390,3 +390,394 @@
     font-size: 11px;
   }
 }
+/* Section editors and assessment occupy one workspace rather than a long form. */
+.practice-page .written-response {
+  display: flex;
+  overflow: hidden;
+}
+.practice-page .reasoning-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 12px 16px 6px;
+}
+.practice-page .reasoning-prompts {
+  flex: none;
+  margin: 0;
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.practice-page .reasoning-prompts button {
+  flex: none;
+  padding: 6px 8px;
+  min-height: 34px;
+  white-space: nowrap;
+}
+.section-filled {
+  color: var(--accent);
+}
+.practice-page .reasoning-prompt {
+  flex: none;
+  min-height: 0;
+  margin: 6px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.writing-toolbar {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0 0 8px;
+  min-height: 34px;
+  max-height: 170px;
+  overflow: auto;
+}
+.writing-tools {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.writing-tools .voice-input {
+  margin: 0;
+  flex: 1 1 210px;
+  min-width: 0;
+}
+.writing-tools .voice-controls {
+  gap: 6px;
+}
+.writing-tools .voice-controls button {
+  min-height: 32px;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.writing-tools .voice-controls > span {
+  font-size: 10px;
+}
+.writing-tools .dictation-preview {
+  max-height: 100px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  font-size: 12px;
+}
+.writing-tools .dictation-preview p {
+  margin: 4px 0;
+}
+.writing-tools .transcript-cleanup {
+  margin: 0;
+}
+.writing-tools .transcript-cleanup > button {
+  min-height: 32px;
+  font-size: 11px;
+}
+.writing-tools .cleanup-proposal {
+  max-height: 120px;
+  overflow: auto;
+  margin: 4px 0;
+  padding: 8px;
+}
+.practice-page .reasoning-answer {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.practice-page .reasoning-answer textarea {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  resize: none;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.practice-page .reasoning-footer {
+  flex: none;
+  font-size: 10px;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.practice-page .reference-source {
+  flex: none;
+  max-height: 120px;
+  overflow: auto;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+}
+.assessment-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.quick-confidence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.quick-confidence > select {
+  display: inline-block;
+  margin: 0;
+  padding: 4px 22px 4px 6px;
+  font-size: 11px;
+  min-height: 32px;
+  max-width: 165px;
+}
+.assessment-controls > .text-button {
+  font-size: 11px;
+}
+.design-view-tabs {
+  display: flex;
+  gap: 2px;
+}
+.design-view-tabs button {
+  min-height: 32px;
+  padding: 5px 10px;
+  font-size: 12px;
+  background: transparent;
+}
+.design-view-tabs [aria-pressed="true"] {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.design-canvas {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  gap: 6px;
+}
+.canvas-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.canvas-toolbar form {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.canvas-toolbar input {
+  min-width: 80px;
+  width: 130px;
+  flex: 1;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.canvas-toolbar button {
+  min-height: 32px;
+  font-size: 11px;
+  padding: 5px 8px;
+}
+.canvas-surface {
+  flex: 1;
+  position: relative;
+  min-height: 100px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--input);
+}
+.canvas-empty {
+  position: absolute;
+  inset: 20% 12%;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  pointer-events: none;
+}
+.design-canvas .react-flow {
+  --xy-node-background-color-default: var(--panel);
+  --xy-node-color-default: var(--text);
+  --xy-node-border-default: 1px solid var(--border-strong);
+  --xy-edge-stroke-default: var(--muted);
+  --xy-edge-label-color-default: var(--text);
+  --xy-edge-label-background-color-default: var(--panel);
+  --xy-background-color-default: var(--input);
+  --xy-controls-button-background-color-default: var(--panel);
+  --xy-controls-button-color-default: var(--text);
+  --xy-controls-button-border-color-default: var(--border);
+  --xy-node-boxshadow-selected-default: 0 0 0 2px var(--accent);
+}
+.design-canvas .react-flow__node {
+  border-radius: 6px;
+  font: 12px/1.5 inherit;
+}
+.design-canvas .react-flow__handle {
+  background: var(--accent);
+  border-color: var(--panel);
+  width: 8px;
+  height: 8px;
+}
+.design-canvas .react-flow__edge-text {
+  fill: var(--text);
+}
+.design-canvas .react-flow__edge-textbg {
+  fill: var(--panel);
+}
+.design-canvas .react-flow__controls button {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--border);
+}
+.canvas-outline {
+  flex: none;
+  margin: 0;
+  padding: 6px 10px;
+  max-height: 45%;
+  overflow: auto;
+  font-size: 12px;
+}
+.canvas-outline > summary {
+  font-size: 12px;
+}
+.canvas-outline p,
+.canvas-outline ul {
+  font-size: 12px;
+}
+.canvas-outline ul {
+  padding-left: 16px;
+}
+.canvas-outline li {
+  margin: 6px 0;
+}
+.canvas-node-fields,
+.canvas-connection-form {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.canvas-node-fields label,
+.canvas-connection-form label {
+  flex: 1;
+  min-width: 80px;
+  font-size: 11px;
+}
+.canvas-node-fields input,
+.canvas-connection-form input,
+.canvas-connection-form select,
+.canvas-outline li > input {
+  font-size: 12px;
+  min-height: 30px;
+  padding: 5px;
+  margin-top: 3px;
+}
+.canvas-node-fields button,
+.canvas-connection-form button,
+.canvas-outline li > button {
+  font-size: 11px;
+  min-height: 30px;
+  padding: 5px 8px;
+}
+.saved-diagram .design-canvas {
+  height: 360px;
+}
+.written-review > section {
+  margin-bottom: 20px;
+}
+.written-review .prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.practice-page > .error-banner,
+.practice-page > .notice {
+  flex: none;
+  max-height: 110px;
+  overflow: auto;
+  padding: 8px 12px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .practice-page .reasoning-workspace {
+    padding: 8px;
+  }
+  .practice-page .reasoning-prompts button {
+    font-size: 11px;
+    padding: 5px 7px;
+  }
+  .practice-page .reasoning-prompt {
+    font-size: 11px;
+  }
+  .quick-confidence > select {
+    max-width: 145px;
+  }
+  .assessment-controls {
+    gap: 4px;
+  }
+  .canvas-toolbar form {
+    flex-basis: 100%;
+  }
+}
+.practice-page .practice-layout {
+  grid-template-rows: minmax(0, 1fr);
+}
+.app:has(.practice-page) .practice-hub-content {
+  min-width: 0;
+}
+.app:has(.practice-page) .practice-hub-content {
+  flex-direction: column;
+}
+.practice-hub-content > .practice-page,
+.practice-page {
+  margin: 0;
+  width: 100%;
+  align-self: stretch;
+}
+.app:has(.practice-page) .practice-hub-header {
+  margin: 0;
+  width: 100%;
+}
+.writing-tools .voice-idle .voice-controls > span {
+  display: none;
+}
+.practice-page > .run-toolbar {
+  border: 1px solid var(--border);
+  border-radius: 0 0 8px 8px;
+}
+.interview-page:has(.practice-page) {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+  align-self: stretch;
+}
+.interview-page:has(.practice-page) .session-bar {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0;
+}
+.interview-page:has(.practice-page) .session-bar > .button-row {
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.interview-page:has(.practice-page) .session-bar button {
+  min-height: 32px;
+  font-size: 12px;
+  padding: 6px 9px;
+}
+.interview-page:has(.practice-page) .session-stages,
+.interview-page:has(.practice-page) .interview-tabs {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.design-canvas {
+  overflow: auto;
+}

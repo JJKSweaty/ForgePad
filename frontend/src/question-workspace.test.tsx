@@ -119,7 +119,7 @@ it("keeps coding in the editor with run controls", async () => {
 });
 it("uses theory and investigation prompts for written questions", async () => {
   const view = open({ ...base, type: "theory" });
-  await screen.findByText("Theory notebook");
+  await screen.findByRole("heading", { name: "Work through the idea" });
   expect(screen.getByRole("button", { name: "2. Example" })).toBeTruthy();
   view.unmount();
   open({ ...base, type: "debugging" });
@@ -322,7 +322,7 @@ it("reports autosave failure and keeps the current draft in local recovery", asy
   await user.type(source, " // kept locally");
   await screen.findByText("Autosave failed · local recovery kept");
   await waitFor(() =>
-    expect(localStorage.getItem("forgepad.v1.recovery.question")).toContain(
+    expect(localStorage.getItem("forgepad.v1.recovery.question.v1")).toContain(
       "kept locally",
     ),
   );
@@ -366,4 +366,142 @@ it("identifies OpenRouter coaching and its data flow before asking", async () =>
     within(coach).getByRole("button", { name: "Help me reason" }),
   );
   await within(coach).findByText("How will you handle a full queue?");
+});
+
+it("keeps separate written sections in autosave, checkpoints and submitted self-assessment", async () => {
+  const user = userEvent.setup();
+  open({ ...base, type: "theory" });
+  const text = await screen.findByRole("textbox", { name: "Written response" });
+  await user.click(screen.getByRole("button", { name: "2. Example" }));
+  expect((text as HTMLTextAreaElement).value).toBe("");
+  await user.type(text, "A producer fills a bounded queue.");
+  await user.click(screen.getByRole("button", { name: /1\. Explanation/ }));
+  expect((text as HTMLTextAreaElement).value).toBe("My existing draft");
+  await user.selectOptions(screen.getByLabelText("Confidence"), "uncertain");
+  await user.click(screen.getByRole("button", { name: "Self-assessment" }));
+  await user.type(
+    screen.getByLabelText("Reflection (optional)"),
+    "Revisit overflow.",
+  );
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("button", { name: "Save checkpoint" }));
+  const checkpoint = JSON.parse(
+    localStorage.getItem("forgepad.v1.checkpoint.question.v1")!,
+  );
+  expect(checkpoint.written_workspace.sections).toEqual({
+    explanation: "My existing draft",
+    example: "A producer fills a bounded queue.",
+  });
+  expect(checkpoint.written_workspace.reflection).toBe("Revisit overflow.");
+  await user.click(screen.getByRole("button", { name: "Submit response" }));
+  await screen.findByText("Response submitted");
+  expect(post).toHaveBeenCalledWith(
+    "/attempts",
+    expect.objectContaining({
+      confidence: "uncertain",
+      reflection: "Revisit overflow.",
+      answer:
+        "Explanation\nMy existing draft\n\nExample\nA producer fills a bounded queue.",
+      written_workspace: checkpoint.written_workspace,
+    }),
+  );
+});
+
+it("opens unknown written workspace versions read-only and keeps the original exportable", async () => {
+  api.mockImplementation(async (path: string) =>
+    path.startsWith("/questions/")
+      ? base
+      : {
+          files: {},
+          answer: "Keep this",
+          written_workspace: {
+            schema_version: 9,
+            sections: { future: "Keep this" },
+          },
+        },
+  );
+  render(
+    <Practice
+      questionId={base.id}
+      theme="dark"
+      onSaved={async () => {}}
+      onBrowse={() => {}}
+    />,
+  );
+  await screen.findByRole("heading", { name: "Draft opened read-only" });
+  expect(
+    screen.getByRole("button", { name: "Export original draft" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Submit response" })).toBeNull();
+  expect(
+    api.mock.calls.filter(([, init]) => init?.method === "PUT"),
+  ).toHaveLength(0);
+});
+
+it("offers unsaved structured recovery without replacing the saved draft automatically", async () => {
+  const user = userEvent.setup();
+  localStorage.setItem(
+    "forgepad.v1.recovery.question.v1",
+    JSON.stringify({
+      question_version: 1,
+      files: {},
+      answer: "Recovered local notes",
+      written_workspace: {
+        schema_version: 1,
+        mode: "theory",
+        sections: {
+          explanation: "Recovered local notes",
+          example: "An unsaved example",
+        },
+        confidence: "uncertain",
+        reflection: "Review limits.",
+      },
+    }),
+  );
+  open({ ...base, type: "theory" });
+  const text = await screen.findByRole("textbox", { name: "Written response" });
+  expect((text as HTMLTextAreaElement).value).toBe("My existing draft");
+  await user.click(screen.getByRole("button", { name: "Recover local edits" }));
+  expect((text as HTMLTextAreaElement).value).toBe("Recovered local notes");
+  await user.click(screen.getByRole("button", { name: /2\. Example/ }));
+  expect((text as HTMLTextAreaElement).value).toBe("An unsaved example");
+  expect((screen.getByLabelText("Confidence") as HTMLSelectElement).value).toBe(
+    "uncertain",
+  );
+});
+
+it("continues server autosave when local recovery storage is full", async () => {
+  const user = userEvent.setup();
+  const original = localStorage.setItem.bind(localStorage);
+  const storage = vi
+    .spyOn(localStorage, "setItem")
+    .mockImplementation((key, value) => {
+      if (key.includes("recovery"))
+        throw new DOMException("Full storage", "QuotaExceededError");
+      original(key, value);
+    });
+  try {
+    open({ ...base, type: "theory" });
+    const text = await screen.findByRole("textbox", {
+      name: "Written response",
+    });
+    await user.clear(text);
+    await user.type(text, "Save this despite full recovery storage.");
+    await screen.findByText("Draft autosaved");
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith(
+        "/drafts/question",
+        expect.objectContaining({
+          body: expect.stringContaining(
+            "Save this despite full recovery storage.",
+          ),
+        }),
+      ),
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Local recovery storage is unavailable",
+    );
+  } finally {
+    storage.mockRestore();
+  }
 });

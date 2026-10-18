@@ -168,14 +168,14 @@ class Store:
 
     def unfinished_drafts(self):
         with self.connect() as db:
-            rows = db.execute("SELECT d.*,q.package,(SELECT payload FROM attempts a WHERE a.question_id=d.question_id AND a.version=d.version ORDER BY created_at DESC,rowid DESC LIMIT 1) latest FROM draft_versions d JOIN questions q ON q.id=d.question_id AND q.version=d.version LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC").fetchall()
+            rows = db.execute("SELECT d.*,q.package,w.payload workspace,(SELECT payload FROM attempts a WHERE a.question_id=d.question_id AND a.version=d.version ORDER BY created_at DESC,rowid DESC LIMIT 1) latest FROM draft_versions d JOIN questions q ON q.id=d.question_id AND q.version=d.version LEFT JOIN written_workspaces w ON w.question_id=d.question_id AND w.version=d.version LEFT JOIN question_flags f ON f.question_id=d.question_id WHERE COALESCE(f.archived,0)=0 ORDER BY d.updated_at DESC").fetchall()
         out = []
         for row in rows:
             q, files = json.loads(row['package']), json.loads(row['files'])
             if files == q['starter_files'] and not row['answer'].strip():
                 continue
             a = json.loads(row['latest']) if row['latest'] else None
-            if a and ((a.get('files', {}) == files and a.get('answer', '') == row['answer']) or a['created_at'] >= row['updated_at']):
+            if a and ((a.get('files', {}) == files and a.get('answer', '') == row['answer'] and a.get('written_workspace') == (json.loads(row['workspace']) if row['workspace'] else None)) or a['created_at'] >= row['updated_at']):
                 continue
             out.append({'question_id': row['question_id'], 'question_version': row['version'], 'updated_at': row['updated_at']})
         return out

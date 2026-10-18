@@ -45,9 +45,10 @@ def test_api_snapshots_sections_and_diagrams_in_immutable_submissions(tmp_path):
         attempt = response.json()
         assert attempt["confidence"] == "partial"
         assert attempt["assessment_basis"] == "self_report"
-        changed = deepcopy(FIXTURE); changed["diagram"]["nodes"][0]["label"] = "Changed"
+        changed = deepcopy(FIXTURE); changed["diagram"]["nodes"][0]["x"] = 90
         assert client.put("/api/drafts/sensor-pipeline", json={**body, "written_workspace":changed}).status_code == 200
         assert client.get(f'/api/attempts/{attempt["id"]}').json()["written_workspace"] == FIXTURE
+        assert client.get("/api/questions/sensor-pipeline").json()["progress_status"] == "in_progress"
         assert "written_workspace" not in client.get("/api/progress?compact=true").json()["attempts"][0]
 
 

@@ -1,3 +1,5 @@
+import { WrittenReview } from "./WrittenReview";
+import type { WrittenWorkspace } from "./writtenWorkspace";
 import { RecordingReplay } from "./RecordingReplay";
 import { useEffect, useState } from "react";
 import { Download, History } from "lucide-react";
@@ -10,6 +12,7 @@ type ReplayEvent = {
   created_at: string;
   files?: Record<string, string>;
   answer?: string;
+  written_workspace?: WrittenWorkspace | null;
   content?: string;
   action?: string;
   state?: string;
@@ -127,7 +130,12 @@ export function InterviewReplay({ sessionId }: { sessionId: string }) {
             </div>
             <div className="replay-detail">
               <h3>{readable(event.kind)}</h3>
-              {event.content && <div className="prose">{event.content}</div>}
+              {event.written_workspace && (
+                <WrittenReview workspace={event.written_workspace} />
+              )}
+              {!event.written_workspace && event.content && (
+                <div className="prose">{event.content}</div>
+              )}
               {event.action && (
                 <p>
                   {readable(event.action)} · {event.state}
@@ -155,7 +163,12 @@ export function InterviewReplay({ sessionId }: { sessionId: string }) {
                       <pre>{source}</pre>
                     </details>
                   ))}
-                  {code.answer && <div className="prose">{code.answer}</div>}
+                  {!event.written_workspace && code.written_workspace && (
+                    <WrittenReview workspace={code.written_workspace} />
+                  )}
+                  {!event.written_workspace &&
+                    !code.written_workspace &&
+                    code.answer && <div className="prose">{code.answer}</div>}
                 </>
               )}
             </div>

@@ -1,3 +1,12 @@
+import {
+  coachText,
+  createWorkspace,
+  normalizeDraft,
+  outlines,
+  projectWorkspace,
+  workspaceError,
+} from "./writtenWorkspace";
+import type { WrittenWorkspace } from "./writtenWorkspace";
 import { useElementSize } from "./useElementSize";
 import { ResultsDivider } from "./ResultsDivider";
 import * as Popover from "@radix-ui/react-popover";
@@ -32,7 +41,7 @@ import {
 import { api, download, message, post, readable } from "./api";
 import type { Draft, Question, Run } from "./api";
 const Editor = lazy(() => import("./CodeEditor"));
-type Checkpoint = { at: string; files: Record<string, string>; answer: string };
+type Checkpoint = Draft & { at: string };
 function navigateTabs(event: ReactKeyboardEvent<HTMLDivElement>) {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   const tabs = [
@@ -96,7 +105,11 @@ export default function Practice({
   };
   const [question, setQuestion] = useState<Question | null>(null),
     [files, setFiles] = useState<Record<string, string>>({}),
-    [answer, setAnswer] = useState(""),
+    [legacyAnswer, setLegacyAnswer] = useState(""),
+    [workspace, setWorkspace] = useState<WrittenWorkspace>(),
+    [section, setSection] = useState(""),
+    [unsupportedDraft, setUnsupportedDraft] = useState<Draft | null>(null),
+    [recoveryDraft, setRecoveryDraft] = useState<Draft | null>(null),
     [activeFile, setActiveFile] = useState(""),
     [error, setError] = useState(""),
     [saveStatus, setSaveStatus] = useState("Loading draft"),
@@ -117,8 +130,6 @@ export default function Practice({
       () => localStorage.getItem("forgepad.problem.collapsed") === "true",
     ),
     [tab, setTab] = useState<"problem" | "hints" | "rubric">("problem"),
-    [confidence, setConfidence] = useState("partial"),
-    [reflection, setReflection] = useState(""),
     [showCheckpoint, setShowCheckpoint] = useState(false),
     [resetConfirm, setResetConfirm] = useState(false),
     [externalDraft, setExternalDraft] = useState<Draft | null>(null),
@@ -132,10 +143,42 @@ export default function Practice({
         return null;
       }
     });
+  const answer = workspace ? projectWorkspace(workspace) : legacyAnswer;
+  const confidence = workspace?.confidence ?? "partial";
+  const reflection = workspace?.reflection ?? "";
+  const validationError = workspaceError(workspace);
+  const activeSection = workspace
+    ? (outlines[workspace.mode].find(([id]) => id === section)?.[0] ??
+      outlines[workspace.mode][0][0])
+    : "";
+  const activeText = workspace?.sections[activeSection] ?? "";
+  function setSectionText(value: string | ((previous: string) => string)) {
+    setWorkspace((previous) =>
+      previous
+        ? {
+            ...previous,
+            sections: {
+              ...previous.sections,
+              [activeSection]:
+                typeof value === "function"
+                  ? value(previous.sections[activeSection] ?? "")
+                  : value,
+            },
+          }
+        : previous,
+    );
+  }
   const size = useElementSize(root, !!question);
   const workSize = useElementSize(workPane, !!question);
   const narrow = size.width < 900;
   const short = workSize.height < 450;
+  const effectiveResultsHeight = Math.min(
+    resultsHeight,
+    Math.max(
+      120,
+      Math.floor(Math.min(workSize.height / 2, workSize.height - 330)),
+    ),
+  );
   useEffect(() => {
     if (executionError) setResultsOpen(true);
   }, [executionError]);
@@ -159,16 +202,50 @@ export default function Practice({
     ])
       .then(([q, d]) => {
         if (!live) return;
-        const next = {
-          files: Object.keys(d.files ?? {}).length
-            ? d.files
-            : (q.starter_files ?? {}),
-          answer: d.answer ?? "",
-        };
+        let next: Draft;
+        try {
+          next = normalizeDraft(q, d);
+        } catch (error) {
+          setQuestion(q);
+          setUnsupportedDraft(d);
+          setError(message(error));
+          return;
+        }
+        try {
+          const stored =
+            localStorage.getItem(
+              `forgepad.v1.recovery.${questionId}.v${q.version}`,
+            ) ?? localStorage.getItem(`forgepad.v1.recovery.${questionId}`);
+          if (stored) {
+            const recovered: Draft = JSON.parse(stored);
+            if (
+              (!recovered.question_version ||
+                recovered.question_version === q.version) &&
+              JSON.stringify(normalizeDraft(q, recovered)) !==
+                JSON.stringify(next)
+            )
+              setRecoveryDraft(normalizeDraft(q, recovered));
+          }
+          const checkpointText =
+            localStorage.getItem(
+              `forgepad.v1.checkpoint.${questionId}.v${q.version}`,
+            ) ?? localStorage.getItem(`forgepad.v1.checkpoint.${questionId}`);
+          if (checkpointText) {
+            const saved: Checkpoint = JSON.parse(checkpointText);
+            setCheckpoint(
+              !saved.question_version || saved.question_version === q.version
+                ? saved
+                : null,
+            );
+          }
+        } catch {
+          /* Keep corrupt/unknown recovery data on disk; never replace the server draft with it. */
+        }
         loadedVersion.current = q.version;
         setQuestion(q);
         setFiles(next.files);
-        setAnswer(next.answer);
+        setLegacyAnswer(next.answer);
+        setWorkspace(next.written_workspace ?? undefined);
         setActiveFile(
           Object.keys(next.files).find((name) => /\.(c|cpp|cc)$/.test(name)) ??
             Object.keys(next.files)[0] ??
@@ -211,6 +288,11 @@ export default function Practice({
     };
   }, [questionId, questionVersion, sessionId]);
   async function save(next: Draft = draft.current) {
+    const invalid = workspaceError(next.written_workspace ?? undefined);
+    if (invalid) {
+      setError(invalid);
+      throw new Error(invalid);
+    }
     const seq = ++saveSequence.current;
     setSaveStatus("Autosaving draft…");
     const request = saveQueue.current
@@ -275,11 +357,12 @@ export default function Practice({
           if (!live) return;
           if (JSON.stringify(draft.current) === savedContent.current) {
             savedAt.current = latest.updated_at ?? null;
-            const next = { files: latest.files, answer: latest.answer };
+            const next = normalizeDraft(question!, latest);
             savedContent.current = JSON.stringify(next);
             draft.current = next;
             setFiles(next.files);
-            setAnswer(next.answer);
+            setLegacyAnswer(next.answer);
+            setWorkspace(next.written_workspace ?? undefined);
             setActiveFile((previous) =>
               previous in next.files
                 ? previous
@@ -302,21 +385,38 @@ export default function Practice({
       live = false;
       stop?.();
     };
-  }, [questionId]);
+  }, [questionId, question?.version]);
   useEffect(() => {
-    draft.current = { files, answer };
-    if (!ready.current) return;
-    localStorage.setItem(
-      `forgepad.v1.recovery.${questionId}`,
-      JSON.stringify(draft.current),
-    );
+    draft.current = {
+      files,
+      answer,
+      ...(workspace ? { written_workspace: workspace } : {}),
+    };
+    if (!ready.current || recoveryDraft) return;
+    const recovery = JSON.stringify({
+      ...draft.current,
+      question_version: loadedVersion.current,
+      updated_at: savedAt.current,
+    });
+    try {
+      localStorage.setItem(
+        `forgepad.v1.recovery.${questionId}.v${loadedVersion.current}`,
+        recovery,
+      );
+    } catch {
+      setError(
+        (previous) =>
+          previous ||
+          "Local recovery storage is unavailable. Drafts can still autosave; use More → Export draft to keep another copy.",
+      );
+    }
     if (JSON.stringify(draft.current) === savedContent.current) return;
     setSaveStatus("Draft changed · autosave pending");
     const timer = setTimeout(() => {
       void save(draft.current).catch(() => {});
     }, 650);
     return () => clearTimeout(timer);
-  }, [files, answer, questionId]);
+  }, [files, answer, workspace, questionId, recoveryDraft]);
   useEffect(() => {
     if (!run || !["queued", "running"].includes(run.status)) return;
     let cancelled = false;
@@ -380,6 +480,7 @@ export default function Practice({
     setError("");
     setExecutionError("");
     setResultsOpen(true);
+    setMobilePane("workspace");
     setRunMode(mode);
     setRun(null);
     const snapshot = draft.current;
@@ -415,9 +516,13 @@ export default function Practice({
           data: snapshot,
         });
       await save(snapshot);
-      const cp = { ...snapshot, at: new Date().toISOString() };
+      const cp = {
+        ...snapshot,
+        question_version: question?.version,
+        at: new Date().toISOString(),
+      };
       localStorage.setItem(
-        `forgepad.v1.checkpoint.${questionId}`,
+        `forgepad.v1.checkpoint.${questionId}.v${question?.version}`,
         JSON.stringify(cp),
       );
       setCheckpoint(cp);
@@ -442,6 +547,19 @@ export default function Practice({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   });
+  if (unsupportedDraft)
+    return (
+      <section className="page">
+        <h1>Draft opened read-only</h1>
+        <p role="alert">{error}</p>
+        <button
+          onClick={() => download(`${questionId}-draft.json`, unsupportedDraft)}
+        >
+          Export original draft
+        </button>
+        <button onClick={onBrowse}>Back to Question Library</button>
+      </section>
+    );
   if (!question)
     return (
       <div className="page">
@@ -455,6 +573,141 @@ export default function Practice({
         )}
       </div>
     );
+  const actionBar = (
+    <div className="run-toolbar">
+      {!coding && workspace && (
+        <div className="assessment-controls">
+          <label className="quick-confidence">
+            Confidence
+            <select
+              value={confidence}
+              onChange={(event) =>
+                setWorkspace({
+                  ...workspace,
+                  confidence: event.target
+                    .value as WrittenWorkspace["confidence"],
+                })
+              }
+            >
+              <option value="partial">Partial understanding</option>
+              <option value="confident">Confident</option>
+              <option value="uncertain">Uncertain</option>
+            </select>
+          </label>
+          <Popover.Root>
+            <Popover.Trigger className="text-button">
+              Self-assessment
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                className="workspace-more"
+                side="top"
+                align="start"
+                sideOffset={8}
+              >
+                <h2>Self-assessment</h2>
+                <p>
+                  Confidence is your own assessment; it is separate from
+                  executable test results.
+                </p>
+                <label>
+                  Reflection (optional)
+                  <textarea
+                    rows={3}
+                    maxLength={10000}
+                    value={reflection}
+                    onChange={(event) =>
+                      setWorkspace({
+                        ...workspace,
+                        reflection: event.target.value,
+                      })
+                    }
+                    placeholder="What would you revisit?"
+                  />
+                </label>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        </div>
+      )}
+      {coding && (
+        <p className="execution-help" id="execution-help">
+          Run checks every visible test. Submit checks the same suite and saves
+          an attempt.
+        </p>
+      )}
+      <div className="button-row">
+        {run && ["queued", "running"].includes(run.status) ? (
+          <button
+            className="secondary"
+            onClick={() =>
+              void api(`/runs/${run.id}`, { method: "DELETE" })
+                .then(() => {
+                  setRun({ ...run, status: "cancelled" });
+                  setExecutionError("");
+                })
+                .catch((e) => setExecutionError(message(e)))
+            }
+          >
+            <Square size={13} />
+            Cancel execution
+          </button>
+        ) : null}
+        {coding ? (
+          <>
+            <button
+              disabled={running || !Object.keys(files).length}
+              title="Compile and run all tests (Ctrl/Cmd+Enter)"
+              aria-describedby="execution-help"
+              onClick={() => void execute("run")}
+            >
+              <Play size={14} />
+              Run all tests
+            </button>
+            <button
+              className="primary"
+              disabled={running || !Object.keys(files).length}
+              title="Submit all tests (Shift+Ctrl/Cmd+Enter)"
+              aria-describedby="execution-help"
+              onClick={() => void execute("submit")}
+            >
+              Submit all tests
+            </button>
+          </>
+        ) : (
+          <button
+            className="primary"
+            disabled={busy || dictating || !answer.trim() || !!validationError}
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                await save();
+                await post("/attempts", {
+                  question_id: questionId,
+                  session_id: sessionId,
+                  question_version: question.version,
+                  answer,
+                  confidence,
+                  reflection,
+                  written_workspace: workspace,
+                });
+                setSaveStatus("Response submitted");
+                await onSaved();
+              } catch (e) {
+                setError(message(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <Check size={15} />
+            {busy ? "Saving…" : "Submit response"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
   return (
     <div
       ref={root}
@@ -629,9 +882,9 @@ export default function Practice({
           ))}
         </div>
       )}
-      {error && (
+      {(error || validationError) && (
         <div className="error-banner" role="alert">
-          {error}
+          {error || validationError}
           <button
             className="icon-button"
             aria-label="Dismiss error"
@@ -639,6 +892,29 @@ export default function Practice({
           >
             <X size={15} />
           </button>
+        </div>
+      )}
+      {recoveryDraft && (
+        <div className="notice" role="status">
+          <p>
+            Local recovery contains different work. Choose which draft to use.
+          </p>
+          <div className="button-row">
+            <button
+              onClick={() => {
+                setFiles(recoveryDraft.files);
+                setLegacyAnswer(recoveryDraft.answer);
+                setWorkspace(recoveryDraft.written_workspace ?? undefined);
+                setActiveFile(Object.keys(recoveryDraft.files)[0] ?? "");
+                setRecoveryDraft(null);
+              }}
+            >
+              Recover local edits
+            </button>
+            <button onClick={() => setRecoveryDraft(null)}>
+              Use saved draft
+            </button>
+          </div>
         </div>
       )}
       {externalDraft && (
@@ -656,7 +932,11 @@ export default function Practice({
                   JSON.stringify(draft.current),
                 );
                 setFiles(externalDraft.files);
-                setAnswer(externalDraft.answer);
+                setLegacyAnswer(externalDraft.answer);
+                setWorkspace(
+                  normalizeDraft(question, externalDraft).written_workspace ??
+                    undefined,
+                );
                 setActiveFile((previous) =>
                   previous in externalDraft.files
                     ? previous
@@ -735,7 +1015,6 @@ export default function Practice({
             {tab === "problem" ? (
               <>
                 <div className="eyebrow">{question.topics.join(" / ")}</div>
-                <h2>{question.title}</h2>
                 <div className="prose">{question.prompt}</div>
                 {question.constraints?.length > 0 && (
                   <>
@@ -818,7 +1097,7 @@ export default function Practice({
                   <QuestionCoach
                     question={question}
                     sessionId={sessionId}
-                    answer={answer}
+                    answer={workspace ? coachText(workspace) : answer}
                     files={files}
                   />
                 )}
@@ -1011,137 +1290,48 @@ export default function Practice({
             </>
           ) : (
             <div className="written-response">
-              <ReasoningWorkspace
-                question={question}
-                answer={answer}
-                onChange={setAnswer}
-                voice={
-                  <>
-                    <VoiceInput
-                      questionId={questionId}
-                      sessionId={sessionId}
-                      onBusyChange={setDictating}
-                      onText={(text) =>
-                        setAnswer(
-                          (previous) =>
-                            `${previous}${previous ? " " : ""}${text}`,
-                        )
-                      }
-                    />
-                    <TranscriptCleanup
-                      text={answer}
-                      questionId={questionId}
-                      onApply={setAnswer}
-                      disabled={dictating || busy}
-                    />
-                  </>
-                }
-              />
-              <div className="response-meta">
-                <label>
-                  Confidence
-                  <select
-                    value={confidence}
-                    onChange={(e) => setConfidence(e.target.value)}
-                  >
-                    <option value="confident">Confident</option>
-                    <option value="partial">Partial understanding</option>
-                    <option value="uncertain">Uncertain</option>
-                  </select>
-                </label>
-                <label>
-                  Reflection (optional)
-                  <textarea
-                    rows={3}
-                    value={reflection}
-                    onChange={(e) => setReflection(e.target.value)}
-                    placeholder="What would you revisit?"
-                  />
-                </label>
-              </div>
-            </div>
-          )}
-          <div className="run-toolbar">
-            {coding && (
-              <p className="execution-help" id="execution-help">
-                Run checks every visible test. Submit checks the same suite and
-                saves an attempt.
-              </p>
-            )}
-            <div className="button-row">
-              {run && ["queued", "running"].includes(run.status) ? (
-                <button
-                  className="secondary"
-                  onClick={() =>
-                    void api(`/runs/${run.id}`, { method: "DELETE" })
-                      .then(() => {
-                        setRun({ ...run, status: "cancelled" });
-                        setExecutionError("");
-                      })
-                      .catch((e) => setExecutionError(message(e)))
+              {workspace && (
+                <ReasoningWorkspace
+                  question={question}
+                  workspace={workspace}
+                  onChange={setWorkspace}
+                  section={activeSection}
+                  onSectionChange={setSection}
+                  dictating={dictating}
+                  voice={
+                    <>
+                      <VoiceInput
+                        questionId={questionId}
+                        sessionId={sessionId}
+                        disabled={busy}
+                        onBusyChange={setDictating}
+                        onText={(text) =>
+                          setSectionText(
+                            (previous) =>
+                              `${previous}${previous ? " " : ""}${text}`,
+                          )
+                        }
+                      />
+                      {activeText.trim() && (
+                        <TranscriptCleanup
+                          key={activeSection}
+                          text={activeText}
+                          questionId={questionId}
+                          onApply={setSectionText}
+                          disabled={dictating || busy}
+                        />
+                      )}
+                    </>
                   }
-                >
-                  <Square size={13} />
-                  Cancel execution
-                </button>
-              ) : null}
-              {coding ? (
-                <>
-                  <button
-                    disabled={running || !Object.keys(files).length}
-                    title="Compile and run all tests (Ctrl/Cmd+Enter)"
-                    aria-describedby="execution-help"
-                    onClick={() => void execute("run")}
-                  >
-                    <Play size={14} />
-                    Run all tests
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={running || !Object.keys(files).length}
-                    title="Submit all tests (Shift+Ctrl/Cmd+Enter)"
-                    aria-describedby="execution-help"
-                    onClick={() => void execute("submit")}
-                  >
-                    Submit all tests
-                  </button>
-                </>
-              ) : (
-                <button
-                  className="primary"
-                  disabled={busy || dictating || !answer.trim()}
-                  onClick={async () => {
-                    setBusy(true);
-                    setError("");
-                    try {
-                      await save();
-                      await post("/attempts", {
-                        question_id: questionId,
-                        session_id: sessionId,
-                        question_version: question.version,
-                        answer,
-                        confidence,
-                        reflection,
-                      });
-                      setSaveStatus("Response submitted");
-                      await onSaved();
-                    } catch (e) {
-                      setError(message(e));
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  <Check size={15} />
-                  {busy ? "Saving…" : "Submit response"}
-                </button>
+                />
               )}
             </div>
-          </div>
+          )}
+          {(!narrow || mobilePane === "workspace") && actionBar}
           {coding && resultsOpen && !short && (
             <ResultsDivider
               container={workPane}
-              height={resultsHeight}
+              height={effectiveResultsHeight}
               onChange={(height) => {
                 setResultsHeight(height);
                 localStorage.setItem("forgepad.results.height", String(height));
@@ -1153,7 +1343,7 @@ export default function Practice({
               id="execution-output"
               style={
                 {
-                  "--results-height": `${resultsHeight}px`,
+                  "--results-height": `${effectiveResultsHeight}px`,
                 } as React.CSSProperties
               }
               className="output-panel"
@@ -1349,6 +1539,7 @@ export default function Practice({
           )}
         </section>
       </div>
+      {narrow && mobilePane === "problem" && actionBar}
       <Dialog.Root
         open={resetConfirm || showCheckpoint}
         onOpenChange={(open) => {
@@ -1391,10 +1582,15 @@ export default function Practice({
                   className="primary"
                   onClick={() => {
                     const next = resetConfirm
-                      ? { files: question.starter_files, answer: "" }
-                      : checkpoint!;
+                      ? normalizeDraft(question, {
+                          files: question.starter_files,
+                          answer: "",
+                          written_workspace: createWorkspace(question),
+                        })
+                      : normalizeDraft(question, checkpoint!);
                     setFiles(next.files);
-                    setAnswer(next.answer);
+                    setLegacyAnswer(next.answer);
+                    setWorkspace(next.written_workspace ?? undefined);
                     setActiveFile(Object.keys(next.files)[0] ?? "");
                     setResetConfirm(false);
                     setShowCheckpoint(false);
