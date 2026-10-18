@@ -488,10 +488,26 @@ impl Service {
         confidence: &str,
         reflection: &str,
     ) -> Result<Value> {
+        self.record_attempt(q, files, result, answer, confidence, reflection, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn record_attempt(
+        &self,
+        q: &Value,
+        files: Value,
+        result: Value,
+        answer: &str,
+        confidence: &str,
+        reflection: &str,
+        workspace: Option<&Value>,
+    ) -> Result<Value> {
         let passed = result["status"] == "passed";
         let self_review = result.is_null() && confidence == "confident";
         let days = if passed || self_review { 7 } else { 1 };
-        let a = json!({"id":crate::id(),"question_id":q["id"],"question_version":q["version"],"title":q["title"],"topics":q["topics"],"type":q["type"],"language":q["language"],"created_at":crate::now(),"files":files,"result":result,"answer":answer,"confidence":confidence,"reflection":reflection,"completion_status":if passed || self_review {"complete"} else {"needs_review"},"review_due_at":(chrono::Utc::now()+chrono::Duration::days(days)).to_rfc3339(),"review_interval_days":days,"assessment_basis":if result.is_null() {"self_report"} else {"deterministic_tests"}});
+        let mut a = json!({"id":crate::id(),"question_id":q["id"],"question_version":q["version"],"title":q["title"],"topics":q["topics"],"type":q["type"],"language":q["language"],"created_at":crate::now(),"files":files,"result":result,"answer":answer,"confidence":confidence,"reflection":reflection,"completion_status":if passed || self_review {"complete"} else {"needs_review"},"review_due_at":(chrono::Utc::now()+chrono::Duration::days(days)).to_rfc3339(),"review_interval_days":days,"assessment_basis":if result.is_null() {"self_report"} else {"deterministic_tests"}});
+        if let Some(workspace) = workspace {
+            a["written_workspace"] = workspace.clone();
+        }
         self.store.save("attempts", &a)?;
         Ok(a)
     }
@@ -963,7 +979,7 @@ impl Service {
                     self.store.event(
                         body["session_id"].as_str(),
                         "code_snapshot",
-                        json!({"files":body["files"],"answer":body["answer"]}),
+                        json!({"files":saved["files"],"answer":saved["answer"],"written_workspace":saved["written_workspace"]}),
                     )?;
                 }
                 saved
@@ -980,20 +996,42 @@ impl Service {
                 if q["test_config"].is_object() {
                     bail!("Executable results must be recorded through Submit");
                 }
-                let confidence = required(&body, "confidence")?;
+                let workspace = body.get("written_workspace").filter(|w| !w.is_null());
+                let projected = workspace
+                    .map(|w| crate::written_workspace::validate(w, &q))
+                    .transpose()?;
+                let confidence = if let Some(w) = workspace {
+                    required(w, "confidence")?
+                } else {
+                    required(&body, "confidence")?
+                };
                 if !["confident", "partial", "uncertain"].contains(&confidence) {
                     bail!("Invalid confidence");
                 }
-                let attempt = self.attempt(
+                let answer = if let Some(text) = projected.as_deref() {
+                    text
+                } else {
+                    bounded(&body, "answer", 50000)?
+                };
+                if answer.trim().is_empty() {
+                    bail!("Write an answer or add a design before submitting");
+                }
+                let reflection = if let Some(w) = workspace {
+                    w["reflection"].as_str().unwrap_or("")
+                } else {
+                    body["reflection"].as_str().unwrap_or("")
+                };
+                let attempt = self.record_attempt(
                     &q,
                     json!({}),
                     Value::Null,
-                    bounded(&body, "answer", 50000)?,
+                    answer,
                     confidence,
-                    body["reflection"].as_str().unwrap_or(""),
+                    reflection,
+                    workspace,
                 )?;
                 if let Some(session) = body["session_id"].as_str() {
-                    self.store.event(Some(session), "written_response", json!({"question_id":q["id"],"content":body["answer"],"confidence":confidence,"attempt_id":attempt["id"]}))?;
+                    self.store.event(Some(session), "written_response", json!({"question_id":q["id"],"content":answer,"confidence":confidence,"written_workspace":workspace,"attempt_id":attempt["id"]}))?;
                 }
                 attempt
             }

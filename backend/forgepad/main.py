@@ -45,6 +45,7 @@ class Draft(StrictModel):
     files: dict[str, str]
     answer: str = Field(default="", max_length=50000)
     session_id: str | None = Field(default=None, max_length=80)
+    written_workspace: dict | None = None
     _files = field_validator("files")(validate_files)
 
 
@@ -89,10 +90,11 @@ class IdeaRequest(StrictModel):
 
 
 class AttemptRequest(StrictModel):
+    written_workspace: dict | None = None
     question_version: int | None = Field(default=None, ge=1)
     question_id: str
     session_id: str | None = Field(default=None, max_length=80)
-    answer: str = Field(min_length=1, max_length=50000)
+    answer: str = Field(default="", max_length=50000)
     confidence: Literal["confident", "partial", "uncertain"]
     reflection: str = Field(default="", max_length=10000)
 
@@ -491,6 +493,7 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                 "answer": row["answer"],
                 "updated_at": row["updated_at"],
                 "question_version": row["version"],
+                "written_workspace": row.get("written_workspace"),
             }
             if row
             else {
@@ -510,9 +513,12 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
                 raise HTTPException(409, "Draft does not belong to an active interview")
             question = question_or_404(question_id, session["question_version"])
         previous = store().draft(question_id, question["version"])
-        record = store().save_draft(question, request.files, request.answer)
+        try:
+            record = store().save_draft(question, request.files, request.answer, request.written_workspace)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
         if request.session_id and (not previous or previous["files"] != request.files or previous["answer"] != request.answer):
-            store().add_replay(request.session_id, "code", {"files": request.files, "answer": request.answer})
+            store().add_replay(request.session_id, "code", {"files": record["files"], "answer": record["answer"], "written_workspace": record.get("written_workspace")})
         return record
 
     @app.post("/api/runs", status_code=202)
@@ -562,12 +568,20 @@ def create_app(db_path=None, seed_dir=None, runner=None, ai=None, speech=None):
             raise HTTPException(
                 422, "Use Submit for executable questions; confidence cannot mark code tests correct"
             )
-        result = attempt(
-            question, answer=request.answer, confidence=request.confidence, reflection=request.reflection
-        )
+        answer, confidence, reflection = request.answer, request.confidence, request.reflection
+        if request.written_workspace is not None:
+            from .written_workspace import validate
+            try:
+                answer = validate(request.written_workspace, question)
+            except ValueError as error:
+                raise HTTPException(422, str(error)) from None
+            confidence, reflection = request.written_workspace["confidence"], request.written_workspace["reflection"]
+        if not answer.strip(): raise HTTPException(422, "Write an answer or add a design before submitting")
+        result = attempt(question, answer=answer, confidence=confidence, reflection=reflection)
+        if request.written_workspace is not None: result["written_workspace"] = request.written_workspace
         store().add_attempt(result)
         if session:
-            store().add_replay(session["id"], "written_response", {"content": request.answer, "confidence": request.confidence, "attempt_id": result["id"]})
+            store().add_replay(session["id"], "written_response", {"content": answer, "confidence": confidence, "written_workspace": request.written_workspace, "attempt_id": result["id"]})
         return result
 
     @app.get("/api/progress")

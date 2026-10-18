@@ -32,7 +32,7 @@ impl Store {
             "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
         )?;
         let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version > 5 {
+        if version > 6 {
             bail!("Workspace was created by a newer ForgePad version");
         }
         // Compatible with the web edition's v2 database, with native-only records in a separate migration.
@@ -52,8 +52,13 @@ impl Store {
             CREATE TABLE IF NOT EXISTS native_records(kind TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(kind,id));
             CREATE TABLE IF NOT EXISTS draft_versions(question_id TEXT NOT NULL,version INTEGER NOT NULL,files TEXT NOT NULL,answer TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(question_id,version),FOREIGN KEY(question_id,version) REFERENCES questions(id,version));
             INSERT OR IGNORE INTO draft_versions SELECT * FROM drafts;
-            PRAGMA user_version=4; COMMIT;")?;
+            COMMIT;")?;
+        if version < 4 {
+            db.pragma_update(None, "user_version", 4)?;
+        }
         crate::activity::migrate(&db)?;
+        db.execute_batch("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS written_workspaces(question_id TEXT NOT NULL,version INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(question_id,version),FOREIGN KEY(question_id,version) REFERENCES draft_versions(question_id,version) ON DELETE CASCADE); COMMIT;")?;
+        db.pragma_update(None, "user_version", 6)?;
         let store = Self {
             db: Mutex::new(db),
             _lock: lock,
@@ -208,7 +213,7 @@ impl Store {
     }
     pub fn attempt_metadata(&self) -> Result<Vec<Value>> {
         let db = self.db.lock().unwrap();
-        let mut st=db.prepare("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts ORDER BY created_at DESC")?;
+        let mut st=db.prepare("SELECT json_remove(payload,'$.files','$.answer','$.written_workspace','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts ORDER BY created_at DESC")?;
         let rows = st
             .query_map([], |r| r.get::<_, String>(0))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -216,7 +221,7 @@ impl Store {
     }
     pub fn latest_attempt(&self, id: &str) -> Result<Option<Value>> {
         let db = self.db.lock().unwrap();
-        let payload:Option<String>=db.query_row("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts WHERE question_id=? ORDER BY created_at DESC LIMIT 1",[id],|r|r.get(0)).optional()?;
+        let payload:Option<String>=db.query_row("SELECT json_remove(payload,'$.files','$.answer','$.written_workspace','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts WHERE question_id=? ORDER BY created_at DESC LIMIT 1",[id],|r|r.get(0)).optional()?;
         payload.map(|p| Ok(serde_json::from_str(&p)?)).transpose()
     }
     pub fn save(&self, kind: &str, record: &Value) -> Result<()> {
@@ -274,16 +279,16 @@ impl Store {
     }
     pub fn draft(&self, q: &Value) -> Result<Value> {
         let db = self.db.lock().unwrap();
-        let row: Option<(String, String, String, i64)> = db
+        let row: Option<(String, String, String, i64, Option<String>)> = db
             .query_row(
-                "SELECT files,answer,updated_at,version FROM draft_versions WHERE question_id=?1 AND version=?2",
+                "SELECT d.files,d.answer,d.updated_at,d.version,w.payload FROM draft_versions d LEFT JOIN written_workspaces w USING(question_id,version) WHERE d.question_id=?1 AND d.version=?2",
                 params![q["id"].as_str(),q["version"].as_i64()],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .optional()?;
         Ok(match row {
-            Some((files, answer, updated, version)) => {
-                json!({"files":serde_json::from_str::<Value>(&files)?,"answer":answer,"updated_at":updated,"question_version":version})
+            Some((files, answer, updated, version, workspace)) => {
+                json!({"files":serde_json::from_str::<Value>(&files)?,"answer":answer,"updated_at":updated,"question_version":version,"written_workspace":workspace.map(|w|serde_json::from_str::<Value>(&w)).transpose()?})
             }
             None => json!({"files":q["starter_files"],"answer":"","question_version":q["version"]}),
         })
@@ -296,7 +301,13 @@ impl Store {
     }
     fn write_draft(&self, q: &Value, body: &Value, check_current: bool) -> Result<Value> {
         crate::schema::files(&body["files"], false)?;
-        let answer = body["answer"].as_str().unwrap_or("");
+        let workspace = body.get("written_workspace").filter(|w| !w.is_null());
+        let projected = workspace
+            .map(|w| crate::written_workspace::validate(w, q))
+            .transpose()?;
+        let answer = projected
+            .as_deref()
+            .unwrap_or_else(|| body["answer"].as_str().unwrap_or(""));
         if answer.len() > 50000 {
             bail!("Answer exceeds 50,000 bytes");
         }
@@ -317,10 +328,19 @@ impl Store {
                     bail!("The saved draft changed. Reload the latest draft before saving; your local recovery is kept.");
                 }
             }
+            if workspace.is_none() {
+                let current: Option<String> = tx.query_row("SELECT d.answer FROM draft_versions d JOIN written_workspaces w USING(question_id,version) WHERE d.question_id=? AND d.version=?",params![id,version],|r|r.get(0)).optional()?;
+                if current.is_some_and(|text| text != answer) {
+                    bail!("Structured answer exists. Reload the full written workspace before replacing its answer.");
+                }
+            }
             let files = body["files"].to_string();
             let at = crate::now();
             tx.execute("INSERT INTO draft_versions VALUES(?,?,?,?,?) ON CONFLICT(question_id,version) DO UPDATE SET files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",params![id,version,files,answer,at])?;
             tx.execute("INSERT INTO drafts VALUES(?,?,?,?,?) ON CONFLICT(question_id) DO UPDATE SET version=excluded.version,files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at WHERE excluded.version>=drafts.version",params![id,version,files,answer,at])?;
+            if let Some(workspace) = workspace {
+                tx.execute("INSERT INTO written_workspaces VALUES(?,?,?) ON CONFLICT(question_id,version) DO UPDATE SET payload=excluded.payload",params![id,version,workspace.to_string()])?;
+            }
             tx.commit()?;
         }
         self.draft(q)
@@ -365,6 +385,18 @@ impl Store {
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         out["drafts"]=json!(rows.into_iter().map(|(id,version,files,answer,at)|json!({"question_id":id,"version":version,"files":serde_json::from_str::<Value>(&files).unwrap_or(Value::Null),"answer":answer,"updated_at":at})).collect::<Vec<_>>());
+        for draft in out["drafts"].as_array_mut().unwrap() {
+            let payload: Option<String> = db
+                .query_row(
+                    "SELECT payload FROM written_workspaces WHERE question_id=? AND version=?",
+                    params![draft["question_id"].as_str(), draft["version"].as_i64()],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            if let Some(payload) = payload {
+                draft["written_workspace"] = serde_json::from_str(&payload)?;
+            }
+        }
         Ok(out)
     }
     pub fn reset_user_data(&self) -> Result<()> {

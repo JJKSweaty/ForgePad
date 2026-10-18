@@ -23,7 +23,11 @@ pub fn migrate(db: &Connection) -> Result<()> {
       CREATE TRIGGER IF NOT EXISTS dashboard_goals AFTER INSERT ON goals BEGIN UPDATE activity_revision SET revision=revision+1 WHERE id=1; END;
       CREATE TRIGGER IF NOT EXISTS dashboard_goal_changes AFTER UPDATE ON goals BEGIN UPDATE activity_revision SET revision=revision+1 WHERE id=1; END;
       CREATE TRIGGER IF NOT EXISTS dashboard_settings AFTER UPDATE ON native_records WHEN NEW.kind='settings' BEGIN UPDATE activity_revision SET revision=revision+1 WHERE id=1; END;
-      PRAGMA user_version=5;COMMIT;")?;
+      COMMIT;")?;
+    let version: i64 = db.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version < 5 {
+        db.pragma_update(None, "user_version", 5)?;
+    }
     reconcile(db)
 }
 // Mirrors one immutable event row; callers provide all canonical event fields.

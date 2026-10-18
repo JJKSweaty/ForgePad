@@ -29,7 +29,7 @@ class Store:
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version > 5:
+            if version > 6:
                 raise RuntimeError("Database was created by a newer ForgePad version")
             if version < 1:
                 db.executescript("""
@@ -81,6 +81,8 @@ class Store:
                 INSERT OR IGNORE INTO draft_versions SELECT * FROM drafts;
                 PRAGMA user_version=4;
                 """)
+            db.execute("CREATE TABLE IF NOT EXISTS written_workspaces(question_id TEXT NOT NULL,version INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(question_id,version),FOREIGN KEY(question_id,version) REFERENCES draft_versions(question_id,version) ON DELETE CASCADE)")
+            db.execute("PRAGMA user_version=6")
             integrity = db.execute("PRAGMA quick_check").fetchone()[0]
             if integrity != "ok":
                 raise RuntimeError(f"SQLite integrity check failed: {integrity}")
@@ -161,7 +163,7 @@ class Store:
 
     def attempt_metadata(self):
         with self.connect() as db:
-            rows = db.execute("SELECT json_remove(payload,'$.files','$.answer','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts ORDER BY created_at DESC,rowid DESC").fetchall()
+            rows = db.execute("SELECT json_remove(payload,'$.files','$.answer','$.written_workspace','$.reflection','$.ai_feedback','$.result.tests','$.result.compiler_output') FROM attempts ORDER BY created_at DESC,rowid DESC").fetchall()
         return [json.loads(row[0]) for row in rows]
 
     def unfinished_drafts(self):
@@ -212,15 +214,28 @@ class Store:
     def draft(self, question_id, version=None):
         with self.connect() as db:
             row = db.execute("SELECT * FROM draft_versions WHERE question_id=? AND (? IS NULL OR version=?) ORDER BY version DESC LIMIT 1", (question_id, version, version)).fetchone()
-        return {**dict(row), "files": json.loads(row["files"])} if row else None
+            workspace = db.execute("SELECT payload FROM written_workspaces WHERE question_id=? AND version=?", (question_id, row["version"])).fetchone() if row else None
+        return {**dict(row), "files": json.loads(row["files"]), "written_workspace": json.loads(workspace[0]) if workspace else None} if row else None
 
-    def save_draft(self, question, files, answer):
+    def save_draft(self, question, files, answer, written_workspace=None):
+        from .written_workspace import validate
+        if written_workspace is not None:
+            answer = validate(written_workspace, question)
         record = {"files": files, "answer": answer, "updated_at": now(), "question_version": question["version"]}
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            previous = db.execute("SELECT d.answer,w.payload FROM draft_versions d JOIN written_workspaces w USING(question_id,version) WHERE d.question_id=? AND d.version=?",(question["id"],question["version"])).fetchone()
+            if written_workspace is None and previous:
+                if previous["answer"] != answer:
+                    raise StorageConflict("Structured answer exists. Reload the full written workspace before replacing its answer.")
+                written_workspace = json.loads(previous["payload"])
             db.execute("INSERT INTO draft_versions VALUES(?,?,?,?,?) ON CONFLICT(question_id,version) DO UPDATE SET files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at",
                        (question["id"], question["version"], encode(files), answer, record["updated_at"]))
             db.execute("INSERT INTO drafts VALUES (?,?,?,?,?) ON CONFLICT(question_id) DO UPDATE SET version=excluded.version,files=excluded.files,answer=excluded.answer,updated_at=excluded.updated_at WHERE excluded.version>=drafts.version",
                        (question["id"], question["version"], encode(files), answer, record["updated_at"]))
+            if written_workspace is not None:
+                db.execute("INSERT INTO written_workspaces VALUES(?,?,?) ON CONFLICT(question_id,version) DO UPDATE SET payload=excluded.payload",(question["id"],question["version"],encode(written_workspace)))
+                record["written_workspace"] = written_workspace
         return record
 
     def add_replay(self, session_id, kind, data):
@@ -286,6 +301,9 @@ class Store:
             result["drafts"] = [
                 {**dict(row), "files": json.loads(row["files"])} for row in db.execute("SELECT * FROM drafts")
             ]
+            for draft in result["drafts"]:
+                workspace = db.execute("SELECT payload FROM written_workspaces WHERE question_id=? AND version=?",(draft["question_id"],draft["version"])).fetchone()
+                if workspace: draft["written_workspace"] = json.loads(workspace[0])
             result["question_flags"] = [dict(row) for row in db.execute("SELECT * FROM question_flags")]
             result["replay"] = [json.loads(row[0]) for row in db.execute("SELECT payload FROM replay ORDER BY created_at")]
         for table in ("attempts", "runs", "interviews", "goals"):

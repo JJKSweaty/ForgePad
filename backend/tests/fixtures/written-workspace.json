@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "mode": "design",
+  "sections": {"requirements":"Bound memory and latency.","architecture":"Separate capture from processing.","tradeoffs":"Backpressure versus loss.","validation":"Exercise overflow recovery."},
+  "confidence": "partial",
+  "reflection": "Measure the queue high-water mark.",
+  "diagram": {
+    "nodes": [{"id":"sensor","label":"Sensor","x":0,"y":0},{"id":"queue","label":"Bounded queue","x":260,"y":0}],
+    "edges": [{"id":"samples","source":"sensor","target":"queue","label":"samples"}]
+  }
+}

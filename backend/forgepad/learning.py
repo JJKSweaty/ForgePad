@@ -7,7 +7,7 @@ def completed(a):
 
 
 def metadata(a):
-    return {**{k: v for k, v in a.items() if k not in {"files", "answer", "reflection", "ai_feedback"}},
+    return {**{k: v for k, v in a.items() if k not in {"files", "answer", "written_workspace", "reflection", "ai_feedback"}},
             "result": {k: v for k, v in (a.get("result") or {}).items() if k not in {"tests", "compiler_output"}} or None}
 
 

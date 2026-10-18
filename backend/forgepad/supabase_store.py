@@ -179,9 +179,18 @@ class SupabaseStore:
         draft = self.record("drafts", question_id)
         return draft if draft and (version is None or draft["version"] == version) else None
 
-    def save_draft(self, question, files, answer):
+    def save_draft(self, question, files, answer, written_workspace=None):
+        from .written_workspace import validate
+        previous = self.draft(question["id"], question["version"])
+        if written_workspace is not None:
+            answer = validate(written_workspace, question)
+        elif previous and previous.get("written_workspace"):
+            if previous["answer"] != answer:
+                raise StorageConflict("Structured answer exists. Reload the full written workspace before replacing its answer.")
+            written_workspace = previous["written_workspace"]
         record = {"id": question["id"], "version": question["version"], "question_version": question["version"], "question_id": question["id"],
                   "files": files, "answer": answer, "updated_at": now()}
+        if written_workspace is not None: record["written_workspace"] = written_workspace
         self.save_record("draft_versions", {**record, "id": f"{question['id']}:{question['version']}"})
         current = self.draft(question["id"])
         if not current or current["version"] <= question["version"]:

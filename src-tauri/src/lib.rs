@@ -35,3 +35,5 @@ pub fn id() -> String {
 }
 
 pub mod learning;
+
+pub mod written_workspace;
