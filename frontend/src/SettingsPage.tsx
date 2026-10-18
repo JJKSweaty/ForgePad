@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { version as appVersion } from "../package.json";
 import {
   Check,
   Copy,
@@ -157,6 +158,7 @@ export function SettingsPage({
       <PageHeader
         title="Settings"
         description="Make ForgePad work the way you do."
+        action={<span className="settings-version">ForgePad {appVersion}</span>}
       />
       <div className="settings-layout">
         <nav className="settings-navigation" aria-label="Settings sections">

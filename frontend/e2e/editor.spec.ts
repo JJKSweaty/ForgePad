@@ -15,14 +15,39 @@ test("Practice is compact, uses readable neutral surfaces, and closes from the u
     page.getByRole("heading", { name: "Question Library" }),
   ).toBeVisible();
   await expect(page.getByLabel("Progress status")).toBeVisible();
+  await expect(page.getByText("Local workspace", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByText("Saved on this Mac", { exact: true }),
+  ).toHaveCount(0);
   const close = await page
     .getByRole("button", { name: "Hide sidebar" })
     .boundingBox();
   expect(close!.x).toBeLessThan(60);
   expect(close!.y).toBeLessThan(80);
+  expect(close!.width).toBeGreaterThanOrEqual(44);
+  expect(close!.height).toBeGreaterThanOrEqual(44);
   for (const theme of ["light", "dark"]) {
     if (theme === "dark")
       await page.getByRole("button", { name: "Use dark appearance" }).click();
+    const brand = (await page
+      .getByRole("button", { name: "ForgePad dashboard" })
+      .boundingBox())!;
+    expect(brand.x).toBeGreaterThanOrEqual(close!.x + close!.width + 8);
+    const settings = (await page
+      .getByRole("button", { name: "Settings", exact: true })
+      .boundingBox())!;
+    const appearance = (await page
+      .getByRole("button", { name: /Use .* appearance/ })
+      .boundingBox())!;
+    expect(Math.abs(settings.y - appearance.y)).toBeLessThanOrEqual(1);
+    expect(appearance.width).toBeGreaterThanOrEqual(44);
+    expect(appearance.x).toBeGreaterThanOrEqual(settings.x + settings.width);
+    await page.locator(".sidebar").screenshot({
+      path: testInfo.outputPath(`sidebar-${theme}.png`),
+      animations: "disabled",
+    });
     const contrast = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
       const rgb = (token: string) =>

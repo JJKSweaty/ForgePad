@@ -1,5 +1,4 @@
 import { defaultLibraryFilters } from "./libraryFilters";
-import { version as appVersion } from "../package.json";
 import { flushDrafts } from "./drafts";
 import {
   lazy,
@@ -298,12 +297,9 @@ export default function App() {
             <span className="brand-mark">
               <CircuitBoard size={22} />
             </span>
-            <span>
-              ForgePad<small>Firmware practice</small>
-            </span>
+            <span>ForgePad</span>
           </button>
         </div>
-        <div className="workspace-label">WORKSPACE</div>
         <nav aria-label="Main navigation">
           {navigation.map(({ id, label, icon: Icon }) => (
             <button
@@ -329,35 +325,16 @@ export default function App() {
             <Settings size={17} />
             <span>Settings</span>
           </button>
-          <div className="local-card">
-            <span className="status-dot" />
-            <span>
-              {health?.hosting === "cloud"
-                ? "Cloud workspace"
-                : "Local workspace"}
-              <small>
-                {health?.storage === "supabase"
-                  ? "Supabase persistence"
-                  : "Saved on this Mac"}
-              </small>
-            </span>
-          </div>
-          <div className="sidebar-tools">
-            <button
-              className="icon-button"
-              aria-label={`Use ${resolvedTheme === "dark" ? "light" : "dark"} appearance`}
-              onClick={() =>
-                setTheme(resolvedTheme === "dark" ? "light" : "dark")
-              }
-            >
-              {resolvedTheme === "dark" ? (
-                <Sun size={16} />
-              ) : (
-                <Moon size={16} />
-              )}
-            </button>
-            <span className="version">ForgePad {appVersion}</span>
-          </div>
+          <button
+            className="icon-button appearance-toggle"
+            aria-label={`Use ${resolvedTheme === "dark" ? "light" : "dark"} appearance`}
+            title={`Use ${resolvedTheme === "dark" ? "light" : "dark"} appearance`}
+            onClick={() =>
+              setTheme(resolvedTheme === "dark" ? "light" : "dark")
+            }
+          >
+            {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
         </div>
       </aside>
       <div className="main-shell">

@@ -1,5 +1,13 @@
 # ForgePad release notes
 
+## 0.3.10 — 2026-10-18
+
+### Improved
+- Simplify sidebar navigation, remove workspace-status clutter, and make the upper-left sidebar control easier to reach.
+
+### Fixed
+- Keep the sidebar toggle clear of branding, with a stable 44px target in expanded and hidden layouts. Group Settings and appearance controls in a compact footer and move the app version to Settings.
+
 ## 0.3.9 — 2026-10-17
 
 ### Added

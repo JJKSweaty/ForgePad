@@ -281,6 +281,8 @@ test("activity fills the workspace and the sidebar control stays in one place", 
         await expect(control).toHaveAttribute("aria-expanded", String(!hidden));
         expect(before.x).toBeLessThan(24);
         expect(before.y).toBeLessThan(24);
+        expect(before.width).toBeGreaterThanOrEqual(44);
+        expect(before.height).toBeGreaterThanOrEqual(44);
         const calendar = (await page.locator(".calendar").boundingBox())!;
         const scroll = (await page.locator(".calendar-scroll").boundingBox())!;
         expect(calendar.width).toBeGreaterThanOrEqual(scroll.width - 5);
